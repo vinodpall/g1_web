@@ -1,13 +1,13 @@
 <template>
   <div class="login-container">
     <div class="login-background">
-      <img src="/src/assets/source_data/bg_data/login.png" alt="background" />
+      <img src="/src/assets/source_data/bg_data/mian_pg_bg.png" alt="background" />
     </div>
     
     <div class="login-content">
       <div class="login-left">
         <div class="logo-section">
-          <img src="/src/assets/source_data/logio-DoB1IvgI.png" alt="logo" class="logo" />
+          <img src="/src/assets/source_data/plane_2.png" alt="logo" class="logo" />
           <h1 class="title">无人机管控平台</h1>
         </div>
         <div class="drone-illustration">
@@ -104,9 +104,18 @@ const handleLogin = async () => {
 </script>
 
 <style scoped>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 .login-container {
-  min-height: 100vh;
-  position: relative;
+  height: 100vh;
+  width: 100vw;
+  position: fixed;
+  top: 0;
+  left: 0;
   overflow: hidden;
 }
 
@@ -127,7 +136,7 @@ const handleLogin = async () => {
 
 .login-content {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
   align-items: center;
   justify-content: space-between;
   padding: 0 5%;
@@ -137,31 +146,37 @@ const handleLogin = async () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   max-width: 600px;
 }
 
 .logo-section {
   display: flex;
   align-items: center;
-  margin-bottom: 2rem;
+  justify-content: center;
+  margin-bottom: 3rem;
 }
 
 .logo {
-  width: 60px;
-  height: 60px;
+  width: 70px;
+  height: 70px;
   margin-right: 1rem;
 }
 
 .title {
-  font-size: 2.5rem;
+  color: #FFF;
+  text-align: center;
+  font-family: YouSheBiaoTiHei;
+  font-size: 48px;
+  font-style: normal;
   font-weight: bold;
-  color: #00bcd4;
-  text-shadow: 0 0 10px rgba(0, 188, 212, 0.5);
+  line-height: 150%;
+  letter-spacing: 1px;
+  margin: 0;
 }
 
 .drone-illustration {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;

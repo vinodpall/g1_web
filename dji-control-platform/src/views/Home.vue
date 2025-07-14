@@ -11,6 +11,11 @@
 
 <style scoped>
 .home-container {
-  color: #ffffff;
+  padding: 20px;
+  color: #333333;
+}
+
+.home-container h1 {
+  margin-bottom: 10px;
 }
 </style>
