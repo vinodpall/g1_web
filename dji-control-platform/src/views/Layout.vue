@@ -26,27 +26,48 @@
       
       <div class="header-right">
         <!-- 机场名称下拉框 -->
-        <div class="airport-selector">
-          <select v-model="selectedDockId" @change="handleDockChange" class="dock-selector">
-            <option v-for="dock in availableDocks" :key="dock.id" :value="dock.id">
-              {{ dock.name }}
-            </option>
-          </select>
-          <i class="arrow-down"></i>
-        </div>
-        
-        <!-- 通知图标 -->
-        <div class="notification-icon">
-          <div class="notification-badge">
-            <span>警</span>
+        <div class="el-select">
+          <div class="el-select__wrapper" 
+               :class="{ 'is-active': isSelectActive }" 
+               @click="toggleSelect">
+            <div class="el-select__selection">
+              <div class="el-select__selected-item el-select__placeholder">
+                <span>{{ selectedDock?.name || '选择机场' }}</span>
+              </div>
+            </div>
+            <div class="el-select__suffix">
+              <i class="el-icon el-select__caret">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+                  <path fill="currentColor" d="M831.872 340.864 512 652.672 192.128 340.864a30.592 30.592 0 0 0-42.752 0 29.12 29.12 0 0 0 0 41.6L489.664 714.24a32 32 0 0 0 44.672 0l340.288-331.712a29.12 29.12 0 0 0 0-41.728 30.592 30.592 0 0 0-42.752 0z"></path>
+                </svg>
+              </i>
+            </div>
           </div>
         </div>
-        
+
+        <!-- 急停按钮 -->
+        <span class="stop-btn" :class="{ 'is-active': isStopActive }" @click="toggleStop">
+          <div class="stop-content">
+            <span>{{ isStopActive ? '启动' : '急停' }}</span>
+          </div>
+        </span>
+
         <!-- 用户信息 -->
-        <div class="user-info">
-          <img src="/src/assets/source_data/plane_2.png" alt="avatar" class="avatar" />
-          <span class="username">{{ user?.name || 'admin' }}</span>
-          <i class="arrow-down"></i>
+        <div class="user-info" @click="toggleUserMenu" v-click-outside="closeUserMenu">
+          <img src="/src/assets/source_data/avatar.jpg" alt="avatar" class="avatar" />
+          <div class="right-sel">
+            <span class="name">{{ user?.name || 'admin' }}</span>
+            <span class="triangle" :class="{ 'is-active': isUserMenuVisible }"></span>
+          </div>
+          <!-- 下拉菜单 -->
+          <div class="user-menu" v-show="isUserMenuVisible">
+            <div class="menu-item" @click="handleChangePassword">
+              <span>修改密码</span>
+            </div>
+            <div class="menu-item" @click="handleLogout">
+              <span>退出</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -58,7 +79,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+interface Dock {
+  id: string;
+  name: string;
+}
+
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useDeviceStore } from '@/stores/device'
@@ -70,20 +96,54 @@ const userStore = useUserStore()
 const deviceStore = useDeviceStore()
 
 const user = computed(() => userStore.user)
-const availableDocks = computed(() => deviceStore.availableDocks)
+const availableDocks = computed(() => deviceStore.availableDocks as Dock[])
 const selectedDockId = computed({
   get: () => deviceStore.selectedDockId,
   set: (value) => deviceStore.setSelectedDock(value)
 })
 
+const selectedDock = computed(() => {
+  return availableDocks.value.find(dock => dock.id === selectedDockId.value)
+})
+
+const isSelectActive = ref(false)
+
+const toggleSelect = () => {
+  isSelectActive.value = !isSelectActive.value
+  handleDockChange()
+}
+
 const handleDockChange = () => {
-  // 机巢切换后可以触发一些全局更新
-  console.log('机巢已切换到:', selectedDockId.value)
+  // 处理机场选择逻辑
+  console.log('当前选中的机场:', selectedDock.value?.name)
+}
+
+const isUserMenuVisible = ref(false)
+
+const toggleUserMenu = (e: Event) => {
+  e.stopPropagation()
+  isUserMenuVisible.value = !isUserMenuVisible.value
+}
+
+const closeUserMenu = () => {
+  isUserMenuVisible.value = false
+}
+
+const handleChangePassword = () => {
+  // 处理修改密码逻辑
+  closeUserMenu()
 }
 
 const handleLogout = () => {
-  userStore.logout()
+  // 处理退出登录逻辑
   router.push('/login')
+  closeUserMenu()
+}
+
+const isStopActive = ref(false)
+
+const toggleStop = () => {
+  isStopActive.value = !isStopActive.value
 }
 </script>
 
@@ -106,11 +166,11 @@ const handleLogout = () => {
 
 /* 顶部导航栏 */
 .header {
-  height: 60px;
-  background-image: url('/title.png');
-  background-repeat: repeat-x;
-  background-position: left center;
-  background-size: auto 100%;
+  width: 100%;
+  height: 90px;
+  background: url('/title.png') no-repeat;
+  background-size: 100% 98%;
+  background-color: #000;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -129,7 +189,8 @@ const handleLogout = () => {
   position: relative;
   z-index: 1;
   min-width: 0;
-  margin-left: -30px;
+  margin-left: -40px;
+  margin-top: 5px;
 }
 
 .logo {
@@ -163,28 +224,36 @@ const handleLogout = () => {
 /* 中间导航菜单 */
 .nav-menu {
   display: flex;
-  align-items: center;
-  gap: clamp(20px, 4vw, 50px);
+  align-items: flex-start;
+  gap: 0;
   position: relative;
   z-index: 1;
   flex: 1;
-  justify-content: center;
-  max-width: 600px;
-  margin: 0 20px;
+  justify-content: flex-start;
+  margin-left: 8vw;
+  list-style: none;
+  height: 54px;
+  margin-top: 26px;
+  border-radius: 0;
 }
 
 .nav-item {
-  padding: 8px clamp(8px, 1.5vw, 20px);
+  width: 100px;
+  height: 54px;
+  background: url('/src/assets/source_data/bg_data/title_dark.png') no-repeat;
+  background-position: bottom center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Source Han Sans CN;
+  font-weight: 400;
+  font-size: 18px;
+  color: #9f9f9f;
+  font-style: normal;
+  text-transform: none;
   cursor: pointer;
-  transition: all 0.3s ease;
-  border-radius: 4px;
-  position: relative;
+  margin-right: 70px;
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: clamp(12px, 1.4vw, 16px);
-  font-weight: 500;
-  white-space: nowrap;
-  text-align: center;
 }
 
 .nav-item:hover {
@@ -192,148 +261,241 @@ const handleLogout = () => {
 }
 
 .nav-item.active {
-  background: rgba(255, 255, 255, 0.1);
   color: #ffffff;
+  background: url('/src/assets/source_data/bg_data/title_light.png') no-repeat;
+  background-position: bottom center;
+}
+
+.nav-item:last-child {
+  margin-right: 0;
 }
 
 .nav-item.active::after {
-  content: '';
-  position: absolute;
-  bottom: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: clamp(20px, 3vw, 40px);
-  height: 2px;
-  background: #4FC3F7;
-  border-radius: 1px;
+  display: none;
 }
 
 /* 右侧功能区 */
 .header-right {
   display: flex;
   align-items: center;
-  gap: clamp(12px, 2vw, 24px);
+  gap: clamp(15px, 2vw, 20px);
   position: relative;
   z-index: 1;
-  min-width: 0;
+  margin-right: clamp(15px, 2vw, 20px);
 }
 
-/* 机场名称下拉框 */
-.airport-selector {
+/* 机场选择器样式 */
+.el-select {
+  --el-transition-duration: 0.3s;
+  --el-border-radius-base: 4px;
+  --el-border-color: rgba(255, 255, 255, 0.2);
+  --el-fill-color-blank: rgba(255, 255, 255, 0.1);
+  
+  width: 150px;
+  margin-right: 20px;
+  display: inline-block;
   position: relative;
+  vertical-align: middle;
+}
+
+.el-select__wrapper {
+  align-items: center;
+  background-color: var(--el-fill-color-blank);
+  border-radius: var(--el-border-radius-base);
+  box-shadow: 0 0 0 1px var(--el-border-color) inset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  gap: 6px;
+  line-height: 24px;
+  min-height: 32px;
+  padding: 4px 12px;
+  position: relative;
+  text-align: left;
+  transform: translateZ(0);
+  transition: var(--el-transition-duration);
+}
+
+.el-select__wrapper:hover {
+  --el-border-color: rgba(255, 255, 255, 0.4);
+  --el-fill-color-blank: rgba(255, 255, 255, 0.15);
+}
+
+.el-select__selection {
   display: flex;
   align-items: center;
-  min-width: 0;
+  flex: 1;
+  color: #fff;
+  font-size: 14px;
+  line-height: 24px;
 }
 
-.dock-selector {
-  padding: 6px clamp(20px, 3vw, 30px) 6px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  border-radius: 4px;
-  color: #ffffff;
-  font-size: clamp(12px, 1.4vw, 16px);
-  cursor: pointer;
-  transition: background 0.3s ease;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  max-width: clamp(80px, 15vw, 150px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.el-select__placeholder {
+  color: #fff;
+  margin-right: 20px;
 }
 
-.dock-selector:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.dock-selector:focus {
-  outline: none;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.arrow-down {
+.el-select__suffix {
   position: absolute;
-  right: 8px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 0;
-  height: 0;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-top: 4px solid #ffffff;
-  pointer-events: none;
+  color: #fff;
+  transition: transform var(--el-transition-duration);
+  display: flex;
+  align-items: center;
 }
 
-/* 通知图标 */
-.notification-icon {
-  position: relative;
+.el-select__caret {
+  height: 16px;
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.el-select__caret svg {
+  width: 12px;
+  height: 12px;
+  transition: transform var(--el-transition-duration);
+}
+
+.el-select__wrapper:hover .el-select__suffix {
+  color: #fff;
+}
+
+.el-select__wrapper:active .el-select__suffix svg {
+  transform: rotate(180deg);
+}
+
+/* 添加一个激活状态的类 */
+.el-select__wrapper.is-active {
+  --el-border-color: rgba(255, 255, 255, 0.6);
+  --el-fill-color-blank: rgba(255, 255, 255, 0.2);
+}
+
+.el-select__wrapper.is-active .el-select__suffix svg {
+  transform: rotate(180deg);
+}
+
+/* 急停按钮样式 */
+.stop-btn {
+  width: 44px;
+  height: 44px;
   cursor: pointer;
-  flex-shrink: 0;
-}
-
-.notification-badge {
-  width: clamp(24px, 3vw, 36px);
-  height: clamp(24px, 3vw, 36px);
-  background: #ff4444;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.3s ease;
+  transition: all 0.3s;
+  position: relative;
+  background: url('/src/assets/source_data/stop_release.png') no-repeat center center;
+  background-size: contain;
+  border: none;
+  outline: none;
 }
 
-.notification-badge:hover {
-  transform: scale(1.1);
+.stop-btn:active {
+  background-image: url('/src/assets/source_data/stop_click.png');
+  transform: scale(0.95);
 }
 
-.notification-badge span {
-  color: #ffffff;
-  font-size: clamp(10px, 1.2vw, 14px);
-  font-weight: bold;
+.stop-btn.is-active {
+  background-image: url('/src/assets/source_data/stop_click.png');
 }
 
-/* 用户信息 */
+.stop-content {
+  display: none;
+}
+
+.stop-icon {
+  display: flex;
+  align-items: center;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* 用户信息样式 */
 .user-info {
   display: flex;
   align-items: center;
-  gap: clamp(4px, 1vw, 12px);
-  padding: 4px clamp(8px, 1.5vw, 16px);
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
+  gap: 12px;
   cursor: pointer;
-  transition: background 0.3s ease;
+  padding: 2px;
   position: relative;
-  min-width: 0;
-  max-width: clamp(100px, 20vw, 200px);
-}
-
-.user-info:hover {
-  background: rgba(255, 255, 255, 0.15);
 }
 
 .avatar {
-  width: clamp(20px, 2.5vw, 28px);
-  height: clamp(20px, 2.5vw, 28px);
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: #ffffff;
-  padding: 2px;
-  flex-shrink: 0;
+  object-fit: cover;
 }
 
-.username {
-  color: #ffffff;
-  font-size: clamp(12px, 1.4vw, 16px);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.right-sel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 80px;
+}
+
+.name {
+  color: #fff;
+  font-size: 18px;
+  font-weight: bold;
+  font-family: Source Han Sans CN;
+}
+
+.triangle {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #999;
+  margin-left: 4px;
+  transition: transform 0.3s;
+}
+
+.triangle.is-active {
+  transform: rotate(180deg);
+}
+
+/* 用户菜单样式 */
+.user-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  min-width: 120px;
+  z-index: 10;
+}
+
+.menu-item {
+  padding: 10px 16px;
+  color: #333;
+  font-size: 14px;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: #f5f5f5;
+  color: #1890ff;
+}
+
+.menu-item:not(:last-child) {
+  border-bottom: 1px solid #f0f0f0;
 }
 
 /* 主内容区 */
 .main-content {
-  height: calc(100vh - 60px);
+  height: calc(100vh - 88px);
   overflow-y: auto;
   background: #f5f5f5;
 }
@@ -402,8 +564,11 @@ const handleLogout = () => {
   }
   
   .header-right {
-    gap: clamp(6px, 1vw, 12px);
-    min-width: auto;
+    gap: clamp(10px, 1.5vw, 15px);
+  }
+  
+  .el-select {
+    min-width: 100px;
   }
   
   .dock-selector {
