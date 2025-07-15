@@ -24,7 +24,7 @@
                   <img src="@/assets/source_data/speed.png" alt="" />
                   <div>
                     <p>0.00m/s</p>
-                    <p>当前行走速度</p>
+                    <p>当前飞行速度</p>
                   </div>
                 </div>
                 <div class="b-top-rightDiv">
@@ -37,8 +37,8 @@
                 <div class="b-top-rightDiv">
                   <img src="@/assets/source_data/total_miles.png" alt="" />
                   <div>
-                    <p>18.389公里</p>
-                    <p>累计行走里程</p>
+                    <p>18.3公里</p>
+                    <p>累计飞行里程</p>
                   </div>
                 </div>
               </div>
@@ -47,28 +47,38 @@
           <div class="b-bottom">
             <div class="status-row">
               <div class="status-item">
-                <img src="@/assets/source_data/svg_data/longitude.svg" alt="经度" />
-                <span class="label">经度</span>
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/longitude.svg" alt="经度" />
+                  <span class="label">经度</span>
+                </div>
                 <span class="value">116.38°E</span>
               </div>
               <div class="status-item">
-                <img src="@/assets/source_data/svg_data/latitude.svg" alt="纬度" />
-                <span class="label">纬度</span>
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/latitude.svg" alt="纬度" />
+                  <span class="label">纬度</span>
+                </div>
                 <span class="value">39.90°N</span>
               </div>
               <div class="status-item">
-                <img src="@/assets/source_data/svg_data/altitude.svg" alt="高度" />
-                <span class="label">高度</span>
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/altitude.svg" alt="高度" />
+                  <span class="label">高度</span>
+                </div>
                 <span class="value">43m</span>
               </div>
               <div class="status-item">
-                <img src="@/assets/source_data/svg_data/speed.svg" alt="速度" />
-                <span class="label">速度</span>
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/speed.svg" alt="速度" />
+                  <span class="label">速度</span>
+                </div>
                 <span class="value">0.0m/s</span>
               </div>
               <div class="status-item">
-                <img src="@/assets/source_data/svg_data/stars.svg" alt="搜星" />
-                <span class="label">提醒</span>
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/stars.svg" alt="搜星" />
+                  <span class="label">搜星</span>
+                </div>
                 <span class="value">4</span>
               </div>
             </div>
@@ -83,24 +93,78 @@
           机场状态
         </div>
         <div class="on2-bottom">
-          <div class="on2-bottom-center">
-            <div class="fabu">
-              <div class="div">循迹点：</div>
-              <div class="select-box">
-                <span>请选择</span>
-                <span class="arrow"></span>
+          <div class="b-top">
+            <div class="b-top-left">
+              <div class="zhuangtai4">
+                <div>离线</div>
               </div>
-              <span class="span">循迹</span>
-              <span class="span1">停止</span>
+              <div class="img">
+                <img src="@/assets/source_data/dock3.png" alt="" />
+              </div>
             </div>
-            <div class="fabu">
-              <div class="div">发布点：</div>
-              <div class="select-box">
-                <span>请选择</span>
-                <span class="arrow"></span>
+            <div class="b-top-right">
+              <div class="b-top-rightCard">
+                <div class="b-top-rightDiv">
+                  <img src="@/assets/source_data/speed.png" alt="" />
+                  <div>
+                    <p>95KB/s</p>
+                    <p>机场网络速率</p>
+                  </div>
+                </div>
+                <div class="b-top-rightDiv">
+                  <img src="@/assets/source_data/today_time.png" alt="" />
+                  <div>
+                    <p>8次</p>
+                    <p>累计任务次数</p>
+                  </div>
+                </div>
+                <div class="b-top-rightDiv">
+                  <img src="@/assets/source_data/total_miles.png" alt="" />
+                  <div>
+                    <p>15小时</p>
+                    <p>累计运行时长</p>
+                  </div>
+                </div>
               </div>
-              <span class="span">发布</span>
-              <span class="span1">停止</span>
+            </div>
+          </div>
+          <div class="b-bottom">
+            <div class="status-row">
+              <div class="status-item">
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/longitude.svg" alt="经度" />
+                  <span class="label">经度</span>
+                </div>
+                <span class="value">116.38°E</span>
+              </div>
+              <div class="status-item">
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/latitude.svg" alt="纬度" />
+                  <span class="label">纬度</span>
+                </div>
+                <span class="value">39.90°N</span>
+              </div>
+              <div class="status-item">
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/stock.svg" alt="舱盖" />
+                  <span class="label">舱盖</span>
+                </div>
+                <span class="value">关闭</span>
+              </div>
+              <div class="status-item">
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/temperature.svg" alt="温度" />
+                  <span class="label">温度</span>
+                </div>
+                <span class="value">25°C</span>
+              </div>
+              <div class="status-item">
+                <div class="top-row">
+                  <img src="@/assets/source_data/svg_data/humidity.svg" alt="湿度" />
+                  <span class="label">湿度</span>
+                </div>
+                <span class="value">65%</span>
+              </div>
             </div>
           </div>
         </div>
@@ -114,13 +178,38 @@
         </div>
         <div class="on3-bottom">
           <div class="on3-bottom-center">
-            <div class="div">多任务：</div>
-            <div class="select-box">
-              <span>请选择</span>
-              <span class="arrow"></span>
+            <div class="control-row">
+              <div class="div">航线名称：</div>
+              <div class="el-select">
+                <div class="el-select__wrapper">
+                  <div class="el-select__selection">
+                    <div class="el-select__selected-item el-select__placeholder">
+                      <span>请选择</span>
+                    </div>
+                  </div>
+                  <div class="el-select__suffix">
+                    <i class="el-select__caret">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+                        <path fill="currentColor" d="M831.872 340.864 512 652.672 192.128 340.864a30.592 30.592 0 0 0-42.752 0 29.12 29.12 0 0 0 0 41.6L489.664 714.24a32 32 0 0 0 44.672 0l340.288-331.712a29.12 29.12 0 0 0 0-41.728 30.592 30.592 0 0 0-42.752 0z"></path>
+                      </svg>
+                    </i>
+                  </div>
+                </div>
+              </div>
+              <div class="button-group">
+                <span class="span">下发任务</span>
+                <span class="span1">取消任务</span>
+              </div>
             </div>
-            <span class="span">执行</span>
-            <span class="span1">停止</span>
+            <!-- 修改第二行的结构 -->
+            <div class="control-row second-row">
+              <div class="button-group-second">
+                <span class="span">航线暂停</span>
+                <span class="span">航线恢复</span>
+                <span class="span">一键返航</span>
+                <span class="span1">取消返航</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -132,24 +221,27 @@
           环境状态
         </div>
         <div class="on4-bottom">
-          <div class="on4-bottom-t">
-            <div class="on4-bottom-tl">
-              <p>当前无待执行任务</p>
-              <p>
-                <span>预计巡检时间：</span>
-                <span>预计剩余时间：</span>
-              </p>
+          <div class="env-status">
+            <div class="env-item">
+              <img src="@/assets/source_data/svg_data/env_temperature.svg" alt="温度" />
+              <div class="env-info">
+                <div class="env-label">环境温度</div>
+                <div class="env-value">35°C</div>
+              </div>
             </div>
-            <div class="on4-bottom-tr">
-              <span>未知</span>
+            <div class="env-item">
+              <img src="@/assets/source_data/svg_data/env_wind.svg" alt="湿度" />
+              <div class="env-info">
+                <div class="env-label">风速</div>
+                <div class="env-value">1.2m/s</div>
+              </div>
             </div>
-          </div>
-          <div class="on4-bottom-b">
-            <div class="divon4">
-              <div id="myChart2" style="width: 100%; height: 100%;"></div>
-            </div>
-            <div class="divon4">
-              <div id="myChart3" style="width: 100%; height: 100%;"></div>
+            <div class="env-item">
+              <img src="@/assets/source_data/svg_data/env_rain.svg" alt="降水量" />
+              <div class="env-info">
+                <div class="env-label">降水量</div>
+                <div class="env-value">10mm</div>
+              </div>
             </div>
           </div>
         </div>
@@ -227,30 +319,31 @@
 
 .left-on1 {
   width: 100%;
-  height: calc(33.3% - 20px);
+  height: calc((100vh - 124px) * 0.333 - 20px);
   background-image: url('@/assets/source_data/bg_data/card_first_body.png');
   background-size: 100% 100%;
 }
 
 .left-on2 {
   width: 100%;
-  height: calc(33.3% - 20px);
+  height: calc((100vh - 124px) * 0.333 - 20px);
   background-image: url('@/assets/source_data/bg_data/card_first_body.png');
   background-size: 100% 100%;
 }
 
 .left-on3 {
   width: 100%;
-  height: calc(13.3% - 20px);
+  height: calc((100vh - 124px) * 0.2 - 20px);
   background-image: url('@/assets/source_data/bg_data/card_first_body.png');
   background-size: 100% 100%;
 }
 
 .left-on4 {
   width: 100%;
-  height: calc(21% - 20px);
+  height: calc((100vh - 124px) * 0.134);
   background-image: url('@/assets/source_data/bg_data/card_first_body.png');
   background-size: 100% 100%;
+  margin-bottom: 0;
 }
 
 .cardTitle {
@@ -277,21 +370,25 @@
   width: calc(100% - 40px);
   padding: 0 20px;
   height: calc(100% - 41px);
+  position: relative;
 }
 
 /* 顶部区域 */
 .b-top {
-  width: 100%;
-  height: 60%;
+  width: 440px;
+  height: 65%;
   display: flex;
+  margin-top: -5px;
 }
 
 .b-top-left {
   width: 60%;
   height: 100%;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
+  position: relative;
+  gap: clamp(10px, 2vw, 20px);
 }
 
 .b-top-right {
@@ -321,13 +418,15 @@
   color: #c6c7c7;
   font-size: 14px;
   font-weight: 500;
-  background: url(data:image/png;base64,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) no-repeat;
+  background: url('@/assets/source_data/status.png') no-repeat;
   background-size: 100% 100%;
 }
 
 .img {
   width: 55%;
-  height: 85%;
+  aspect-ratio: 100/100;
+  max-width: 100px;
+  max-height: 100px;
 }
 
 .img img {
@@ -342,35 +441,34 @@
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
-  align-items: center;
+  align-items: flex-end;
+  padding-right: 5px;
+  padding-top: 15px;
+  gap: 1px;
 }
 
 .b-top-rightDiv {
   width: 85%;
-  height: 42px;
+  min-height: 38px;
+  height: auto;
   border-radius: 10px;
   background: linear-gradient(270deg, #0187bf4d, #0187bf00);
   display: flex;
   justify-content: center;
   align-items: center;
   color: #d4edfd;
+  padding: 0.5rem 0;
 }
 
 .b-top-rightDiv img {
-  width: 22px;
-  height: 22px;
+  width: clamp(35px, 4vw, 48px);
+  height: clamp(25px, 3vw, 35px);
   margin-right: 10px;
-}
-
-.b-top-rightDiv div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
 .b-top-rightDiv p:first-child {
   color: #d4edfd;
-  font-size: 16px;
+  font-size: clamp(14px, 1vw, 16px);
   font-weight: 600;
   margin-bottom: 3px;
   line-height: 1;
@@ -378,7 +476,7 @@
 
 .b-top-rightDiv p:last-child {
   color: rgba(212, 237, 253, 0.7);
-  font-size: 11px;
+  font-size: clamp(10px, 0.8vw, 11px);
   line-height: 1;
 }
 
@@ -390,51 +488,58 @@
 
 /* 底部区域 */
 .b-bottom {
-  width: 100%;
-  height: 40%;
+  width: 440px;
+  height: 30%;
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  position: absolute;
+  bottom: 0;
+  padding-bottom: 2%;
 }
 
 .status-row {
-  width: 100%;
+  width: 440px;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  background: rgba(1, 135, 191, 0.1);
   border-radius: 20px;
-  padding: 14px 16px;
+  gap: 45px;
   height: 55px;
+  padding: 0 10px;
 }
 
 .status-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  flex: 1;
+  gap: 8px;
   justify-content: center;
+  width: clamp(50px, 12%, 60px);
+}
+
+.status-item .top-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .status-item img {
-  width: 24px;
-  height: 24px;
+  width: clamp(20px, 2.5vw, 24px);
+  height: clamp(20px, 2.5vw, 24px);
   filter: brightness(0) saturate(100%) invert(69%) sepia(28%) saturate(469%) hue-rotate(169deg) brightness(91%) contrast(87%);
-  margin-bottom: 3px;
 }
 
 .status-item .label {
   color: rgba(212, 237, 253, 0.8);
-  font-size: 11px;
-  margin-bottom: 2px;
+  font-size: clamp(10px, 0.8vw, 11px);
   font-weight: 500;
 }
 
 .status-item .value {
   color: #d4edfd;
-  font-size: 13px;
+  font-size: clamp(12px, 0.9vw, 13px);
   font-weight: 600;
+  text-align: center;
 }
 
 .icon-back {
@@ -473,26 +578,59 @@
   font-weight: 500;
 }
 
-/* 通用选择框样式 */
-.select-box {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  padding: 8px 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
+/* 下拉框样式 */
+.el-select {
+  width: 190px;
+  border: 1px rgba(201, 59, 59, 0) solid;
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+}
+
+.el-select__wrapper {
+  width: 190px;
   height: 32px;
-  color: rgba(255, 255, 255, 0.8);
+  background-color: transparent;
+  box-shadow: 0 0 0 1px #164159 inset;
+  align-items: center;
+  border-radius: 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  gap: 6px;
+  line-height: 24px;
+  padding: 4px 12px;
+  position: relative;
+  text-align: left;
+}
+
+.el-select__selection {
+  flex: 1;
+  position: relative;
+}
+
+.el-select__placeholder {
+  color: rgba(255, 255, 255, 0.5);
   font-size: 14px;
 }
 
-.arrow {
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-top: 4px solid #999;
+.el-select__suffix {
+  display: flex;
+  align-items: center;
+}
+
+.el-select__caret {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  height: 16px;
+  width: 16px;
+  display: inline-flex;
+}
+
+.el-select__caret svg {
+  height: 100%;
+  width: 100%;
 }
 
 /* 巡检点样式 */
@@ -548,45 +686,65 @@
 /* 任务下发样式 */
 .on3-bottom-center {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: clamp(10px, 2vh, 15px);
   height: 100%;
+  padding: clamp(5px, 1vh, 10px) 0;
 }
 
-.on3-bottom-center .div {
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  padding-right: 20px;
+  justify-content: flex-start;
+}
+
+.control-row .div {
   color: rgba(255, 255, 255, 0.8);
-  font-size: 14px;
-  min-width: 60px;
-}
-
-.on3-bottom-center .span {
-  background: rgba(0, 168, 255, 0.1);
-  border: 1px solid #00a8ff;
-  color: #00a8ff;
-  padding: 4px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.3s;
   font-size: 12px;
+  white-space: nowrap;
 }
 
-.on3-bottom-center .span:hover {
-  background: rgba(0, 168, 255, 0.2);
-}
-
-.on3-bottom-center .span1 {
-  background: rgba(255, 77, 79, 0.1);
-  border: 1px solid #ff4d4f;
-  color: #ff4d4f;
-  padding: 4px 12px;
+.control-row .span {
+  width: clamp(60px, 6vw, 70px);
+  height: 30px;
+  line-height: 30px;
+  text-align: center;
+  background: #0c3c56;
   border-radius: 4px;
+  border: 1px solid rgba(38, 131, 182, 0);
+  color: #67d5fd;
   cursor: pointer;
-  transition: all 0.3s;
   font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.3s;
 }
 
-.on3-bottom-center .span1:hover {
-  background: rgba(255, 77, 79, 0.2);
+.control-row .span:hover {
+  border-color: rgba(38, 131, 182, 0.8);
+  background: #0c4666;
+}
+
+.control-row .span1 {
+  width: clamp(60px, 6vw, 70px);
+  height: 30px;
+  line-height: 30px;
+  text-align: center;
+  background: #561c1c;
+  border-radius: 4px;
+  border: 1px solid rgba(182, 38, 38, 0);
+  color: #fd6767;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.3s;
+}
+
+.control-row .span1:hover {
+  border-color: rgba(182, 38, 38, 0.8);
+  background: #662626;
 }
 
 /* 任务信息样式 */
@@ -689,5 +847,72 @@
   width: 16px;
   height: 16px;
   color: #00a8ff;
+}
+
+.button-group {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+
+.button-group-second {
+  display: flex;
+  gap: clamp(20px, 2vw, 26px);
+  margin-left: auto;  /* 靠右对齐 */
+  padding-right: 20px;
+}
+
+.button-group-second .span,
+.button-group-second .span1 {
+  width: clamp(80px, 8vw, 90px);
+}
+
+.button-group-second .span:first-child {
+  margin-left: 0;
+}
+
+.button-group-second .span1:last-child {
+  margin-right: 0;
+}
+
+/* 环境状态样式 */
+.env-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: clamp(15px, 2vh, 20px) clamp(15px, 2vw, 20px) clamp(15px, 2vh, 20px) clamp(8px, 1vw, 10px);
+  height: 100%;
+  gap: clamp(30px, 4vw, 40px);
+}
+
+.env-item {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.5vw, 15px);
+}
+
+.env-item img {
+  width: clamp(32px, 4vw, 38px);
+  height: clamp(32px, 4vw, 38px);
+  filter: brightness(0) saturate(100%) invert(80%) sepia(33%) saturate(7493%) hue-rotate(157deg) brightness(101%) contrast(101%);
+}
+
+.env-info {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(4px, 0.8vh, 6px);
+}
+
+.env-label {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: clamp(12px, 1vw, 13px);
+  min-width: clamp(60px, 5vw, 65px);
+  white-space: nowrap;
+}
+
+.env-value {
+  color: #67d5fd;
+  font-size: clamp(16px, 1.2vw, 18px);
+  font-weight: 500;
 }
 </style>
