@@ -360,33 +360,13 @@
               <div class="progress-item">
                 <div :ref="el => taskPieChart1Ref = el as HTMLElement" class="progress-chart"></div>
                 <div class="progress-label">
-                  <div class="label">进度</div>
-                  <div class="legend">
-                    <div class="legend-item">
-                      <span class="dot inspected"></span>
-                      <span>已巡检</span>
-                    </div>
-                    <div class="legend-item">
-                      <span class="dot waiting"></span>
-                      <span>待巡检</span>
-                    </div>
-                  </div>
+                  <!-- Removing custom legend -->
                 </div>
               </div>
               <div class="progress-item">
                 <div :ref="el => taskPieChart2Ref = el as HTMLElement" class="progress-chart"></div>
                 <div class="progress-label">
-                  <div class="label">任务状态</div>
-                  <div class="legend">
-                    <div class="legend-item">
-                      <span class="dot normal"></span>
-                      <span>正常</span>
-                    </div>
-                    <div class="legend-item">
-                      <span class="dot abnormal"></span>
-                      <span>异常</span>
-                    </div>
-                  </div>
+                  <!-- Removing custom legend -->
                 </div>
               </div>
             </div>
@@ -407,7 +387,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import * as echarts from 'echarts'
 
 // 当前选中的标签
@@ -580,6 +560,8 @@ const initAlarmTrendChart = () => {
   alarmTrendChart.setOption(option)
 }
 
+
+
 // 初始化任务饼图
 const initTaskPieCharts = () => {
   if (!taskPieChart1Ref.value || !taskPieChart2Ref.value) return
@@ -588,185 +570,232 @@ const initTaskPieCharts = () => {
   const progressOption = {
     backgroundColor: 'transparent',
     title: {
-      text: '75%',
-      x: 'center',
-      y: 'center',
+      text: '巡检进度',
+      left: 'center',
+      top: '35%',
       textStyle: {
-        fontSize: 24,
+        fontSize: 16,
         fontWeight: 'bold',
         color: '#67d5fd',
-        textShadow: '0 0 10px rgba(103, 213, 253, 0.3)'
+        lineHeight: 20
+      },
+      subtext: '0%',
+      subtextStyle: {
+        fontSize: 14,
+        color: '#67d5fd'
       }
     },
-    graphic: [
-      {
-        type: 'group',
-        left: 'center',
-        top: 'center',
-        children: [
-          {
-            type: 'ring',
-            shape: {
-              r: 70,
-              r0: 65
-            },
-            style: {
-              fill: 'transparent',
-              stroke: '#0c2c44',
-              lineWidth: 2
-            }
-          }
-        ]
-      }
-    ],
+    tooltip: {
+      trigger: 'item',
+      formatter: '{a} <br/>{b}: {c} ({d}%)'
+    },
+    legend: {
+      show: true,
+      bottom: '5%',
+      left: 'center',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: {
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: 12
+      },
+      selectedMode: false
+    },
     series: [
       {
+        name: '巡检进度',
         type: 'pie',
-        radius: ['75%', '85%'],
+        radius: ['65%', '85%'],
+        center: ['50%', '50%'],
         startAngle: 90,
-        avoidLabelOverlap: false,
         label: {
           show: false
         },
         emphasis: {
-          disabled: true
+          focus: 'self',
+          scale: true,
+          scaleSize: 5
         },
         data: [
           { 
-            value: 75, 
+            value: 25, 
+            name: '已巡检',
             itemStyle: {
               color: {
                 type: 'linear',
                 x: 0,
                 y: 0,
-                x2: 0,
-                y2: 1,
-                colorStops: [{
-                  offset: 0,
-                  color: '#67d5fd'
-                }, {
-                  offset: 1,
-                  color: '#2683b6'
-                }]
+                x2: 1,
+                y2: 0,
+                colorStops: [
+                  { offset: 0, color: '#67d5fd' },
+                  { offset: 1, color: '#1890ff' }
+                ]
               },
               shadowBlur: 10,
               shadowColor: 'rgba(103, 213, 253, 0.5)'
-            },
-            name: '已巡检'
+            }
           },
           { 
-            value: 25, 
+            value: 75, 
+            name: '待巡检',
             itemStyle: {
-              color: 'rgba(12, 44, 68, 0.6)',
-              borderWidth: 1,
-              borderColor: 'rgba(103, 213, 253, 0.2)'
-            },
-            name: '待巡检'
+              color: {
+                type: 'linear',
+                x: 0,
+                y: 0,
+                x2: 1,
+                y2: 0,
+                colorStops: [
+                  { offset: 0, color: '#ff8000' },
+                  { offset: 1, color: '#ff4d4f' }
+                ]
+              },
+              shadowBlur: 10,
+              shadowColor: 'rgba(255, 128, 0, 0.5)'
+            }
           }
         ],
         animationType: 'scale',
         animationEasing: 'elasticOut',
-        animationDelay: function (idx: number) {
-          return Math.random() * 200;
-        }
+        animationDuration: 1000
       }
     ]
-  }
+  };
 
   // 状态环形图配置
   const statusOption = {
     backgroundColor: 'transparent',
     title: {
-      text: '正常',
-      x: 'center',
-      y: 'center',
+      text: '任务状态',
+      left: 'center',
+      top: '35%',
       textStyle: {
-        fontSize: 20,
+        fontSize: 16,
         fontWeight: 'bold',
         color: '#52C41A',
-        textShadow: '0 0 10px rgba(82, 196, 26, 0.3)'
+        lineHeight: 20
+      },
+      subtext: '正常',
+      subtextStyle: {
+        fontSize: 14,
+        color: '#52C41A'
       }
     },
-    graphic: [
-      {
-        type: 'group',
-        left: 'center',
-        top: 'center',
-        children: [
-          {
-            type: 'ring',
-            shape: {
-              r: 70,
-              r0: 65
-            },
-            style: {
-              fill: 'transparent',
-              stroke: '#0c2c44',
-              lineWidth: 2
-            }
-          }
-        ]
-      }
-    ],
+    tooltip: {
+      trigger: 'item',
+      formatter: '{a} <br/>{b}: {c} ({d}%)'
+    },
+    legend: {
+      show: true,
+      bottom: '5%',
+      left: 'center',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: {
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: 12
+      },
+      selectedMode: false
+    },
     series: [
       {
+        name: '任务状态',
         type: 'pie',
-        radius: ['75%', '85%'],
+        radius: ['65%', '85%'],
+        center: ['50%', '50%'],
         startAngle: 90,
-        avoidLabelOverlap: false,
         label: {
           show: false
         },
         emphasis: {
-          disabled: true
+          focus: 'self',
+          scale: true,
+          scaleSize: 5
         },
         data: [
           { 
-            value: 100, 
+            value: 75, 
+            name: '正常',
             itemStyle: {
               color: {
                 type: 'linear',
                 x: 0,
                 y: 0,
-                x2: 0,
-                y2: 1,
-                colorStops: [{
-                  offset: 0,
-                  color: '#52C41A'
-                }, {
-                  offset: 1,
-                  color: '#3d9213'
-                }]
+                x2: 1,
+                y2: 0,
+                colorStops: [
+                  { offset: 0, color: '#52C41A' },
+                  { offset: 1, color: '#87d068' }
+                ]
               },
               shadowBlur: 10,
               shadowColor: 'rgba(82, 196, 26, 0.5)'
-            },
-            name: '正常'
+            }
           },
           { 
-            value: 0, 
+            value: 25, 
+            name: '异常',
             itemStyle: {
-              color: 'rgba(12, 44, 68, 0.6)',
-              borderWidth: 1,
-              borderColor: 'rgba(82, 196, 26, 0.2)'
-            },
-            name: '异常'
+              color: {
+                type: 'linear',
+                x: 0,
+                y: 0,
+                x2: 1,
+                y2: 0,
+                colorStops: [
+                  { offset: 0, color: '#000000' },
+                  { offset: 1, color: '#434343' }
+                ]
+              },
+              shadowBlur: 10,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            }
           }
         ],
         animationType: 'scale',
         animationEasing: 'elasticOut',
-        animationDelay: function (idx: number) {
-          return Math.random() * 200;
-        }
+        animationDuration: 1000
       }
     ]
-  }
+  };
 
   taskPieChart1 = echarts.init(taskPieChart1Ref.value)
   taskPieChart2 = echarts.init(taskPieChart2Ref.value)
 
   taskPieChart1.setOption(progressOption)
   taskPieChart2.setOption(statusOption)
+  
+  // 添加图表动画效果
+  const animateCharts = () => {
+    if (taskPieChart1 && taskPieChart2) {
+      // 为第一个图表添加旋转动画
+      taskPieChart1.setOption({
+        series: [{
+          animation: true,
+          animationDuration: 3000,
+          animationEasingUpdate: 'cubicInOut'
+        }]
+      });
+      
+      // 为第二个图表添加旋转动画
+      taskPieChart2.setOption({
+        series: [{
+          animation: true,
+          animationDuration: 3000,
+          animationEasingUpdate: 'cubicInOut'
+        }]
+      });
+    }
+  };
+  
+  // 初始动画
+  animateCharts();
+  
+  // 每隔一段时间刷新动画效果
+  setInterval(() => {
+    animateCharts();
+  }, 10000);
 }
 
 // 初始化航线报表图表
@@ -881,6 +910,37 @@ onMounted(() => {
     taskPieChart2?.resize()
     lineChart?.resize()
   })
+  
+  // 添加图表动画效果
+  const animateCharts = () => {
+    if (taskPieChart1 && taskPieChart2) {
+      // 为第一个图表添加旋转动画
+      taskPieChart1.setOption({
+        series: [{
+          animation: true,
+          animationDuration: 3000,
+          animationEasingUpdate: 'cubicInOut'
+        }]
+      });
+      
+      // 为第二个图表添加旋转动画
+      taskPieChart2.setOption({
+        series: [{
+          animation: true,
+          animationDuration: 3000,
+          animationEasingUpdate: 'cubicInOut'
+        }]
+      });
+    }
+  };
+  
+  // 初始动画
+  animateCharts();
+  
+  // 每隔一段时间刷新动画效果
+  setInterval(() => {
+    animateCharts();
+  }, 10000);
 })
 </script>
 
@@ -1402,7 +1462,6 @@ onMounted(() => {
 .divon4 {
   flex: 1;
   height: 131px;
-  background: rgba(0, 12, 23, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
@@ -2005,6 +2064,7 @@ onMounted(() => {
   padding: 0;
 }
 
+/* 任务进度图表样式调整 */
 .task-progress {
   width: 100%;
   height: 70%;
@@ -2013,16 +2073,17 @@ onMounted(() => {
   align-items: center;
   padding: 0;
   margin: 0;
-  gap: 20px;
+  gap: 30px;
+  margin-bottom: 60px; /* 增加底部间距，让图例有更多空间 */
+  transform: translateY(0); /* 移除垂直偏移 */
 }
 
 .progress-item {
   flex: 1;
   height: 100%;
-  background: rgba(0, 12, 23, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
@@ -2031,21 +2092,22 @@ onMounted(() => {
 .progress-chart {
   width: 100%;
   height: 100%;
+  transform: translateY(0); /* 不需要移动图表 */
 }
 
+/* 图例样式调整 */
 .progress-label {
-  position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 5px;
   z-index: 1;
+  position: absolute; /* 绝对定位 */
+  bottom: -20px; /* 向下移动图例 */
+  width: 100%;
 }
 
-.progress-label .label {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 14px;
-}
+/* 已移除进度和任务状态标签 */
 
 .legend {
   display: flex;
@@ -2058,6 +2120,20 @@ onMounted(() => {
   gap: 5px;
   color: rgba(255, 255, 255, 0.6);
   font-size: 12px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.legend-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.legend-item.active {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
 }
 
 .dot {
@@ -2067,11 +2143,11 @@ onMounted(() => {
 }
 
 .dot.inspected {
-  background: #59C0FC;
+  background: #67d5fd;
 }
 
 .dot.waiting {
-  background: rgba(89, 192, 252, 0.3);
+  background: #ff8000;
 }
 
 .dot.normal {
@@ -2079,7 +2155,7 @@ onMounted(() => {
 }
 
 .dot.abnormal {
-  background: rgba(82, 196, 26, 0.3);
+  background: #000000;
 }
 
 /* 地图容器样式 */
