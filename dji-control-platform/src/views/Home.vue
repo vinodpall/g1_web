@@ -325,13 +325,90 @@
 
     <!-- 右侧区域 -->
     <div class="right-column">
-      <!-- 这里将放置告警趋势和设备状态等信息 -->
+      <!-- 告警趋势卡片 -->
+      <div class="right-on1">
+        <div class="cardTitle">
+          <img src="@/assets/source_data/bg_data/card_logo.png" alt="card logo" />
+          航线报表
+        </div>
+        <div class="chart-container">
+          <div :ref="el => lineChartRef = el as HTMLElement" class="trend-chart"></div>
+        </div>
+      </div>
+
+      <!-- 航线任务卡片 -->
+      <div class="right-on2">
+        <div class="cardTitle">
+          <img src="@/assets/source_data/bg_data/card_logo.png" alt="card logo" />
+          航线任务
+        </div>
+        <div class="chart-container">
+          <div class="task-content">
+            <div class="task-header">
+              <div class="task-time">
+                <div class="task-name">任务名称：高架路灯巡检</div>
+                <div class="time-item">
+                  <span class="label">任务开始时间：2025-07-16 17:00:00</span>
+                  <span class="label">当前航点：第8个</span>
+                </div>
+              </div>
+              <div class="task-status">
+                <div class="status-btn waiting">未开始</div>
+              </div>
+            </div>
+            <div class="task-progress">
+              <div class="progress-item">
+                <div :ref="el => taskPieChart1Ref = el as HTMLElement" class="progress-chart"></div>
+                <div class="progress-label">
+                  <div class="label">进度</div>
+                  <div class="legend">
+                    <div class="legend-item">
+                      <span class="dot inspected"></span>
+                      <span>已巡检</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="dot waiting"></span>
+                      <span>待巡检</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="progress-item">
+                <div :ref="el => taskPieChart2Ref = el as HTMLElement" class="progress-chart"></div>
+                <div class="progress-label">
+                  <div class="label">任务状态</div>
+                  <div class="legend">
+                    <div class="legend-item">
+                      <span class="dot normal"></span>
+                      <span>正常</span>
+                    </div>
+                    <div class="legend-item">
+                      <span class="dot abnormal"></span>
+                      <span>异常</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 地图信息卡片 -->
+      <div class="right-on3">
+        <div class="cardTitle">
+          <img src="@/assets/source_data/bg_data/card_logo.png" alt="card logo" />
+          地图信息
+        </div>
+        <div class="map-container" ref="mapContainer"></div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import * as echarts from 'echarts'
 
 // 当前选中的标签
 const currentTab = ref('device')
@@ -408,6 +485,403 @@ const selectScreenMode = (mode: string) => {
   currentScreenMode.value = mode
   showScreenMenu.value = false
 }
+
+// 告警趋势图表实例
+let alarmTrendChart: echarts.ECharts | null = null
+// 任务饼图实例
+let taskPieChart1: echarts.ECharts | null = null
+let taskPieChart2: echarts.ECharts | null = null
+
+// 航线报表图表实例
+let lineChart: echarts.ECharts | null = null
+
+// 图表容器引用
+const alarmTrendChartRef = ref<HTMLElement | null>(null)
+const taskPieChart1Ref = ref<HTMLElement | null>(null)
+const taskPieChart2Ref = ref<HTMLElement | null>(null)
+const lineChartRef = ref<HTMLElement | null>(null)
+
+// 初始化告警趋势图表
+const initAlarmTrendChart = () => {
+  if (!alarmTrendChartRef.value) return
+  
+  alarmTrendChart = echarts.init(alarmTrendChartRef.value)
+  const option = {
+    grid: {
+      top: '15%',
+      left: '5%',
+      right: '5%',
+      bottom: '8%',
+      containLabel: true
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: ['设备告警', '巡检告警', '环境告警', '任务告警'],
+      axisLine: {
+        lineStyle: {
+          color: 'rgba(255, 255, 255, 0.1)'
+        }
+      },
+      axisLabel: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: 12,
+        interval: 0
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        show: false
+      },
+      splitLine: {
+        lineStyle: {
+          color: 'rgba(255, 255, 255, 0.1)'
+        }
+      },
+      axisLabel: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: 12
+      }
+    },
+    series: [
+      {
+        data: [180, 150, 90, 120],
+        type: 'bar',
+        barWidth: '40%',
+        itemStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              {
+                offset: 0,
+                color: '#FF8000'
+              },
+              {
+                offset: 1,
+                color: 'rgba(255, 128, 0, 0.1)'
+              }
+            ]
+          },
+          borderRadius: [4, 4, 0, 0]
+        }
+      }
+    ]
+  }
+  alarmTrendChart.setOption(option)
+}
+
+// 初始化任务饼图
+const initTaskPieCharts = () => {
+  if (!taskPieChart1Ref.value || !taskPieChart2Ref.value) return
+
+  // 进度环形图配置
+  const progressOption = {
+    backgroundColor: 'transparent',
+    title: {
+      text: '75%',
+      x: 'center',
+      y: 'center',
+      textStyle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#67d5fd',
+        textShadow: '0 0 10px rgba(103, 213, 253, 0.3)'
+      }
+    },
+    graphic: [
+      {
+        type: 'group',
+        left: 'center',
+        top: 'center',
+        children: [
+          {
+            type: 'ring',
+            shape: {
+              r: 70,
+              r0: 65
+            },
+            style: {
+              fill: 'transparent',
+              stroke: '#0c2c44',
+              lineWidth: 2
+            }
+          }
+        ]
+      }
+    ],
+    series: [
+      {
+        type: 'pie',
+        radius: ['75%', '85%'],
+        startAngle: 90,
+        avoidLabelOverlap: false,
+        label: {
+          show: false
+        },
+        emphasis: {
+          disabled: true
+        },
+        data: [
+          { 
+            value: 75, 
+            itemStyle: {
+              color: {
+                type: 'linear',
+                x: 0,
+                y: 0,
+                x2: 0,
+                y2: 1,
+                colorStops: [{
+                  offset: 0,
+                  color: '#67d5fd'
+                }, {
+                  offset: 1,
+                  color: '#2683b6'
+                }]
+              },
+              shadowBlur: 10,
+              shadowColor: 'rgba(103, 213, 253, 0.5)'
+            },
+            name: '已巡检'
+          },
+          { 
+            value: 25, 
+            itemStyle: {
+              color: 'rgba(12, 44, 68, 0.6)',
+              borderWidth: 1,
+              borderColor: 'rgba(103, 213, 253, 0.2)'
+            },
+            name: '待巡检'
+          }
+        ],
+        animationType: 'scale',
+        animationEasing: 'elasticOut',
+        animationDelay: function (idx: number) {
+          return Math.random() * 200;
+        }
+      }
+    ]
+  }
+
+  // 状态环形图配置
+  const statusOption = {
+    backgroundColor: 'transparent',
+    title: {
+      text: '正常',
+      x: 'center',
+      y: 'center',
+      textStyle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#52C41A',
+        textShadow: '0 0 10px rgba(82, 196, 26, 0.3)'
+      }
+    },
+    graphic: [
+      {
+        type: 'group',
+        left: 'center',
+        top: 'center',
+        children: [
+          {
+            type: 'ring',
+            shape: {
+              r: 70,
+              r0: 65
+            },
+            style: {
+              fill: 'transparent',
+              stroke: '#0c2c44',
+              lineWidth: 2
+            }
+          }
+        ]
+      }
+    ],
+    series: [
+      {
+        type: 'pie',
+        radius: ['75%', '85%'],
+        startAngle: 90,
+        avoidLabelOverlap: false,
+        label: {
+          show: false
+        },
+        emphasis: {
+          disabled: true
+        },
+        data: [
+          { 
+            value: 100, 
+            itemStyle: {
+              color: {
+                type: 'linear',
+                x: 0,
+                y: 0,
+                x2: 0,
+                y2: 1,
+                colorStops: [{
+                  offset: 0,
+                  color: '#52C41A'
+                }, {
+                  offset: 1,
+                  color: '#3d9213'
+                }]
+              },
+              shadowBlur: 10,
+              shadowColor: 'rgba(82, 196, 26, 0.5)'
+            },
+            name: '正常'
+          },
+          { 
+            value: 0, 
+            itemStyle: {
+              color: 'rgba(12, 44, 68, 0.6)',
+              borderWidth: 1,
+              borderColor: 'rgba(82, 196, 26, 0.2)'
+            },
+            name: '异常'
+          }
+        ],
+        animationType: 'scale',
+        animationEasing: 'elasticOut',
+        animationDelay: function (idx: number) {
+          return Math.random() * 200;
+        }
+      }
+    ]
+  }
+
+  taskPieChart1 = echarts.init(taskPieChart1Ref.value)
+  taskPieChart2 = echarts.init(taskPieChart2Ref.value)
+
+  taskPieChart1.setOption(progressOption)
+  taskPieChart2.setOption(statusOption)
+}
+
+// 初始化航线报表图表
+const initLineChart = () => {
+  if (!lineChartRef.value) return
+  
+  lineChart = echarts.init(lineChartRef.value)
+  const option = {
+    grid: {
+      top: '12%',
+      left: '1%',
+      right: '1%',
+      bottom: '2%',
+      containLabel: true
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'none'
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: ['10-01', '10-02', '10-03', '10-04', '10-05', '10-06', '10-07'],
+      axisLine: {
+        lineStyle: {
+          color: 'rgba(255, 255, 255, 0.1)'
+        }
+      },
+      axisLabel: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: 12,
+        margin: 8
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        show: false
+      },
+      splitLine: {
+        lineStyle: {
+          color: 'rgba(255, 255, 255, 0.1)'
+        }
+      },
+      axisLabel: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: 12,
+        margin: 8
+      }
+    },
+    series: [
+      {
+        data: [120, 180, 150, 210, 190, 230, 200],
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 8,
+        itemStyle: {
+          color: '#59C0FC',
+          borderWidth: 2,
+          borderColor: '#fff'
+        },
+        lineStyle: {
+          color: '#59C0FC',
+          width: 3
+        },
+        label: {
+          show: true,
+          position: 'top',
+          distance: 5,
+          color: '#fff',
+          fontSize: 11,
+          backgroundColor: 'rgba(89, 192, 252, 0.2)',
+          borderRadius: 4,
+          padding: [2, 4],
+          formatter: '{c}'
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              {
+                offset: 0,
+                color: 'rgba(89, 192, 252, 0.3)'
+              },
+              {
+                offset: 1,
+                color: 'rgba(89, 192, 252, 0.1)'
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+  lineChart.setOption(option)
+}
+
+onMounted(() => {
+  initAlarmTrendChart()
+  initTaskPieCharts()
+  initLineChart()
+
+  window.addEventListener('resize', () => {
+    alarmTrendChart?.resize()
+    taskPieChart1?.resize()
+    taskPieChart2?.resize()
+    lineChart?.resize()
+  })
+})
 </script>
 
 <style scoped>
@@ -436,6 +910,7 @@ const selectScreenMode = (mode: string) => {
   overflow-y: auto;
   padding-right: 8px;
   width: 480px;
+  gap: 20px; /* 统一卡片间距 */
 }
 
 /* 自定义滚动条样式 */
@@ -460,7 +935,7 @@ const selectScreenMode = (mode: string) => {
 /* 左侧卡片通用样式 */
 .left-on1, .left-on2, .left-on3, .left-on4 {
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 0; /* 移除margin-bottom，使用gap控制间距 */
 }
 
 .left-on1 {
@@ -504,6 +979,7 @@ const selectScreenMode = (mode: string) => {
   color: #fff;
   font-size: 16px;
   font-weight: 500;
+  flex-shrink: 0;
 }
 
 .cardTitle img {
@@ -935,7 +1411,7 @@ const selectScreenMode = (mode: string) => {
 .center-column {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 20px; /* 统一卡片间距 */
   height: calc(100vh - 124px);
   background: transparent;
   overflow: hidden;
@@ -1199,7 +1675,7 @@ const selectScreenMode = (mode: string) => {
 .right-column {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 20px; /* 统一卡片间距 */
   height: calc(100vh - 124px);
   overflow-y: auto;
   padding-right: 8px;
@@ -1390,5 +1866,326 @@ const selectScreenMode = (mode: string) => {
   border-right: 1px solid rgba(89, 192, 252, 0.3);
   border-bottom: 1px solid rgba(89, 192, 252, 0.3);
   transform: rotate(45deg);
+}
+
+/* 右侧卡片通用样式 */
+.right-on1,
+.right-on2,
+.right-on3 {
+  width: 100%;
+  background-image: url('@/assets/source_data/bg_data/card_first_body.png');
+  background-size: 100% 100%;
+  margin-bottom: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardTitle {
+  width: calc(100% - 10px);
+  height: 41px;
+  display: flex;
+  justify-content: start;
+  align-items: center;
+  padding-left: 10px;
+  background-image: url('@/assets/source_data/bg_data/card_title.png');
+  background-size: 100% 100%;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.cardTitle img {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+}
+
+.right-on1,
+.right-on2 {
+  height: calc((100vh - 124px) * 0.333 - 20px);
+}
+
+.right-on3 {
+  height: calc((100vh - 124px) * 0.2 - 20px);
+}
+
+.chart-container {
+  flex: 1;
+  width: 100%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trend-chart {
+  width: calc(100% - 40px);
+  height: calc(100% - 20px);
+}
+
+/* 航线任务样式 */
+.task-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  gap: 20px;
+}
+
+.task-header {
+  width: calc(100% - 20px);
+  height: 50px;
+  margin: 10px;
+  background: linear-gradient(#1f87cc33, #1f87cc00);
+  border: 1px solid #164159;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.task-name {
+  color: #59bfff;
+  font-size: 14px;
+  line-height: 25px;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.task-time {
+  display: flex;
+  flex-direction: column;
+  width: calc(70% - 10px);
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+
+.time-item {
+  display: flex;
+  align-items: center;
+  height: 25px;
+  line-height: 25px;
+  gap: 20px;
+  padding: 0;
+}
+
+.time-item .label {
+  color: #59bfff;
+  font-size: 12px;
+  white-space: nowrap; /* 防止文字换行 */
+}
+
+.task-status {
+  padding-right: 10px;
+  width: 30%;
+  height: 100%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin: 0;
+}
+
+.status-btn.waiting {
+  width: 60px;
+  height: 20px;
+  text-align: center;
+  color: #c4cdc9;
+  background: linear-gradient(#0bed9654, #0bed9600);
+  box-shadow: inset 0 0 6px #0bed96;
+  border-radius: 3px;
+  font-size: 12px;
+  border: 1px solid #0BED96;
+  line-height: 20px;
+  padding: 0;
+}
+
+.task-progress {
+  width: 100%;
+  height: 70%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  gap: 20px;
+}
+
+.progress-item {
+  flex: 1;
+  height: 100%;
+  background: rgba(0, 12, 23, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.progress-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.progress-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  z-index: 1;
+}
+
+.progress-label .label {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+}
+
+.legend {
+  display: flex;
+  gap: 15px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot.inspected {
+  background: #59C0FC;
+}
+
+.dot.waiting {
+  background: rgba(89, 192, 252, 0.3);
+}
+
+.dot.normal {
+  background: #52C41A;
+}
+
+.dot.abnormal {
+  background: rgba(82, 196, 26, 0.3);
+}
+
+/* 地图容器样式 */
+.map-container {
+  height: calc(100% - 41px);
+  background: #0a1929;
+}
+
+/* 航线任务卡片响应式样式 */
+@media (max-width: 1400px) {
+  .task-header {
+    padding: 0 clamp(10px, 1.5vw, 15px);
+  }
+
+  .task-name {
+    font-size: clamp(12px, 1vw, 14px);
+  }
+
+  .time-item {
+    gap: clamp(10px, 1.5vw, 20px);
+  }
+
+  .time-item .label {
+    font-size: clamp(11px, 0.9vw, 12px);
+  }
+
+  .task-progress {
+    gap: clamp(15px, 1.5vw, 20px);
+  }
+}
+
+@media (max-width: 1200px) {
+  .task-time {
+    width: 65%;
+  }
+
+  .task-status {
+    width: 35%;
+  }
+
+  .status-btn.waiting {
+    width: clamp(50px, 5vw, 60px);
+    font-size: clamp(11px, 0.9vw, 12px);
+  }
+
+  .progress-label .label {
+    font-size: clamp(12px, 1vw, 14px);
+  }
+
+  .legend-item {
+    font-size: clamp(11px, 0.9vw, 12px);
+  }
+}
+
+@media (max-width: 992px) {
+  .task-header {
+    height: auto;
+    min-height: 50px;
+    padding: clamp(8px, 1vw, 10px) clamp(8px, 1.2vw, 12px);
+  }
+
+  .task-time {
+    width: 60%;
+  }
+
+  .task-status {
+    width: 40%;
+  }
+
+  .time-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    height: auto;
+  }
+
+  .progress-item {
+    padding: clamp(8px, 1vw, 10px);
+  }
+}
+
+@media (max-width: 768px) {
+  .task-content {
+    gap: 15px;
+  }
+
+  .task-header {
+    margin: 5px;
+  }
+
+  .task-time {
+    width: 100%;
+  }
+
+  .task-status {
+    display: none;
+  }
+
+  .task-progress {
+    flex-direction: column;
+    height: auto;
+    gap: 10px;
+  }
+
+  .progress-item {
+    height: 120px;
+  }
 }
 </style>
