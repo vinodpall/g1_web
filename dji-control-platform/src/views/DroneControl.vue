@@ -47,12 +47,15 @@
                       <span>任务进度</span>
                       <span>0%</span>
                     </div>
-                    <div class="task-progress-bar">
-                      <div class="task-progress-inner" style="width: 0%"></div>
-                    </div>
-                    <div class="task-progress-actions-btns">
-                      <button class="btn-pause">暂停</button>
-                      <button class="btn-stop">停止</button>
+                    <div class="task-progress-row">
+                      <div class="task-progress-bar">
+                        <div class="task-progress-inner" style="width: 0%"></div>
+                      </div>
+                      <div class="task-progress-divider"></div>
+                      <div class="task-progress-actions-btns">
+                        <button class="btn-pause">暂停</button>
+                        <button class="btn-stop">停止</button>
+                      </div>
                     </div>
                   </div>
                   <div class="task-stats-panel">
@@ -837,12 +840,15 @@ const currentTab = ref('plane')
 .task-info-panel {
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: flex-end;
   align-items: flex-start;
-  width: 480px;
-  min-width: 480px;
+  flex: 1;
   margin-left: 10px;
   max-width: 100%;
+  max-height: 180px;         /* 限制最大高度 */
+  padding-bottom: 5px;      /* 底部留白，避免贴死横线 */
+  padding-top: 5px;
+  box-sizing: border-box;
 }
 .task-progress-actions,
 .task-stats-panel {
@@ -854,6 +860,14 @@ const currentTab = ref('plane')
   flex-direction: column;
   align-items: flex-end;
   margin-bottom: 8px;
+  box-sizing: border-box;
+  flex: 1; /* 让上半部分自动填满剩余空间 */
+}
+.task-progress-title,
+.task-progress-bar,
+.task-progress-actions-btns {
+  width: 100%;
+  box-sizing: border-box;
 }
 .task-progress-title {
   width: 100%;
@@ -864,22 +878,43 @@ const currentTab = ref('plane')
   color: #b6b6b6;
   margin-bottom: 4px;
 }
-.task-progress-bar {
+.task-progress-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   width: 100%;
+  gap: 0;
+  justify-content: space-between; /* 让按钮组靠最右 */
+  position: relative;
+}
+.task-progress-bar {
   height: 6px;
   background: #222;
   border-radius: 3px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   overflow: hidden;
+  flex-shrink: 0;
+  min-width: 80px;
+  max-width: 300px;
+  margin-right: 10px; /* 进度条右侧留10px */
+  flex: 1;
 }
-.task-progress-inner {
+.task-progress-divider {
+  width: 1.5px;
+  background: linear-gradient(180deg, #59c0fc 0%, #223a5e 100%);
+  margin: 0 10px 0 0; /* 竖线距离按钮组10px，左侧不留间距 */
+  border-radius: 1px;
   height: 100%;
-  background: linear-gradient(90deg, #67d5fd, #59c0fc);
-  border-radius: 3px;
+  align-self: stretch;
+  opacity: 0.7;
 }
 .task-progress-actions-btns {
   display: flex;
+  flex-direction: column;
   gap: 8px;
+  width: auto;
+  align-items: flex-end;
+  justify-content: center;
 }
 .btn-pause {
   background: #223a5e;
@@ -903,18 +938,19 @@ const currentTab = ref('plane')
   display: flex;
   gap: 12px;
   margin-top: 8px;
+  width: 100%;
 }
 .task-stat-card {
   display: flex;
-  width: 146px;
+  flex: 1; /* 均分宽度 */
   height: 44px;
-  padding: 0 34px;
   flex-direction: column;
   align-items: center;
-  flex-shrink: 0;
   justify-content: center;
   background: linear-gradient(0deg, rgba(170, 128, 255, 0.20) 0%, rgba(170, 128, 255, 0.00) 100%);
   border-bottom: 3px solid #7E44F2;
+  min-width: 0;
+  padding: 0;
 }
 .stat-title {
   font-size: 13px;
