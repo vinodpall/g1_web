@@ -357,16 +357,59 @@
               </div>
             </div>
             <div class="task-progress">
-              <div class="progress-item">
-                <div :ref="el => taskPieChart1Ref = el as HTMLElement" class="progress-chart"></div>
-                <div class="progress-label">
-                  <!-- Removing custom legend -->
+              <div class="chart-box">
+                <div class="progress-circle-container">
+                  <div class="progress-circle">
+                    <div class="progress-circle-outer-ring"></div>
+                    <div class="progress-circle-left">
+                      <div class="progress-circle-bar blue"></div>
+                    </div>
+                    <div class="progress-circle-right">
+                      <div class="progress-circle-bar orange"></div>
+                    </div>
+                    <div class="progress-circle-center">
+                      <div class="progress-text">
+                        <span>进度</span>
+                        <span class="percentage">50%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="chart-legend">
+                  <div class="legend-item">
+                    <span class="legend-color blue-gradient"></span>
+                    <span>已巡检</span>
+                  </div>
+                  <div class="legend-item">
+                    <span class="legend-color orange-gradient"></span>
+                    <span>待巡检</span>
+                  </div>
                 </div>
               </div>
-              <div class="progress-item">
-                <div :ref="el => taskPieChart2Ref = el as HTMLElement" class="progress-chart"></div>
-                <div class="progress-label">
-                  <!-- Removing custom legend -->
+              
+              <div class="chart-box">
+                <div class="progress-circle-container">
+                  <div class="progress-circle">
+                    <div class="circle-status">
+                      <div :class="['status-circle', {'error': taskStatus === 'error'}]"></div>
+                    </div>
+                    <div class="progress-circle-center">
+                      <div class="progress-text">
+                        <span>任务</span>
+                        <span>状态</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="chart-legend">
+                  <div class="legend-item" @click="toggleTaskStatus">
+                    <span class="legend-color green-gradient"></span>
+                    <span>正常</span>
+                  </div>
+                  <div class="legend-item" @click="toggleTaskStatus">
+                    <span class="legend-color red-gradient"></span>
+                    <span>异常</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -380,18 +423,28 @@
           <img src="@/assets/source_data/bg_data/card_logo.png" alt="card logo" />
           地图信息
         </div>
-        <div class="map-container" ref="mapContainer"></div>
+        <div class="map-container" ref="mapContainer">
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
 import * as echarts from 'echarts'
+import AMapLoader from '@amap/amap-jsapi-loader'
 
 // 当前选中的标签
 const currentTab = ref('device')
+
+// 设置任务状态（正常/异常）
+const taskStatus = ref('normal') // 'normal' 或 'error'
+
+// 切换任务状态
+const toggleTaskStatus = () => {
+  taskStatus.value = taskStatus.value === 'normal' ? 'error' : 'normal'
+}
 
 // 设备告警数据
 const deviceAlarmData = ref([
@@ -481,6 +534,10 @@ const taskPieChart1Ref = ref<HTMLElement | null>(null)
 const taskPieChart2Ref = ref<HTMLElement | null>(null)
 const lineChartRef = ref<HTMLElement | null>(null)
 
+// 地图容器ref和地图实例
+const mapContainer = ref<HTMLElement | null>(null)
+let amapInstance: any = null
+
 // 初始化告警趋势图表
 const initAlarmTrendChart = () => {
   if (!alarmTrendChartRef.value) return
@@ -569,52 +626,24 @@ const initTaskPieCharts = () => {
   // 进度环形图配置
   const progressOption = {
     backgroundColor: 'transparent',
-    title: {
-      text: '巡检进度',
-      left: 'center',
-      top: '35%',
-      textStyle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#67d5fd',
-        lineHeight: 20
-      },
-      subtext: '0%',
-      subtextStyle: {
-        fontSize: 14,
-        color: '#67d5fd'
-      }
-    },
-    tooltip: {
-      trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
-    },
-    legend: {
-      show: true,
-      bottom: '5%',
-      left: 'center',
-      itemWidth: 10,
-      itemHeight: 10,
-      textStyle: {
-        color: 'rgba(255, 255, 255, 0.7)',
-        fontSize: 12
-      },
-      selectedMode: false
-    },
     series: [
       {
         name: '巡检进度',
         type: 'pie',
-        radius: ['65%', '85%'],
-        center: ['50%', '50%'],
+        radius: ['75%', '90%'],
+        center: ['50%', '45%'],
         startAngle: 90,
+        silent: true,
         label: {
           show: false
         },
         emphasis: {
-          focus: 'self',
-          scale: true,
-          scaleSize: 5
+          scale: false,
+          scaleSize: 0
+        },
+        itemStyle: {
+          borderWidth: 1,
+          borderColor: 'rgba(0, 0, 0, 0.3)'
         },
         data: [
           { 
@@ -629,11 +658,11 @@ const initTaskPieCharts = () => {
                 y2: 0,
                 colorStops: [
                   { offset: 0, color: '#67d5fd' },
-                  { offset: 1, color: '#1890ff' }
+                  { offset: 1, color: '#2683b6' }
                 ]
               },
               shadowBlur: 10,
-              shadowColor: 'rgba(103, 213, 253, 0.5)'
+              shadowColor: 'rgba(103, 213, 253, 0.3)'
             }
           },
           { 
@@ -647,12 +676,12 @@ const initTaskPieCharts = () => {
                 x2: 1,
                 y2: 0,
                 colorStops: [
-                  { offset: 0, color: '#ff8000' },
-                  { offset: 1, color: '#ff4d4f' }
+                  { offset: 0, color: '#FF8000' },
+                  { offset: 1, color: '#B25000' }
                 ]
               },
-              shadowBlur: 10,
-              shadowColor: 'rgba(255, 128, 0, 0.5)'
+              borderWidth: 1,
+              borderColor: 'rgba(255, 128, 0, 0.3)'
             }
           }
         ],
@@ -666,52 +695,24 @@ const initTaskPieCharts = () => {
   // 状态环形图配置
   const statusOption = {
     backgroundColor: 'transparent',
-    title: {
-      text: '任务状态',
-      left: 'center',
-      top: '35%',
-      textStyle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#52C41A',
-        lineHeight: 20
-      },
-      subtext: '正常',
-      subtextStyle: {
-        fontSize: 14,
-        color: '#52C41A'
-      }
-    },
-    tooltip: {
-      trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
-    },
-    legend: {
-      show: true,
-      bottom: '5%',
-      left: 'center',
-      itemWidth: 10,
-      itemHeight: 10,
-      textStyle: {
-        color: 'rgba(255, 255, 255, 0.7)',
-        fontSize: 12
-      },
-      selectedMode: false
-    },
     series: [
       {
         name: '任务状态',
         type: 'pie',
-        radius: ['65%', '85%'],
-        center: ['50%', '50%'],
+        radius: ['75%', '90%'],
+        center: ['50%', '45%'],
         startAngle: 90,
+        silent: true,
         label: {
           show: false
         },
         emphasis: {
-          focus: 'self',
-          scale: true,
-          scaleSize: 5
+          scale: false,
+          scaleSize: 0
+        },
+        itemStyle: {
+          borderWidth: 1,
+          borderColor: 'rgba(0, 0, 0, 0.3)'
         },
         data: [
           { 
@@ -726,11 +727,11 @@ const initTaskPieCharts = () => {
                 y2: 0,
                 colorStops: [
                   { offset: 0, color: '#52C41A' },
-                  { offset: 1, color: '#87d068' }
+                  { offset: 1, color: '#3d9213' }
                 ]
               },
               shadowBlur: 10,
-              shadowColor: 'rgba(82, 196, 26, 0.5)'
+              shadowColor: 'rgba(82, 196, 26, 0.3)'
             }
           },
           { 
@@ -744,12 +745,12 @@ const initTaskPieCharts = () => {
                 x2: 1,
                 y2: 0,
                 colorStops: [
-                  { offset: 0, color: '#000000' },
-                  { offset: 1, color: '#434343' }
+                  { offset: 0, color: '#FF4D4F' },
+                  { offset: 1, color: '#B22426' }
                 ]
               },
-              shadowBlur: 10,
-              shadowColor: 'rgba(0, 0, 0, 0.5)'
+              borderWidth: 1,
+              borderColor: 'rgba(255, 77, 79, 0.3)'
             }
           }
         ],
@@ -941,13 +942,37 @@ onMounted(() => {
   setInterval(() => {
     animateCharts();
   }, 10000);
+
+  if (mapContainer.value) {
+    AMapLoader.load({
+      key: '6f9eaf51960441fa4f813ea2d7e7cfff',
+      version: '2.0',
+      plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch']
+    }).then((AMap) => {
+      amapInstance = new AMap.Map(mapContainer.value, {
+        zoom: 12,
+        center: [116.397428, 39.90923],
+        logoEnable: false,
+        copyrightEnable: false
+      })
+      // 放大缩小工具放左上角
+      amapInstance.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
+    })
+  }
+})
+
+onBeforeUnmount(() => {
+  if (amapInstance) {
+    amapInstance.destroy()
+    amapInstance = null
+  }
 })
 </script>
 
 <style scoped>
 .home-container {
   display: grid;
-  grid-template-columns: 480px 1fr 480px;
+  grid-template-columns: clamp(280px, 28vw, 480px) 1fr clamp(280px, 28vw, 480px);
   gap: 12px;
   padding: 20px;
   height: calc(100vh - 84px); /* 64px导航栏 + 20px间距 */
@@ -968,8 +993,7 @@ onMounted(() => {
   flex-direction: column;
   height: calc(100vh - 124px); /* 64px导航栏 + 20px间距 + 40px内边距 */
   overflow-y: auto;
-  padding-right: 8px;
-  width: 480px;
+  width: clamp(280px, 28vw, 480px);
   gap: 20px; /* 统一卡片间距 */
 }
 
@@ -1737,8 +1761,7 @@ onMounted(() => {
   gap: 20px; /* 统一卡片间距 */
   height: calc(100vh - 124px);
   overflow-y: auto;
-  padding-right: 8px;
-  width: 480px;
+  width: clamp(280px, 28vw, 480px);
 }
 
 .right-column::-webkit-scrollbar {
@@ -1967,7 +1990,16 @@ onMounted(() => {
 }
 
 .right-on3 {
-  height: calc((100vh - 124px) * 0.2 - 20px);
+  flex: 1;
+  min-height: 0;
+  /* 保持卡片风格一致 */
+  width: 100%;
+  background-image: url('@/assets/source_data/bg_data/card_first_body.png');
+  background-size: 100% 100%;
+  margin-bottom: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-container {
@@ -1982,6 +2014,7 @@ onMounted(() => {
 .trend-chart {
   width: calc(100% - 40px);
   height: calc(100% - 20px);
+  margin-top: clamp(-18px, -2vw, -25px);
 }
 
 /* 航线任务样式 */
@@ -1990,16 +2023,16 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   padding: 0;
-  gap: 20px;
+  gap: 10px;
 }
 
 .task-header {
   width: calc(100% - 20px);
   height: 50px;
-  margin: 10px;
+  margin: 10px 10px 0 10px;
   background: linear-gradient(#1f87cc33, #1f87cc00);
   border: 1px solid #164159;
   display: flex;
@@ -2067,101 +2100,452 @@ onMounted(() => {
 /* 任务进度图表样式调整 */
 .task-progress {
   width: 100%;
-  height: 70%;
+  height: calc(100% - 70px);
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 0;
+  padding: 0 20px 10px;
   margin: 0;
   gap: 30px;
-  margin-bottom: 60px; /* 增加底部间距，让图例有更多空间 */
-  transform: translateY(0); /* 移除垂直偏移 */
 }
 
-.progress-item {
+.chart-box {
   flex: 1;
   height: 100%;
-  border-radius: 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
+  gap: 15px;
+  padding-bottom: 20px;
 }
 
-.progress-chart {
+/* 新的圆环进度条样式 */
+.progress-circle-container {
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+
+.progress-circle {
+  position: relative;
   width: 100%;
   height: 100%;
-  transform: translateY(0); /* 不需要移动图表 */
 }
 
-/* 图例样式调整 */
-.progress-label {
+.progress-circle-left,
+.progress-circle-right {
+  position: absolute;
+  width: 40px;
+  height: 80px;
+  top: 0;
+  overflow: hidden;
+}
+
+.progress-circle-left {
+  left: 0;
+}
+
+.progress-circle-right {
+  right: 0;
+}
+
+.progress-circle-bar {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border: 4px solid transparent;
+  border-radius: 50%;
+  box-sizing: border-box;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+}
+
+.progress-circle-left .progress-circle-bar {
+  left: 0;
+  border-top: 4px solid;
+  border-left: 4px solid;
+  border-bottom: 4px solid;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  transform-origin: right center;
+  transform: rotate(0deg);
+}
+
+.progress-circle-right .progress-circle-bar {
+  right: 0;
+  border-top: 4px solid;
+  border-right: 4px solid;
+  border-bottom: 4px solid;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  transform-origin: left center;
+  transform: rotate(0deg);
+}
+
+.progress-circle-bar.blue {
+  border-color: #00e1ff;
+  box-shadow: 0 0 15px rgba(0, 225, 255, 0.9), inset 0 0 8px rgba(0, 225, 255, 0.7);
+  transform: rotate(180deg);
+}
+
+.progress-circle-bar.orange {
+  border-color: #ff8000;
+  box-shadow: 0 0 15px rgba(255, 128, 0, 0.9), inset 0 0 8px rgba(255, 128, 0, 0.7);
+  transform: rotate(180deg);
+}
+
+.progress-circle-bar.green {
+  border-color: #00ff7f;
+  box-shadow: 0 0 10px rgba(0, 255, 127, 0.7), inset 0 0 5px rgba(0, 255, 127, 0.5);
+  transform: rotate(180deg);
+}
+
+.progress-circle-bar.red {
+  border-color: #ff4d4f;
+  box-shadow: 0 0 10px rgba(255, 77, 79, 0.7), inset 0 0 5px rgba(255, 77, 79, 0.5);
+  transform: rotate(0deg);
+}
+
+.progress-circle-center {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  top: 8px;
+  left: 8px;
+  border-radius: 50%;
+  background-color: rgba(0, 12, 23, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.8);
+}
+
+/* 修改为环形进度线 */
+.progress-circle-center::before {
+  content: '';
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  top: 6px;
+  left: 6px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top: 2px solid #00e1ff;
+  border-left: 2px solid #00e1ff;
+  border-bottom: 2px solid #ff8000;
+  border-right: 2px solid #ff8000;
+  box-sizing: border-box;
+  transform: rotate(45deg);
+  box-shadow: 0 0 10px rgba(0, 225, 255, 0.5);
+}
+
+.progress-circle-center::after {
+  content: '';
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  top: -4px;
+  left: -4px;
+  border-radius: 50%;
+  background: rgba(0, 12, 23, 0.9);
+  clip-path: inset(35px 4px 35px 4px);
+  z-index: -1;
+}
+
+.progress-text {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
-  gap: 5px;
-  z-index: 1;
-  position: absolute; /* 绝对定位 */
-  bottom: -20px; /* 向下移动图例 */
-  width: 100%;
+  text-align: center;
 }
 
-/* 已移除进度和任务状态标签 */
+.progress-text span {
+  color: #00e1ff;
+  font-size: 14px;
+  line-height: 1.2;
+  text-shadow: 0 0 8px rgba(0, 225, 255, 0.9);
+}
 
-.legend {
+.progress-text .percentage {
+  font-size: 24px;
+  font-weight: bold;
+  margin-top: 2px;
+  color: #00e1ff;
+  text-shadow: 0 0 10px rgba(0, 225, 255, 1);
+}
+
+.chart-box:nth-child(2) .progress-text span {
+  color: #00ff7f;
+  text-shadow: 0 0 5px rgba(0, 255, 127, 0.7);
+}
+
+/* 图例样式 */
+.chart-legend {
   display: flex;
-  gap: 15px;
+  gap: 30px;
+  justify-content: center;
+  margin-top: 15px;
+  position: absolute;
+  bottom: 0px;
+  left: 0;
+  right: 0;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: rgba(255, 255, 255, 0.6);
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+}
+
+.blue-gradient {
+  background: linear-gradient(90deg, #00e1ff, #0088a3);
+}
+
+.orange-gradient {
+  background: linear-gradient(90deg, #ff8000, #B25000);
+}
+
+.green-gradient {
+  background: linear-gradient(90deg, #00ff7f, #00b359);
+}
+
+.red-gradient {
+  background: linear-gradient(90deg, #ff4d4f, #B22426);
+}
+
+.legend-item span:last-child {
+  color: rgba(255, 255, 255, 0.8);
   font-size: 12px;
-  cursor: pointer;
-  padding: 3px 6px;
-  border-radius: 4px;
-  transition: all 0.3s ease;
 }
 
-.legend-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+.chart-box:first-child .legend-item:first-child span:last-child {
+  color: #00e1ff;
+  text-shadow: 0 0 3px rgba(0, 225, 255, 0.5);
 }
 
-.legend-item.active {
-  color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+.chart-box:first-child .legend-item:last-child span:last-child {
+  color: #ff8000;
+  text-shadow: 0 0 3px rgba(255, 128, 0, 0.5);
 }
 
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.chart-box:last-child .legend-item:first-child span:last-child {
+  color: #00ff7f;
+  text-shadow: 0 0 3px rgba(0, 255, 127, 0.5);
 }
 
-.dot.inspected {
-  background: #67d5fd;
+.chart-box:last-child .legend-item:last-child span:last-child {
+  color: #ff4d4f;
+  text-shadow: 0 0 3px rgba(255, 77, 79, 0.5);
 }
 
-.dot.waiting {
-  background: #ff8000;
+/* 响应式调整 */
+@media (max-width: 1400px) {
+  .progress-circle-container {
+    width: 75px;
+    height: 75px;
+  }
+  
+  .progress-circle-left,
+  .progress-circle-right {
+    width: 37.5px;
+    height: 75px;
+  }
+  
+  .progress-circle-bar {
+    width: 75px;
+    height: 75px;
+  }
+  
+  .progress-circle-center {
+    width: 59px;
+    height: 59px;
+    top: 8px;
+    left: 8px;
+  }
+  
+  .progress-text span {
+    font-size: 13px;
+  }
+  
+  .progress-text .percentage {
+    font-size: 22px;
+  }
+  
+  .status-circle {
+    width: 75px;
+    height: 75px;
+  }
+  
+  .progress-circle-outer-ring {
+    width: 85px;
+    height: 85px;
+  }
 }
 
-.dot.normal {
-  background: #52C41A;
+@media (max-width: 1200px) {
+  .progress-circle-container {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .progress-circle-left,
+  .progress-circle-right {
+    width: 35px;
+    height: 70px;
+  }
+  
+  .progress-circle-bar {
+    width: 70px;
+    height: 70px;
+    border-width: 3px;
+  }
+  
+  .progress-circle-left .progress-circle-bar {
+    border-width: 3px;
+  }
+  
+  .progress-circle-right .progress-circle-bar {
+    border-width: 3px;
+  }
+  
+  .progress-circle-center {
+    width: 56px;
+    height: 56px;
+    top: 7px;
+    left: 7px;
+  }
+  
+  .progress-text span {
+    font-size: 13px;
+  }
+  
+  .progress-text .percentage {
+    font-size: 20px;
+  }
+  
+  .status-circle {
+    width: 70px;
+    height: 70px;
+    border-width: 3px;
+  }
+  
+  .progress-circle-outer-ring {
+    width: 80px;
+    height: 80px;
+  }
 }
 
-.dot.abnormal {
-  background: #000000;
+@media (max-width: 992px) {
+  .progress-circle-container {
+    width: 65px;
+    height: 65px;
+  }
+  
+  .progress-circle-left,
+  .progress-circle-right {
+    width: 32.5px;
+    height: 65px;
+  }
+  
+  .progress-circle-bar {
+    width: 65px;
+    height: 65px;
+    border-width: 3px;
+  }
+  
+  .progress-circle-center {
+    width: 51px;
+    height: 51px;
+    top: 7px;
+    left: 7px;
+  }
+  
+  .status-circle {
+    width: 65px;
+    height: 65px;
+    border-width: 3px;
+  }
+  
+  .progress-circle-outer-ring {
+    width: 75px;
+    height: 75px;
+  }
+}
+
+@media (max-width: 768px) {
+  .progress-circle-container {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .progress-circle-left,
+  .progress-circle-right {
+    width: 30px;
+    height: 60px;
+  }
+  
+  .progress-circle-bar {
+    width: 60px;
+    height: 60px;
+    border-width: 3px;
+  }
+  
+  .progress-circle-left .progress-circle-bar {
+    border-width: 3px;
+  }
+  
+  .progress-circle-right .progress-circle-bar {
+    border-width: 3px;
+  }
+  
+  .progress-circle-center {
+    width: 48px;
+    height: 48px;
+    top: 6px;
+    left: 6px;
+  }
+  
+  .progress-text span {
+    font-size: 11px;
+  }
+  
+  .progress-text .percentage {
+    font-size: 16px;
+  }
+  
+  .status-circle {
+    width: 60px;
+    height: 60px;
+    border-width: 3px;
+  }
+  
+  .progress-circle-outer-ring {
+    width: 70px;
+    height: 70px;
+  }
 }
 
 /* 地图容器样式 */
 .map-container {
-  height: calc(100% - 41px);
+  height: calc(100% - 41px - 10px); /* 41px为标题高度，10px为上下5px间距 */
+  margin: 5px;
+  overflow: hidden;
+  position: relative;
+  border-radius: 4px;
   background: #0a1929;
+}
+
+:deep(.amap-copyright) {
+  display: none !important;
 }
 
 /* 航线任务卡片响应式样式 */
@@ -2185,6 +2569,16 @@ onMounted(() => {
   .task-progress {
     gap: clamp(15px, 1.5vw, 20px);
   }
+  
+  .progress-circle-left .progress-circle-bar {
+    border-top-left-radius: 55px;
+    border-bottom-left-radius: 55px;
+  }
+  
+  .progress-circle-right .progress-circle-bar {
+    border-top-right-radius: 55px;
+    border-bottom-right-radius: 55px;
+  }
 }
 
 @media (max-width: 1200px) {
@@ -2201,11 +2595,7 @@ onMounted(() => {
     font-size: clamp(11px, 0.9vw, 12px);
   }
 
-  .progress-label .label {
-    font-size: clamp(12px, 1vw, 14px);
-  }
-
-  .legend-item {
+  .legend-item span:last-child {
     font-size: clamp(11px, 0.9vw, 12px);
   }
 }
@@ -2231,9 +2621,15 @@ onMounted(() => {
     gap: 5px;
     height: auto;
   }
-
-  .progress-item {
-    padding: clamp(8px, 1vw, 10px);
+  
+  .progress-circle-left .progress-circle-bar {
+    border-top-left-radius: 45px;
+    border-bottom-left-radius: 45px;
+  }
+  
+  .progress-circle-right .progress-circle-bar {
+    border-top-right-radius: 45px;
+    border-bottom-right-radius: 45px;
   }
 }
 
@@ -2259,9 +2655,421 @@ onMounted(() => {
     height: auto;
     gap: 10px;
   }
-
-  .progress-item {
+  
+  .chart-box {
     height: 120px;
   }
+  
+  .progress-circle-left .progress-circle-bar {
+    border-top-left-radius: 40px;
+    border-bottom-left-radius: 40px;
+  }
+  
+  .progress-circle-right .progress-circle-bar {
+    border-top-right-radius: 40px;
+    border-bottom-right-radius: 40px;
+  }
+  
+  .progress-circle-value span:first-child {
+    font-size: 12px;
+  }
+  
+  .progress-circle-value span:last-child {
+    font-size: 16px;
+  }
+}
+
+.progress-circle-right.status {
+  width: 100%;
+  height: 100%;
+  right: 0;
+  overflow: visible;
+}
+
+.progress-circle-right.status .progress-circle-bar {
+  width: 120px;
+  height: 120px;
+  border: 4px solid transparent;
+  border-radius: 50%;
+  border-left: 0;
+  transform: rotate(0);
+  right: 0;
+  border-color: #ff4d4f;
+  box-shadow: 0 0 10px rgba(255, 77, 79, 0.7), inset 0 0 5px rgba(255, 77, 79, 0.5);
+  clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%);
+}
+
+.progress-circle-status {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+.progress-circle-bar.green-circle {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border: 4px solid #00ff7f;
+  border-radius: 50%;
+  box-sizing: border-box;
+  box-shadow: 0 0 10px rgba(0, 255, 127, 0.7), inset 0 0 5px rgba(0, 255, 127, 0.5);
+}
+
+/* 新增状态圆环样式 */
+.circle-status {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+.status-circle {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border: 4px solid #00ff7f;
+  border-radius: 50%;
+  box-sizing: border-box;
+  box-shadow: 0 0 10px rgba(0, 255, 127, 0.7), inset 0 0 5px rgba(0, 255, 127, 0.5);
+  transition: all 0.3s ease;
+}
+
+.status-circle.error {
+  border-color: #ff4d4f;
+  box-shadow: 0 0 10px rgba(255, 77, 79, 0.7), inset 0 0 5px rgba(255, 77, 79, 0.5);
+}
+
+@media (max-width: 1400px) {
+  .status-circle {
+    width: 110px;
+    height: 110px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .status-circle {
+    width: 100px;
+    height: 100px;
+    border-width: 3px;
+  }
+}
+
+@media (max-width: 992px) {
+  .status-circle {
+    width: 90px;
+    height: 90px;
+    border-width: 3px;
+  }
+}
+
+@media (max-width: 768px) {
+  .status-circle {
+    width: 80px;
+    height: 80px;
+    border-width: 3px;
+  }
+}
+
+.progress-circle-outer-ring {
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  top: -5px;
+  left: -5px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 225, 255, 0.5);
+  box-sizing: border-box;
+  box-shadow: 0 0 20px rgba(0, 225, 255, 0.5), inset 0 0 10px rgba(0, 225, 255, 0.3);
+  pointer-events: none;
+  z-index: 1;
+  animation: pulse 2s infinite alternate;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 15px rgba(0, 225, 255, 0.4), inset 0 0 8px rgba(0, 225, 255, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 25px rgba(0, 225, 255, 0.6), inset 0 0 12px rgba(0, 225, 255, 0.4);
+  }
+}
+
+@media (max-width: 1400px) {
+  .progress-circle-outer-ring {
+    width: 120px;
+    height: 120px;
+    top: -5px;
+    left: -5px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .progress-circle-outer-ring {
+    width: 110px;
+    height: 110px;
+    top: -5px;
+    left: -5px;
+  }
+}
+
+@media (max-width: 992px) {
+  .progress-circle-outer-ring {
+    width: 100px;
+    height: 100px;
+    top: -5px;
+    left: -5px;
+  }
+}
+
+@media (max-width: 768px) {
+  .progress-circle-outer-ring {
+    width: 90px;
+    height: 90px;
+    top: -5px;
+    left: -5px;
+  }
+}
+
+/* 响应式调整内部进度线 */
+@media (max-width: 1400px) {
+  .progress-circle-center::before,
+  .progress-circle-center::after {
+    width: 67px;
+    height: 67px;
+    top: -4px;
+    left: -4px;
+  }
+  
+  .progress-circle-center::before {
+    clip-path: inset(31px 0 31px 0);
+  }
+  
+  .progress-circle-center::after {
+    clip-path: inset(32px 4px 32px 4px);
+  }
+}
+
+@media (max-width: 1200px) {
+  .progress-circle-center::before,
+  .progress-circle-center::after {
+    width: 64px;
+    height: 64px;
+    top: -4px;
+    left: -4px;
+  }
+  
+  .progress-circle-center::before {
+    clip-path: inset(29px 0 29px 0);
+  }
+  
+  .progress-circle-center::after {
+    clip-path: inset(30px 4px 30px 4px);
+  }
+}
+
+@media (max-width: 992px) {
+  .progress-circle-center::before,
+  .progress-circle-center::after {
+    width: 59px;
+    height: 59px;
+    top: -4px;
+    left: -4px;
+  }
+  
+  .progress-circle-center::before {
+    clip-path: inset(27px 0 27px 0);
+  }
+  
+  .progress-circle-center::after {
+    clip-path: inset(28px 4px 28px 4px);
+  }
+}
+
+@media (max-width: 768px) {
+  .progress-circle-center::before,
+  .progress-circle-center::after {
+    width: 56px;
+    height: 56px;
+    top: -4px;
+    left: -4px;
+  }
+  
+  .progress-circle-center::before {
+    clip-path: inset(25px 0 25px 0);
+  }
+  
+  .progress-circle-center::after {
+    clip-path: inset(26px 4px 26px 4px);
+  }
+}
+
+/* 修改为环形进度线 - 只应用于左边的环形图 */
+.chart-box:first-child .progress-circle-center::before {
+  content: '';
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  top: 2px;
+  left: 2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top: 2px solid #00e1ff;
+  border-left: 2px solid #00e1ff;
+  border-bottom: 2px solid #ff8000;
+  border-right: 2px solid #ff8000;
+  box-sizing: border-box;
+  transform: rotate(45deg);
+  box-shadow: 0 0 10px rgba(0, 225, 255, 0.5);
+}
+
+/* 去掉第二个环形图内的颜色环线 */
+.chart-box:last-child .progress-circle-center::before {
+  display: none;
+}
+
+.chart-box:last-child .progress-circle-center::after {
+  display: none;
+}
+
+/* 响应式调整内部进度线 - 只应用于左边的环形图 */
+@media (max-width: 1400px) {
+  .chart-box:first-child .progress-circle-center::before {
+    width: 56px;
+    height: 56px;
+    top: 1.5px;
+    left: 1.5px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .chart-box:first-child .progress-circle-center::before {
+    width: 52px;
+    height: 52px;
+    top: 2px;
+    left: 2px;
+  }
+}
+
+@media (max-width: 992px) {
+  .chart-box:first-child .progress-circle-center::before {
+    width: 48px;
+    height: 48px;
+    top: 1.5px;
+    left: 1.5px;
+  }
+}
+
+@media (max-width: 768px) {
+  .chart-box:first-child .progress-circle-center::before {
+    width: 44px;
+    height: 44px;
+    top: 2px;
+    left: 2px;
+  }
+}
+
+/* 第一个环形图的字体缩小 */
+.chart-box:first-child .progress-text span {
+  font-size: 12px;
+}
+
+.chart-box:first-child .progress-text .percentage {
+  font-size: 20px;
+}
+
+.map-search-input {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 220px;
+  height: 36px;
+  border-radius: 18px;
+  border: none;
+  padding: 0 16px;
+  font-size: 15px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  z-index: 20;
+  outline: none;
+}
+.map-search-list {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  width: 220px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #fff;
+  color: #333;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 21;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.map-search-list li {
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.map-search-list li:hover {
+  background: #f0f0f0;
+}
+
+.map-search-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.7);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.map-search-btn:hover {
+  background: #00a8ff;
+}
+.map-search-modal {
+  position: absolute;
+  top: 16px;
+  right: 64px;
+  background: rgba(0,0,0,0.92);
+  border-radius: 10px;
+  padding: 18px 48px 18px 18px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+}
+.map-search-modal-input {
+  width: 220px;
+  height: 36px;
+  border-radius: 18px;
+  border: none;
+  padding: 0 16px;
+  font-size: 15px;
+  background: #fff;
+  color: #333;
+  outline: none;
+}
+.map-search-modal-close {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 22px;
+  cursor: pointer;
+  z-index: 41;
 }
 </style>
