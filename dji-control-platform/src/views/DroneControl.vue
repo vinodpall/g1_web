@@ -43,19 +43,25 @@
                 <!-- 任务信息面板移到竖线右侧10px -->
                 <div class="task-info-panel">
                   <div class="task-progress-actions">
-                    <div class="task-progress-title">
-                      <span>任务进度</span>
-                      <span>0%</span>
-                    </div>
-                    <div class="task-progress-row">
+                    <div class="task-progress-left">
+                      <div class="task-progress-title">
+                        <span>任务进度</span>
+                        <span>{{ progressPercent }}%</span>
+                      </div>
                       <div class="task-progress-bar">
-                        <div class="task-progress-inner" style="width: 0%"></div>
+                        <div class="el-slider__runway">
+                          <div class="el-slider__bar" :style="{ width: progressPercent + '%', left: '0%' }"></div>
+                          <div class="el-slider__button-wrapper" :style="{ left: progressPercent + '%' }">
+                            <div class="el-slider__button"></div>
+                          </div>
+                        </div>
                       </div>
-                      <div class="task-progress-divider"></div>
-                      <div class="task-progress-actions-btns">
-                        <button class="btn-pause">暂停</button>
-                        <button class="btn-stop">停止</button>
-                      </div>
+                      <div class="task-name">正在执行：<span class="route-name">{{ currentRouteName }}</span></div>
+                    </div>
+                    <div class="task-progress-divider"></div>
+                    <div class="task-progress-actions-btns">
+                      <span class="span">暂停</span>
+                      <span class="span1">停止</span>
                     </div>
                   </div>
                   <div class="task-stats-panel">
@@ -77,18 +83,47 @@
                 <div class="on1-lt-border-horizontal"></div>
               </div>
               <div class="robot-status-footer">
-                <span>行走速度：线速度：0.00m/s ，角速度：0.00m/s</span>
-                <span>，前后超声：0</span>
-                <span>，左右超声：0</span>
-                <span>，温度1：未知℃</span>
-                <span>，温度2：未知℃</span>
+                <span>飞行速度：线速度：0.00m/s ，角速度：0.00m/s</span>
+                <span>，风向：东南风</span>
+                <span>，降水：0mm</span>
+                <span>，温度：35℃</span>
+                <span>，湿度：52%</span>
               </div>
             </div>
             <div class="on1-r">
-              <div class="drone-io-mini">
-                <div class="io-switch-item"><span>IO项1</span><span class="switch-placeholder"></span></div>
-                <div class="io-switch-item"><span>IO项2</span><span class="switch-placeholder"></span></div>
-                <div class="io-input-item"><span>前后超声</span><input type="number" placeholder="0~255" /></div>
+              <div class="remote-control-section">
+                <div class="remote-control-header">
+                  <span class="remote-control-text">远程控制</span>
+                  <div class="switch-container">
+                    <div class="switch-toggle"></div>
+                  </div>
+                </div>
+                <div class="remote-card-list">
+                  <div class="remote-card-item">
+                    <img :src="stockIcon" class="remote-card-icon" alt="电池" />
+                    <div class="remote-card-info">
+                      <div class="remote-card-title">未充电</div>
+                      <div class="remote-card-sub">飞行器充电</div>
+                    </div>
+                    <button class="remote-card-btn" disabled>充电</button>
+                  </div>
+                  <div class="remote-card-item">
+                    <img :src="stockIcon" class="remote-card-icon" alt="系统" />
+                    <div class="remote-card-info">
+                      <div class="remote-card-title">工作中</div>
+                      <div class="remote-card-sub">机场系统</div>
+                    </div>
+                    <button class="remote-card-btn" disabled>开启</button>
+                  </div>
+                  <div class="remote-card-item">
+                    <img :src="stockIcon" class="remote-card-icon" alt="相机" />
+                    <div class="remote-card-info">
+                      <div class="remote-card-title">未启动</div>
+                      <div class="remote-card-sub">全景相机</div>
+                    </div>
+                    <button class="remote-card-btn" disabled>启动</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -153,12 +188,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
+import batteryIcon from '@/assets/source_data/svg_data/battery.svg'
+import systemIcon from '@/assets/source_data/svg_data/system.svg'
+import cameraIcon from '@/assets/source_data/svg_data/camera.svg'
 import plane2Img from '@/assets/source_data/plane_2.png'
 import batteryImg from '@/assets/source_data/Battery.png'
+import AMapLoader from '@amap/amap-jsapi-loader'
 
 const sidebarTabs = [
   {
@@ -173,6 +212,38 @@ const sidebarTabs = [
   }
 ]
 const currentTab = ref('plane')
+const progressPercent = ref(40) // 改为40%测试效果
+const currentRouteName = ref('测试航线A') // 当前航线名称
+const amapInstance = ref<any>(null)
+
+onMounted(() => {
+  AMapLoader.load({
+    key: '6f9eaf51960441fa4f813ea2d7e7cfff', 
+    version: '2.0',
+    plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch']
+  }).then((AMap) => {
+    amapInstance.value = new AMap.Map('amap-container', {
+      zoom: 12,
+      center: [116.397428, 39.90923],
+      logoEnable: false,
+      copyrightEnable: false
+    })
+    amapInstance.value.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
+  })
+})
+
+onBeforeUnmount(() => {
+  if (amapInstance.value) {
+    amapInstance.value.destroy()
+    amapInstance.value = null
+  }
+})
+
+// 测试方法：动态改变进度
+const updateProgress = (percent: number) => {
+  progressPercent.value = Math.max(0, Math.min(100, percent))
+}
+
 // 仅结构占位，后续资源和交互等你补充
 </script>
 
@@ -392,8 +463,11 @@ const currentTab = ref('plane')
   border-radius: 4px;
 }
 .task-name {
-  font-size: 12px;
-  color: #d4edfd;
+  font-size: 13px;
+  color: #b6b6b6;
+  margin-top: 10px;
+  text-align: left;
+  padding-left: 0;
 }
 .task-actions {
   display: flex;
@@ -409,11 +483,13 @@ const currentTab = ref('plane')
 }
 .robot-status-footer {
   font-size: 12px;
-  color: #d4edfd;
-  margin-top: 8px;
+  color: rgb(202, 133, 48);
+  margin-top: 0px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-height: 30px;
+  padding-left: 8px;
 }
 .io-control-card .io-switch-list {
   display: flex;
@@ -784,6 +860,79 @@ const currentTab = ref('plane')
   box-sizing: border-box;
   margin: 0;
 }
+.remote-control-section {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.remote-control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid #223a5e;
+  margin-bottom: 12px;
+  margin-top: -8px;
+  width: calc(100% + 16px);
+  margin-left: -16px;
+  box-sizing: border-box;
+}
+.remote-control-text {
+  color: #67d5fd;
+  font-size: 14px;
+  font-weight: 500;
+}
+.switch-container {
+  width: 40px;
+  height: 20px;
+  background: #B0B0B0;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  border: 1px solid #888;
+}
+.switch-toggle {
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  transition: left 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.switch-container.active .switch-toggle {
+  left: 21px;
+}
+.remote-control-data {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+}
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(34, 58, 94, 0.3);
+}
+.data-row:last-child {
+  border-bottom: none;
+}
+.data-label {
+  color: #b6b6b6;
+  font-size: 12px;
+}
+.data-value {
+  color: #67d5fd;
+  font-size: 12px;
+  font-weight: 500;
+}
 .drone-img-battery-block {
   display: flex;
   flex-direction: row;
@@ -857,15 +1006,24 @@ const currentTab = ref('plane')
 .task-progress-actions {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row; /* 改为水平布局 */
+  align-items: center;
+  justify-content: space-between; /* 左右分布 */
   margin-bottom: 8px;
   box-sizing: border-box;
   flex: 1; /* 让上半部分自动填满剩余空间 */
 }
+.task-progress-left {
+  flex: 1; /* 左侧占据剩余空间 */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  margin-top: -8px; /* 往上移动10px */
+}
 .task-progress-title,
 .task-progress-bar,
-.task-progress-actions-btns {
+.task-name {
   width: 100%;
   box-sizing: border-box;
 }
@@ -875,64 +1033,141 @@ const currentTab = ref('plane')
   justify-content: space-between;
   align-items: center;
   font-size: 15px;
-  color: #b6b6b6;
+  color: #67D5FD; /* 改为要求的颜色 */
   margin-bottom: 4px;
-}
-.task-progress-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  width: 100%;
-  gap: 0;
-  justify-content: space-between; /* 让按钮组靠最右 */
   position: relative;
+}
+.task-progress-title span:first-child {
+  flex: 1;
+  text-align: left;
+}
+.task-progress-title span:last-child {
+  flex-shrink: 0;
+  margin-left: 10px;
 }
 .task-progress-bar {
   height: 6px;
-  background: #222;
-  border-radius: 3px;
-  margin-bottom: 0;
-  overflow: hidden;
+  margin-bottom: 4px;
   flex-shrink: 0;
   min-width: 80px;
-  max-width: 300px;
-  margin-right: 10px; /* 进度条右侧留10px */
+  max-width: none; /* 移除最大宽度限制 */
   flex: 1;
+  position: relative;
+  width: 100%; /* 让进度条占满整个宽度 */
+}
+.el-slider__runway {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  cursor: pointer;
+  flex: 1;
+  height: 6px;
+  position: relative;
+  width: 100%;
+  margin-right: 50px; /* 为百分比数字留出空间 */
+}
+.el-slider__bar {
+  background-color: rgb(22, 187, 242);
+  border-bottom-left-radius: 3px;
+  border-top-left-radius: 3px;
+  height: 6px;
+  position: absolute;
+  left: 0%;
+  width: 0%;
+  transition: width 0.3s ease, left 0.3s ease;
+}
+.el-slider__button-wrapper {
+  background-color: transparent;
+  height: 20px;
+  line-height: normal;
+  outline: none;
+  position: absolute;
+  text-align: center;
+  top: -7px;
+  transform: translate(-50%);
+  user-select: none;
+  width: 20px;
+  z-index: 1;
+  left: 0%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.el-slider__button {
+  width: 10px;
+  height: 10px;
+  background-color: rgb(22, 187, 242);
+  border: 5px solid rgba(22, 187, 242, 0.7);
+  border-radius: 50%;
+  box-sizing: border-box;
+  display: inline-block;
+  transition: 0.2s;
+  user-select: none;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.task-name {
+  font-size: 13px;
+  color: #b6b6b6;
+  margin-top: 10px;
 }
 .task-progress-divider {
   width: 1.5px;
   background: linear-gradient(180deg, #59c0fc 0%, #223a5e 100%);
-  margin: 0 10px 0 0; /* 竖线距离按钮组10px，左侧不留间距 */
+  margin: 0 15px; /* 竖线两侧留10px间距 */
   border-radius: 1px;
-  height: 100%;
-  align-self: stretch;
+  height: 80%; /* 缩短高度为60% */
+  align-self: center; /* 垂直居中 */
   opacity: 0.7;
+  flex-shrink: 0;
 }
 .task-progress-actions-btns {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 20px; /* 增加按钮间距从8px到16px */
   width: auto;
   align-items: flex-end;
   justify-content: center;
+  flex-shrink: 0; /* 防止按钮组被压缩 */
+  margin-top: -5px; /* 往上移动，与任务进度平齐 */
+  height: 100%; /* 让按钮组占满高度 */
 }
-.btn-pause {
-  background: #223a5e;
+.task-progress-actions-btns .span {
+  width: clamp(60px, 6vw, 70px);
+  height: 30px;
+  line-height: 30px;
+  text-align: center;
+  background: #0c3c56;
+  border-radius: 4px;
+  border: 1px solid rgba(38, 131, 182, 0.8);
   color: #67d5fd;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 18px;
-  font-size: 15px;
   cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.3s;
+  margin-top: auto; /* 暂停按钮靠上 */
 }
-.btn-stop {
-  background: #2d1a1a;
+.task-progress-actions-btns .span:hover {
+  border-color: rgba(38, 131, 182, 0.8);
+  background: #0c4666;
+}
+.task-progress-actions-btns .span1 {
+  width: clamp(60px, 6vw, 70px);
+  height: 30px;
+  line-height: 30px;
+  text-align: center;
+  background: #561c1c;
+  border-radius: 4px;
+  border: 1px solid rgba(182, 38, 38, 0);
   color: #fd6767;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 18px;
-  font-size: 15px;
   cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.3s;
+  margin-bottom: auto; /* 停止按钮靠下 */
+}
+.task-progress-actions-btns .span1:hover {
+  border-color: rgba(182, 38, 38, 0.8);
+  background: #662626;
 }
 .task-stats-panel {
   display: flex;
@@ -943,7 +1178,7 @@ const currentTab = ref('plane')
 .task-stat-card {
   display: flex;
   flex: 1; /* 均分宽度 */
-  height: 44px;
+  height: 60px; /* 从44px增加到60px */
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -956,18 +1191,102 @@ const currentTab = ref('plane')
   font-size: 13px;
   color: #b6b6b6;
 }
+/* 紫色卡片标题 */
+.task-stat-card .stat-title {
+  color: #7E44F2;
+}
+/* 蓝色卡片标题 */
+.stat-blue .stat-title {
+  color: #16BBF2;
+}
+/* 绿色卡片标题 */
+.stat-green .stat-title {
+  color: #31C2A5;
+}
 .stat-value {
   font-size: 18px;
   color: #fff;
   font-weight: bold;
   margin-top: 2px;
 }
+/* 紫色卡片的数值颜色 */
+.task-stat-card .stat-value {
+  color: #7E44F2;
+}
 .stat-blue {
   background: linear-gradient(0deg, rgba(0, 212, 255, 0.20) 0%, rgba(0, 212, 255, 0.00) 100%);
   border-bottom: 3px solid #00CFFF;
 }
+.stat-blue .stat-value {
+  color: #16BBF2;
+}
 .stat-green {
   background: linear-gradient(0deg, rgba(0, 255, 170, 0.20) 0%, rgba(0, 255, 170, 0.00) 100%);
   border-bottom: 3px solid #00FFAA;
+}
+.stat-green .stat-value {
+  color: #31C2A5;
+}
+.route-name {
+  color: #16BBF2;
+  font-weight: bold;
+  margin-left: 4px;
+}
+.remote-card-list {
+  width: calc(100% + 16px);
+  margin-left: -16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 0;
+}
+.remote-card-item {
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border-radius: 8px;
+  min-height: 48px;
+  width: 92%;
+  max-width: 260px;
+  margin: 0 auto;
+  padding-left: 12px;
+}
+.remote-card-icon {
+  width: 32px;
+  height: 32px;
+  margin-right: 12px;
+}
+.remote-card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.remote-card-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
+.remote-card-sub {
+  font-size: 14px;
+  color: #888;
+}
+.remote-card-btn {
+  min-width: 72px;
+  height: 36px;
+  border: 1.5px solid #d3d6db;
+  background: #f7f9fa;
+  color: #b0b3b8;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  outline: none;
+  cursor: not-allowed;
+  margin-left: 16px;
+  transition: border 0.2s, background 0.2s;
+}
+.remote-card-btn:active,
+.remote-card-btn:focus {
+  border-color: #b0b3b8;
 }
 </style> 
