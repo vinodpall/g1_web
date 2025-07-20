@@ -65,6 +65,21 @@ button:focus-visible {
   text-align: center;
 }
 
+#amap-container .amap-maptype,
+.amap-container .amap-maptype,
+body .amap-maptype,
+.amap-maptype {
+  right: 16px !important;
+  bottom: 110px !important;
+  z-index: 20 !important;
+}
+
+.amap-maptype,
+.amap-maptype * {
+  color: #222 !important;
+  font-weight: 500;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

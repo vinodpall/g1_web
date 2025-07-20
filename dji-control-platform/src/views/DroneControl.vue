@@ -94,34 +94,38 @@
               <div class="remote-control-section">
                 <div class="remote-control-header">
                   <span class="remote-control-text">远程控制</span>
-                  <div class="switch-container">
+                  <div
+                    class="switch-container"
+                    :class="{ active: remoteEnabled }"
+                    @click="toggleRemote"
+                  >
                     <div class="switch-toggle"></div>
                   </div>
                 </div>
                 <div class="remote-card-list">
                   <div class="remote-card-item">
-                    <img :src="stockIcon" class="remote-card-icon" alt="电池" />
-                    <div class="remote-card-info">
+                    <img :src="droneCloseIcon" class="remote-card-icon" alt="电源" />
+                    <div class="remote-card-texts">
+                      <div class="remote-card-title">关机</div>
+                      <div class="remote-card-sub">飞行器电源</div>
+                    </div>
+                    <button class="remote-card-btn" :disabled="!remoteEnabled">开机</button>
+                  </div>
+                  <div class="remote-card-item">
+                    <img :src="droneBatteryIcon" class="remote-card-icon" alt="电池" />
+                    <div class="remote-card-texts">
                       <div class="remote-card-title">未充电</div>
                       <div class="remote-card-sub">飞行器充电</div>
                     </div>
-                    <button class="remote-card-btn" disabled>充电</button>
+                    <button class="remote-card-btn" :disabled="!remoteEnabled">充电</button>
                   </div>
                   <div class="remote-card-item">
-                    <img :src="stockIcon" class="remote-card-icon" alt="系统" />
-                    <div class="remote-card-info">
-                      <div class="remote-card-title">工作中</div>
-                      <div class="remote-card-sub">机场系统</div>
+                    <img :src="drone4gIcon" class="remote-card-icon" alt="4G" />
+                    <div class="remote-card-texts">
+                      <div class="remote-card-title">已开启</div>
+                      <div class="remote-card-sub">增强图传</div>
                     </div>
-                    <button class="remote-card-btn" disabled>开启</button>
-                  </div>
-                  <div class="remote-card-item">
-                    <img :src="stockIcon" class="remote-card-icon" alt="相机" />
-                    <div class="remote-card-info">
-                      <div class="remote-card-title">未启动</div>
-                      <div class="remote-card-sub">全景相机</div>
-                    </div>
-                    <button class="remote-card-btn" disabled>启动</button>
+                    <button class="remote-card-btn" :disabled="!remoteEnabled">关闭</button>
                   </div>
                 </div>
               </div>
@@ -129,55 +133,134 @@
           </div>
           <!-- 地图卡片 -->
           <div class="card map-card">
-            <div id="amap-container" class="amap-container"></div>
+            <div id="amap-container" class="amap-container">
+              <!-- <div class="map-layer-switch" @click="toggleMapLayer">
+                {{ isSatellite ? '默认图' : '卫星图' }}
+              </div> -->
+            </div>
           </div>
         </section>
         <!-- 右侧视频与控制区 -->
         <section class="right-panel">
           <div class="right-flex">
             <div class="video-card">
-              <div class="video-player-placeholder">视频播放器占位</div>
-              <div class="video-controls-placeholder">播放器控制条占位</div>
-            </div>
-            <div class="control-bottom">
-              <div class="robot-move-panel">
-                <div class="panel-title">机器人移动</div>
-                <div class="move-btns">
-                  <div class="move-row">
-                    <span class="icon-placeholder"></span>
-                    <span>↑</span>
-                    <span class="icon-placeholder"></span>
+              <div class="boxGrid-box">
+                <div class="boxGrid-box-content">
+                  <div class="player_container">
+                    <div class="player_item">
+                      <div class="player_box" id="player_box1">
+                        <!-- 视频播放器将在这里初始化 -->
+                      </div>
+                    </div>
                   </div>
-                  <div class="move-row">
-                    <span>←</span>
-                    <span>↓</span>
-                    <span>→</span>
+                </div>
+                <div class="boxGrid-box-bottom">
+                  <div class="left-controls">
+                    <svg class="icon svg-icon" aria-hidden="true">
+                      <use xlink:href="#icon-jiugongge"></use>
+                    </svg>
                   </div>
-                  <div class="move-speed">
-                    <span>-</span><span>1</span><span>+</span>
+                  <div class="right-controls" :class="{ active: showScreenMenu }" @click="toggleScreenMenu">
+                    <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
+                    <i class="el-icon dropdown-icon">
+                      <svg width="20" height="20" viewBox="0 0 1024 1024">
+                        <path fill="#59C0FC" d="m192 384 320 384 320-384z"></path>
+                      </svg>
+                    </i>
+                    <!-- 分屏选择菜单 -->
+                    <div class="screen-menu" v-if="showScreenMenu">
+                      <div class="menu-item" @click="selectScreenMode('一分屏')">一分屏</div>
+                      <div class="menu-item" @click="selectScreenMode('二分屏')">二分屏</div>
+                      <div class="menu-item" @click="selectScreenMode('四分屏')">四分屏</div>
+                      <div class="menu-item" @click="selectScreenMode('六分屏')">六分屏</div>
+                      <div class="menu-item" @click="selectScreenMode('九分屏')">九分屏</div>
+                    </div>
                   </div>
-                  <div class="move-stop"><span>停止</span></div>
                 </div>
               </div>
-              <div class="gimbal-panel">
-                <div class="panel-title">云台控制</div>
-                <div class="gimbal-joystick">
-                  <span class="icon-placeholder"></span>
-                  <!-- 八向云台按钮占位 -->
+            </div>
+            <div class="control-bottom">
+              <div class="drone-control-panel">
+                <div class="panel-title">无人机控制</div>
+                <div class="drone-direction-grid">
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left_round.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">左旋</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_forward.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">前进</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right_round.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">右旋</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">左移</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_back.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">后退</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">右移</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_up.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">上升</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_light.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">补光灯</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_down.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">下降</span>
+                  </button>
                 </div>
-                <ul class="gimbal-func-list">
-                  <li><span>调焦:</span><span class="icon-placeholder"></span><span class="icon-placeholder"></span></li>
-                  <li><span>聚焦:</span><span class="icon-placeholder"></span><span class="icon-placeholder"></span></li>
-                  <li><span>雨刷:</span><span class="icon-placeholder"></span><span class="icon-placeholder"></span></li>
-                  <li><span>补光灯:</span><span class="icon-placeholder"></span><span class="icon-placeholder"></span></li>
-                  <li><span>红外测温:</span><span class="icon-placeholder"></span><span class="icon-placeholder"></span></li>
-                </ul>
-                <ul class="gimbal-func-list">
-                  <li><span>宽动态:</span><span class="icon-placeholder"></span><span class="icon-placeholder"></span></li>
-                  <li><span>一键聚焦:</span><span class="icon-placeholder"></span></li>
-                  <li><span>追踪屏蔽:</span><span class="icon-placeholder"></span><span class="icon-placeholder"></span></li>
-                  <li class="move-speed"><span>-</span><span>4</span><span>+</span></li>
-                </ul>
+                <div class="drone-bottom-row">
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_stop.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">急停</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_visible.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">隐蔽模式</span>
+                  </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_fly.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">一键起飞</span>
+                  </button>
+                </div>
+              </div>
+              <div class="gimbal-control-panel">
+                <div class="panel-title">云台控制</div>
+                <div class="gimbal-group">
+                  <div class="gimbal-group-title">重置云台</div>
+                  <div class="gimbal-btn-row">
+                    <button>云台回中</button>
+                    <button>云台向下</button>
+                    <button>偏航回中</button>
+                    <button>俯仰向下</button>
+                  </div>
+                </div>
+                <div class="gimbal-group">
+                  <div class="gimbal-group-title">功能按键</div>
+                  <div class="gimbal-btn-row">
+                    <button>开启分屏</button>
+                    <button>放大</button>
+                    <button>开始录像</button>
+                    <button>拍照</button>
+                  </div>
+                  <div class="gimbal-btn-row">
+                    <button>关闭分屏</button>
+                    <button>缩小</button>
+                    <button>停止录像</button>
+                    <button>夜景模式</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -198,6 +281,10 @@ import cameraIcon from '@/assets/source_data/svg_data/camera.svg'
 import plane2Img from '@/assets/source_data/plane_2.png'
 import batteryImg from '@/assets/source_data/Battery.png'
 import AMapLoader from '@amap/amap-jsapi-loader'
+// 新增 drone_ 系列图标
+import droneCloseIcon from '@/assets/source_data/svg_data/drone_close.svg'
+import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
+import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
 
 const sidebarTabs = [
   {
@@ -215,13 +302,45 @@ const currentTab = ref('plane')
 const progressPercent = ref(40) // 改为40%测试效果
 const currentRouteName = ref('测试航线A') // 当前航线名称
 const amapInstance = ref<any>(null)
+const amapApiRef = ref<any>(null); // 新增
+const remoteEnabled = ref(false);
+const toggleRemote = () => {
+  remoteEnabled.value = !remoteEnabled.value;
+};
+const isSatellite = ref(false);
+const toggleMapLayer = () => {
+  if (!amapInstance.value || !amapApiRef.value) return;
+  isSatellite.value = !isSatellite.value;
+  const AMap = amapApiRef.value;
+  if (isSatellite.value) {
+    amapInstance.value.setLayers([
+      new AMap.TileLayer.Satellite(),
+      new AMap.TileLayer.RoadNet()
+    ]);
+  } else {
+    amapInstance.value.setLayers([
+      new AMap.TileLayer()
+    ]);
+  }
+};
+
+const showScreenMenu = ref(false)
+const currentScreenMode = ref('一分屏')
+const toggleScreenMenu = () => {
+  showScreenMenu.value = !showScreenMenu.value
+}
+const selectScreenMode = (mode: string) => {
+  currentScreenMode.value = mode
+  showScreenMenu.value = false
+}
 
 onMounted(() => {
   AMapLoader.load({
     key: '6f9eaf51960441fa4f813ea2d7e7cfff', 
     version: '2.0',
-    plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch']
+    plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch', 'AMap.MapType']
   }).then((AMap) => {
+    amapApiRef.value = AMap; // 缓存 AMap
     amapInstance.value = new AMap.Map('amap-container', {
       zoom: 12,
       center: [116.397428, 39.90923],
@@ -229,6 +348,7 @@ onMounted(() => {
       copyrightEnable: false
     })
     amapInstance.value.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
+    amapInstance.value.addControl(new AMap.MapType({ position: 'RB' }))
   })
 })
 
@@ -322,7 +442,7 @@ const updateProgress = (percent: number) => {
 .main-flex {
   display: flex;
   height: 100%;
-  gap: 1.5vw;
+  gap: 0.8vw;
 }
 .left-panel {
   flex-basis: 60%;
@@ -334,6 +454,7 @@ const updateProgress = (percent: number) => {
   height: 100%;
   overflow-y: auto;
   background: transparent;
+  padding-bottom: 20px; /* 新增，确保底部有间距 */
 }
 .drone-info-card {
   min-height: 220px;
@@ -359,12 +480,36 @@ const updateProgress = (percent: number) => {
   flex-direction: column;
   padding: 0;
   overflow: hidden;
+  background: none !important;
+  border: 1.5px solid #164159;
+  border-radius: 8px;
+  box-shadow: none;
+  margin-bottom: 0; /* 修正，避免被flex吞掉 */
 }
 .amap-container {
   width: 100%;
   height: 100%;
   border-radius: 8px;
   min-height: 200px;
+  position: relative;
+}
+.map-layer-switch {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  background: rgba(1,135,191,0.85);
+  color: #fff;
+  border-radius: 4px;
+  padding: 6px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  transition: background 0.2s;
+}
+.map-layer-switch:hover {
+  background: #16bbf2;
 }
 .right-panel {
   flex-basis: 40%;
@@ -377,6 +522,7 @@ const updateProgress = (percent: number) => {
   background: transparent;
   box-sizing: border-box;
   overflow: auto;
+  padding-right: 18px;
 }
 .right-flex {
   display: flex;
@@ -567,9 +713,11 @@ const updateProgress = (percent: number) => {
 }
 .video-card {
   flex: 2;
-  background: linear-gradient(135deg, #16213a 80%, #0a0f1c 100%);
+  /* 去掉背景色和阴影 */
+  background: none !important;
+  border: 1.5px solid #164159;
   border-radius: 8px;
-  box-shadow: 0 2px 8px #0003;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -600,52 +748,79 @@ const updateProgress = (percent: number) => {
   justify-content: center;
 }
 .control-bottom {
-  flex: 1;
   display: flex;
-  gap: 16px;
+  gap: 18px;
   margin-top: 8px;
 }
-.robot-move-panel, .gimbal-panel {
-  flex: 1;
-  background: linear-gradient(135deg, #16213a 80%, #0a0f1c 100%);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px #0003;
-  padding: 12px 16px;
+.drone-control-panel {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  margin-bottom: 20px;
+}
+.gimbal-control-panel {
+  flex: 2 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
 }
 .panel-title {
   font-size: 15px;
-  color: #59c0fc;
+  color: #fff;
   font-weight: 600;
-  margin-bottom: 8px;
+  /* margin-bottom: 8px; */
+  text-align: center;
+  border-radius: 4px 4px 0 0;
+  background: #004161;
+  padding: 0;
+  height: 32px;
+  line-height: 32px;
+  width: calc(100% + 32px);
+  box-sizing: border-box;
+  margin-left: -16px;
+  margin-right: -16px;
+  margin-top: -12px;
 }
-.move-btns {
+.drone-direction-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+.drone-bottom-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
+  flex-direction: row;
+  gap: 3px;
 }
-.move-row {
+.gimbal-group {
+  margin-bottom: 10px;
+}
+.gimbal-group-title {
+  color: #b6b6b6;
+  font-size: 13px;
+  margin-bottom: 6px;
+  text-align: left;
+}
+.gimbal-btn-row {
   display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: center;
+  gap: 10px;
+  margin-bottom: 6px;
 }
-.move-speed {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  color: #d4edfd;
-}
-.move-stop {
-  margin-top: 4px;
-  color: #fd6767;
-  font-weight: 600;
+.gimbal-btn-row button, .drone-direction-grid button, .drone-bottom-row button {
+  flex: 1;
+  background: rgba(1,135,191,0.30);
+  border: 1px solid #164159;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 13px;
+  padding: 6px 0;
   cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.gimbal-btn-row button:hover, .drone-direction-grid button:hover, .drone-bottom-row button:hover {
+  background: #16bbf2;
+  color: #fff;
 }
 .gimbal-joystick {
   width: 80px;
@@ -856,7 +1031,7 @@ const updateProgress = (percent: number) => {
   flex-direction: column;
   justify-content: flex-start;
   align-items: flex-start;
-  padding: 16px 0 16px 16px;
+  padding: 16px 0 16px 0px;
   box-sizing: border-box;
   margin: 0;
 }
@@ -875,8 +1050,7 @@ const updateProgress = (percent: number) => {
   border-bottom: 1px solid #223a5e;
   margin-bottom: 12px;
   margin-top: -8px;
-  width: calc(100% + 16px);
-  margin-left: -16px;
+  width: calc(100%);
   box-sizing: border-box;
 }
 .remote-control-text {
@@ -892,6 +1066,11 @@ const updateProgress = (percent: number) => {
   position: relative;
   cursor: pointer;
   border: 1px solid #888;
+  transition: background 0.3s, border 0.3s;
+}
+.switch-container.active {
+  background: #16bbf2;
+  border: 1px solid #16bbf2;
 }
 .switch-toggle {
   width: 16px;
@@ -901,7 +1080,7 @@ const updateProgress = (percent: number) => {
   position: absolute;
   top: 1px;
   left: 1px;
-  transition: left 0.3s ease;
+  transition: left 0.3s;
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 .switch-container.active .switch-toggle {
@@ -1233,60 +1412,326 @@ const updateProgress = (percent: number) => {
   margin-left: 4px;
 }
 .remote-card-list {
-  width: calc(100% + 16px);
-  margin-left: -16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 0;
+  gap: 12px;
+  width: 100%;
+  align-items: center;
+  padding: 0;
+  margin: 0;
 }
 .remote-card-item {
-  display: flex;
+  display: flex;                /* 恢复横向排列 */
+  flex-direction: row;
   align-items: center;
-  background: transparent;
-  border-radius: 8px;
-  min-height: 48px;
-  width: 92%;
-  max-width: 260px;
+  width: 90%;
+  height: 42px;
   margin: 0 auto;
-  padding-left: 12px;
+  gap: 18px;
+  border-radius: 4px;
+  background: rgba(1, 135, 191, 0.30);
+  padding: 0 12px 0 16px;
+  box-sizing: border-box;
+  position: relative;
 }
 .remote-card-icon {
-  width: 32px;
-  height: 32px;
-  margin-right: 12px;
+  width: 20px;
+  height: 20px;
+  filter: brightness(0) invert(1);
+  flex-shrink: 0;
 }
-.remote-card-info {
-  flex: 1;
+.remote-card-texts {
   display: flex;
   flex-direction: column;
+  flex: 1;
   justify-content: center;
+  align-self: stretch;
+  gap: 0;
+  min-width: 0;
 }
 .remote-card-title {
-  font-size: 18px;
-  font-weight: bold;
-  color: #333;
+  color: #FFF;
+  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 1px;
+  margin-bottom: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .remote-card-sub {
-  font-size: 14px;
-  color: #888;
+  color: #FFF;
+  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 1px;
+  margin-top: -1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .remote-card-btn {
-  min-width: 72px;
-  height: 36px;
-  border: 1.5px solid #d3d6db;
-  background: #f7f9fa;
-  color: #b0b3b8;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 500;
+  display: flex;
+  padding: 4px 16px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.23);
+  background: rgba(255, 255, 255, 0.65);
+  color: #5E5E5E;
+  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 150%;
+  letter-spacing: 1px;
   outline: none;
   cursor: not-allowed;
-  margin-left: 16px;
+  min-width: 56px;
+  height: 28px;         /* 按钮高度适配卡片 */
+  margin-left: auto;    /* 靠右对齐 */
   transition: border 0.2s, background 0.2s;
+  align-self: center;   /* 垂直居中 */
 }
 .remote-card-btn:active,
 .remote-card-btn:focus {
   border-color: #b0b3b8;
+}
+.remote-card-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(0, 0, 0, 0.23);
+  color: #5E5E5E;
+}
+.remote-card-btn:not(:disabled) {
+  cursor: pointer;
+  opacity: 1;
+  background: #fff;
+  border: 1px solid #16bbf2;
+  color: #222;
+  box-shadow: 0 2px 8px 0 rgba(22, 187, 242, 0.08);
+  transition: background 0.2s, border 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.remote-card-btn:not(:disabled):hover {
+  background: #e6f7ff;
+  border: 1.5px solid #16bbf2;
+  color: #16bbf2;
+  box-shadow: 0 4px 12px 0 rgba(22, 187, 242, 0.15);
+}
+.amap-maptype {
+  right: 16px !important;
+  bottom: 16px !important;
+  z-index: 20 !important;
+}
+.boxGrid-box {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 2;
+  background: rgba(0, 12, 23, .5);
+  border-radius: 4px;
+  overflow: hidden;
+  padding: 12px 12px 0 12px; /* 增加内边距，顶部和左右有间距 */
+}
+.boxGrid-box-content {
+  flex: 1;
+  position: relative;
+  padding: 0;
+}
+.player_container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.player_item {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.player_box {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #000;
+  border-radius: 0;
+  overflow: hidden;
+}
+.boxGrid-box-bottom {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(0, 12, 23, .8);
+  position: relative;
+  z-index: 3;
+  margin-top: 8px;
+}
+.svg-icon {
+  width: 20px;
+  height: 20px;
+  fill: #59C0FC;
+}
+.el-icon {
+  color: #59C0FC;
+  font-size: 20px;
+}
+.right-controls {
+  display: flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+.screen-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+}
+.el-icon.dropdown-icon {
+  color: #59C0FC;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+}
+.el-icon.dropdown-icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  fill: #59C0FC !important;
+}
+.screen-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  background: rgba(0, 12, 23, .9);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 4px;
+  padding: clamp(6px, 0.5vw, 8px) 0;
+  min-width: clamp(100px, 8vw, 120px);
+  margin-bottom: 8px;
+  z-index: 10;
+}
+.menu-item {
+  padding: clamp(6px, 0.5vw, 8px) clamp(12px, 1vw, 16px);
+  color: #fff;
+  font-size: clamp(12px, 0.9vw, 14px);
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.menu-item:hover {
+  background: rgba(89, 192, 252, 0.1);
+  color: #59C0FC;
+}
+.screen-menu::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  background: rgba(0, 12, 23, .9);
+  border-right: 1px solid rgba(89, 192, 252, 0.3);
+  border-bottom: 1px solid rgba(89, 192, 252, 0.3);
+  transform: rotate(45deg);
+}
+.right-controls .el-icon.dropdown-icon svg {
+  transition: transform 0.2s, fill 0.2s;
+}
+.right-controls.active .el-icon.dropdown-icon svg {
+  transform: rotate(180deg);
+  fill: #16bbf2 !important;
+}
+.drone-control-panel, .gimbal-control-panel {
+  background: none;
+  border: 1.5px solid #164159;
+  border-radius: 8px;
+  box-shadow: none;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.drone-control-panel {
+  position: relative;
+  overflow: hidden;
+}
+.drone-btn-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+  margin: 0 auto 2px auto;
+}
+.drone-direction-grid button, .drone-bottom-row button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  cursor: pointer;
+  gap: 4px;
+}
+.drone-btn-iconbox {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #164159;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  margin-bottom: 0;
+  transition: background 0.2s, border 0.2s;
+}
+.drone-direction-grid button:hover .drone-btn-label,
+.drone-bottom-row button:hover .drone-btn-label {
+  color: #fff;
+}
+.drone-direction-grid button:hover .drone-btn-iconbox,
+.drone-bottom-row button:hover .drone-btn-iconbox {
+  background: #16bbf2;
+  border-color: #16bbf2;
+}
+.drone-direction-grid button:hover .drone-btn-label,
+.drone-bottom-row button:hover .drone-btn-label {
+  color: #fff !important;
+}
+/* 取消按钮整体高亮，只高亮图标框 */
+.drone-direction-grid button:hover,
+.drone-bottom-row button:hover {
+  background: none;
+  color: #fff;
+}
+.drone-btn-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.drone-btn-label {
+  color: #fff;
+  font-size: 12px;
+  margin-top: 2px;
+  text-align: center;
+  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
+  font-weight: 400;
+  line-height: 1.2;
+}
+</style>
+
+<style>
+.amap-maptype {
+  right: 16px !important;
+  bottom: 16px !important;
+  z-index: 20 !important;
 }
 </style> 
