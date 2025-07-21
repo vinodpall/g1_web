@@ -188,7 +188,7 @@
                     <span class="drone-btn-label">左旋</span>
                   </button>
                   <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_forward.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_forward.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">前进</span>
                   </button>
                   <button>
@@ -196,15 +196,15 @@
                     <span class="drone-btn-label">右旋</span>
                   </button>
                   <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">左移</span>
                   </button>
                   <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_back.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_back.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">后退</span>
                   </button>
                   <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">右移</span>
                   </button>
                   <button>
@@ -219,8 +219,6 @@
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_down.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">下降</span>
                   </button>
-                </div>
-                <div class="drone-bottom-row">
                   <button>
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_stop.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">急停</span>
@@ -767,7 +765,7 @@ const updateProgress = (percent: number) => {
   margin-bottom: 20px;
 }
 .panel-title {
-  font-size: 15px;
+  font-size: 13px;
   color: #fff;
   font-weight: 600;
   /* margin-bottom: 8px; */
@@ -786,7 +784,8 @@ const updateProgress = (percent: number) => {
 .drone-direction-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
+  column-gap: 24px;
+  row-gap: 0px;
 }
 .drone-bottom-row {
   display: flex;
@@ -813,7 +812,7 @@ const updateProgress = (percent: number) => {
   border: 1px solid #164159;
   border-radius: 4px;
   color: #fff;
-  font-size: 13px;
+  font-size: 16px;
   padding: 6px 0;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
@@ -1679,12 +1678,12 @@ const updateProgress = (percent: number) => {
   box-shadow: none;
   padding: 0;
   cursor: pointer;
-  gap: 4px;
+  gap: 0px;
 }
 .drone-btn-iconbox {
   width: 40px;
   height: 40px;
-  border: 1px solid #164159;
+  border: none !important;
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -1718,13 +1717,54 @@ const updateProgress = (percent: number) => {
   display: block;
 }
 .drone-btn-label {
-  color: #fff;
-  font-size: 12px;
+  color: #67d5fd;
+  font-size: 10px;
   margin-top: 2px;
   text-align: center;
   font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
   font-weight: 400;
   line-height: 1.2;
+}
+.drone-direction-grid button:hover .drone-btn-label {
+  color: #fff !important;
+}
+.big-drone-btn-icon {
+  width: 30px !important;
+  height: 30px !important;
+}
+.drone-direction-grid button:focus,
+.drone-direction-grid button:active {
+  outline: none !important;
+  box-shadow: none !important;
+  background: none !important;
+}
+.gimbal-btn-row button {
+  min-width: 90px;
+  height: 40px;
+  line-height: 40px;
+  text-align: center;
+  background: #0c3c56;
+  border-radius: 4px;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+  color: #67d5fd;
+  cursor: pointer;
+  font-size: 16px;
+  white-space: nowrap;
+  transition: all 0.3s;
+  margin: 0 8px 0 0;
+  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
+  font-weight: 400;
+  padding: 0 18px;
+  outline: none;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gimbal-btn-row button:hover {
+  border-color: rgba(38, 131, 182, 0.8);
+  background: #0c4666;
+  color: #67d5fd;
 }
 </style>
 
