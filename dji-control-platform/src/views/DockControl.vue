@@ -133,11 +133,7 @@
           </div>
           <!-- 地图卡片 -->
           <div class="card map-card">
-            <div id="amap-container" class="amap-container">
-              <!-- <div class="map-layer-switch" @click="toggleMapLayer">
-                {{ isSatellite ? '默认图' : '卫星图' }}
-              </div> -->
-            </div>
+            <div id="amap-container" class="amap-container"></div>
           </div>
         </section>
         <!-- 右侧视频与控制区 -->
@@ -280,13 +276,11 @@ import cameraIcon from '@/assets/source_data/svg_data/camera.svg'
 import plane2Img from '@/assets/source_data/plane_2.png'
 import batteryImg from '@/assets/source_data/Battery.png'
 import AMapLoader from '@amap/amap-jsapi-loader'
-// 新增 drone_ 系列图标
 import droneCloseIcon from '@/assets/source_data/svg_data/drone_close.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
 
 const router = useRouter()
-
 const sidebarTabs = [
   {
     key: 'plane',
@@ -299,32 +293,31 @@ const sidebarTabs = [
     icon: stockIcon
   }
 ]
-const currentTab = ref('plane')
-const progressPercent = ref(40) // 改为40%测试效果
-const currentRouteName = ref('测试航线A') // 当前航线名称
+const currentTab = ref('stock')
+const progressPercent = ref(40)
+const currentRouteName = ref('测试航线B')
 const amapInstance = ref<any>(null)
-const amapApiRef = ref<any>(null); // 新增
-const remoteEnabled = ref(false);
+const amapApiRef = ref<any>(null)
+const remoteEnabled = ref(false)
 const toggleRemote = () => {
-  remoteEnabled.value = !remoteEnabled.value;
-};
-const isSatellite = ref(false);
+  remoteEnabled.value = !remoteEnabled.value
+}
+const isSatellite = ref(false)
 const toggleMapLayer = () => {
-  if (!amapInstance.value || !amapApiRef.value) return;
-  isSatellite.value = !isSatellite.value;
-  const AMap = amapApiRef.value;
+  if (!amapInstance.value || !amapApiRef.value) return
+  isSatellite.value = !isSatellite.value
+  const AMap = amapApiRef.value
   if (isSatellite.value) {
     amapInstance.value.setLayers([
       new AMap.TileLayer.Satellite(),
       new AMap.TileLayer.RoadNet()
-    ]);
+    ])
   } else {
     amapInstance.value.setLayers([
       new AMap.TileLayer()
-    ]);
+    ])
   }
-};
-
+}
 const showScreenMenu = ref(false)
 const currentScreenMode = ref('一分屏')
 const toggleScreenMenu = () => {
@@ -334,14 +327,21 @@ const selectScreenMode = (mode: string) => {
   currentScreenMode.value = mode
   showScreenMenu.value = false
 }
-
+const handleTabClick = (key: string) => {
+  currentTab.value = key
+  if (key === 'plane') {
+    router.push('/dashboard/control')
+  } else if (key === 'stock') {
+    router.push('/dashboard/dock-control')
+  }
+}
 onMounted(() => {
   AMapLoader.load({
-    key: '6f9eaf51960441fa4f813ea2d7e7cfff', 
+    key: '6f9eaf51960441fa4f813ea2d7e7cfff',
     version: '2.0',
     plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch', 'AMap.MapType']
   }).then((AMap) => {
-    amapApiRef.value = AMap; // 缓存 AMap
+    amapApiRef.value = AMap
     amapInstance.value = new AMap.Map('amap-container', {
       zoom: 12,
       center: [116.397428, 39.90923],
@@ -352,32 +352,19 @@ onMounted(() => {
     amapInstance.value.addControl(new AMap.MapType({ position: 'RB' }))
   })
 })
-
 onBeforeUnmount(() => {
   if (amapInstance.value) {
     amapInstance.value.destroy()
     amapInstance.value = null
   }
 })
-
-// 测试方法：动态改变进度
 const updateProgress = (percent: number) => {
   progressPercent.value = Math.max(0, Math.min(100, percent))
 }
-
-const handleTabClick = (key: string) => {
-  currentTab.value = key
-  if (key === 'plane') {
-    router.push('/dashboard/control')
-  } else if (key === 'stock') {
-    router.push('/dashboard/dock-control')
-  }
-}
-
-// 仅结构占位，后续资源和交互等你补充
 </script>
 
 <style scoped>
+/* 以下内容复制自DroneControl.vue */
 .drone-control-main {
   display: flex;
   height: calc(100vh - 84px);
@@ -943,847 +930,5 @@ const handleTabClick = (key: string) => {
   padding: 0;
   margin-bottom: 0;
 }
-.in-box-top-left .on1-l {
-  width: 74%;
-  height: 100%;
-  border-radius: 5px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-.in-box-top-left .on1-lt {
-  display: flex;
-  justify-content: flex-start;
-  align-items: stretch;
-  width: 100%;
-  height: 100%;
-  position: relative;
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-  overflow: hidden;
-}
-.on1-ltl-main {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  height: 100%;
-  margin-top: 14px;
-  width: 220px;
-  box-sizing: border-box;
-  flex-shrink: 0;
-}
-.on1-lt-flex-vertical {
-  display: none;
-}
-.on1-lt-border-horizontal {
-  position: absolute;
-  left: 0;
-  right: -12px;
-  bottom: 10px;
-  height: 1.5px;
-  background: linear-gradient(90deg, #59c0fc 0%, #223a5e 100%);
-  opacity: 0.7;
-  border-radius: 1px;
-  z-index: 1;
-  display: block;
-  pointer-events: none;
-}
-.on1-lt-border-vertical {
-  position: absolute;
-  top: 0;
-  left: 220px;
-  width: 1.5px;
-  height: calc(100% - 10px);
-  background: linear-gradient(180deg, #59c0fc 0%, #223a5e 100%);
-  opacity: 0.7;
-  border-radius: 1px;
-  z-index: 2;
-  pointer-events: none;
-}
-.in-box-top-left .on1-ltl {
-  height: calc(100% - 40px);
-  padding: 0;
-  color: rgba(212, 237, 253, 0.6);
-  position: relative;
-}
-.in-box-top-left .on1-ltlt {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-}
-.in-box-top-left .img {
-  width: 35%;
-  height: 100%;
-  background: #223a5e;
-  border-radius: 8px;
-}
-.in-box-top-left .dian {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-around;
-  align-items: center;
-  border-radius: 8px;
-  height: 100%;
-  width: calc(60% - 20px);
-  padding: 0px 10px;
-  background: linear-gradient(rgba(0, 65, 97, 0.5), rgba(5, 27, 38, 0.8));
-}
-.in-box-top-left .on1-r {
-  width: 26%;
-  height: 100%;
-  border-left: 1px solid rgb(22, 65, 89);
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: flex-start;
-  padding: 16px 0 16px 0px;
-  box-sizing: border-box;
-  margin: 0;
-}
-.remote-control-section {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.remote-control-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 16px;
-  border-bottom: 1px solid #223a5e;
-  margin-bottom: 12px;
-  margin-top: -8px;
-  width: calc(100%);
-  box-sizing: border-box;
-}
-.remote-control-text {
-  color: #67d5fd;
-  font-size: 14px;
-  font-weight: 500;
-}
-.switch-container {
-  width: 40px;
-  height: 20px;
-  background: #B0B0B0;
-  border-radius: 10px;
-  position: relative;
-  cursor: pointer;
-  border: 1px solid #888;
-  transition: background 0.3s, border 0.3s;
-}
-.switch-container.active {
-  background: #16bbf2;
-  border: 1px solid #16bbf2;
-}
-.switch-toggle {
-  width: 16px;
-  height: 16px;
-  background: #fff;
-  border-radius: 50%;
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  transition: left 0.3s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-}
-.switch-container.active .switch-toggle {
-  left: 21px;
-}
-.remote-control-data {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0;
-}
-.data-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(34, 58, 94, 0.3);
-}
-.data-row:last-child {
-  border-bottom: none;
-}
-.data-label {
-  color: #b6b6b6;
-  font-size: 12px;
-}
-.data-value {
-  color: #67d5fd;
-  font-size: 12px;
-  font-weight: 500;
-}
-.drone-img-battery-block {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  width: auto;
-  height: 100%;
-  gap: 0px;
-  padding-left: 0;
-  box-sizing: border-box;
-}
-.plane-img {
-  width: 120px;
-  height: auto;
-  object-fit: contain;
-  display: block;
-  margin-left: 0;
-}
-.battery-info-block {
-  display: flex;
-  width: 90px;
-  height: 140px;
-  padding: 10px 12px;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  border-radius: 4px;
-  background: linear-gradient(180deg, #004161 0%, rgba(5, 27, 38, 0.80) 100%);
-  box-sizing: border-box;
-}
-.battery-img {
-  width: 71px;
-  height: 44px;
-  object-fit: contain;
-  margin-bottom: 2px;
-}
-.battery-detail-list {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: #D4EDFD;
-  font-size: 12px;
-  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
-  font-style: normal;
-  font-weight: 400;
-  line-height: 150%; /* 18px */
-  letter-spacing: 1px;
-  text-align: center;
-  margin-left: 0;
-}
-.task-info-panel {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: flex-start;
-  flex: 1;
-  margin-left: 10px;
-  max-width: 100%;
-  max-height: 180px;         /* 限制最大高度 */
-  padding-bottom: 5px;      /* 底部留白，避免贴死横线 */
-  padding-top: 5px;
-  box-sizing: border-box;
-}
-.task-progress-actions,
-.task-stats-panel {
-  width: 100%;
-}
-.task-progress-actions {
-  width: 100%;
-  display: flex;
-  flex-direction: row; /* 改为水平布局 */
-  align-items: center;
-  justify-content: space-between; /* 左右分布 */
-  margin-bottom: 8px;
-  box-sizing: border-box;
-  flex: 1; /* 让上半部分自动填满剩余空间 */
-}
-.task-progress-left {
-  flex: 1; /* 左侧占据剩余空间 */
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  box-sizing: border-box;
-  margin-top: -8px; /* 往上移动10px */
-}
-.task-progress-title,
-.task-progress-bar,
-.task-name {
-  width: 100%;
-  box-sizing: border-box;
-}
-.task-progress-title {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 15px;
-  color: #67D5FD; /* 改为要求的颜色 */
-  margin-bottom: 4px;
-  position: relative;
-}
-.task-progress-title span:first-child {
-  flex: 1;
-  text-align: left;
-}
-.task-progress-title span:last-child {
-  flex-shrink: 0;
-  margin-left: 10px;
-}
-.task-progress-bar {
-  height: 6px;
-  margin-bottom: 4px;
-  flex-shrink: 0;
-  min-width: 80px;
-  max-width: none; /* 移除最大宽度限制 */
-  flex: 1;
-  position: relative;
-  width: 100%; /* 让进度条占满整个宽度 */
-}
-.el-slider__runway {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-  cursor: pointer;
-  flex: 1;
-  height: 6px;
-  position: relative;
-  width: 100%;
-  margin-right: 50px; /* 为百分比数字留出空间 */
-}
-.el-slider__bar {
-  background-color: rgb(22, 187, 242);
-  border-bottom-left-radius: 3px;
-  border-top-left-radius: 3px;
-  height: 6px;
-  position: absolute;
-  left: 0%;
-  width: 0%;
-  transition: width 0.3s ease, left 0.3s ease;
-}
-.el-slider__button-wrapper {
-  background-color: transparent;
-  height: 20px;
-  line-height: normal;
-  outline: none;
-  position: absolute;
-  text-align: center;
-  top: -7px;
-  transform: translate(-50%);
-  user-select: none;
-  width: 20px;
-  z-index: 1;
-  left: 0%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.el-slider__button {
-  width: 10px;
-  height: 10px;
-  background-color: rgb(22, 187, 242);
-  border: 5px solid rgba(22, 187, 242, 0.7);
-  border-radius: 50%;
-  box-sizing: border-box;
-  display: inline-block;
-  transition: 0.2s;
-  user-select: none;
-  vertical-align: middle;
-  flex-shrink: 0;
-}
-.task-name {
-  font-size: 13px;
-  color: #b6b6b6;
-  margin-top: 10px;
-}
-.task-progress-divider {
-  width: 1.5px;
-  background: linear-gradient(180deg, #59c0fc 0%, #223a5e 100%);
-  margin: 0 15px; /* 竖线两侧留10px间距 */
-  border-radius: 1px;
-  height: 80%; /* 缩短高度为60% */
-  align-self: center; /* 垂直居中 */
-  opacity: 0.7;
-  flex-shrink: 0;
-}
-.task-progress-actions-btns {
-  display: flex;
-  flex-direction: column;
-  gap: 20px; /* 增加按钮间距从8px到16px */
-  width: auto;
-  align-items: flex-end;
-  justify-content: center;
-  flex-shrink: 0; /* 防止按钮组被压缩 */
-  margin-top: -5px; /* 往上移动，与任务进度平齐 */
-  height: 100%; /* 让按钮组占满高度 */
-}
-.task-progress-actions-btns .span {
-  width: clamp(60px, 6vw, 70px);
-  height: 30px;
-  line-height: 30px;
-  text-align: center;
-  background: #0c3c56;
-  border-radius: 4px;
-  border: 1px solid rgba(38, 131, 182, 0.8);
-  color: #67d5fd;
-  cursor: pointer;
-  font-size: 12px;
-  white-space: nowrap;
-  transition: all 0.3s;
-  margin-top: auto; /* 暂停按钮靠上 */
-}
-.task-progress-actions-btns .span:hover {
-  border-color: rgba(38, 131, 182, 0.8);
-  background: #0c4666;
-}
-.task-progress-actions-btns .span1 {
-  width: clamp(60px, 6vw, 70px);
-  height: 30px;
-  line-height: 30px;
-  text-align: center;
-  background: #561c1c;
-  border-radius: 4px;
-  border: 1px solid rgba(182, 38, 38, 0);
-  color: #fd6767;
-  cursor: pointer;
-  font-size: 12px;
-  white-space: nowrap;
-  transition: all 0.3s;
-  margin-bottom: auto; /* 停止按钮靠下 */
-}
-.task-progress-actions-btns .span1:hover {
-  border-color: rgba(182, 38, 38, 0.8);
-  background: #662626;
-}
-.task-stats-panel {
-  display: flex;
-  gap: 12px;
-  margin-top: 8px;
-  width: 100%;
-}
-.task-stat-card {
-  display: flex;
-  flex: 1; /* 均分宽度 */
-  height: 60px; /* 从44px增加到60px */
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(0deg, rgba(170, 128, 255, 0.20) 0%, rgba(170, 128, 255, 0.00) 100%);
-  border-bottom: 3px solid #7E44F2;
-  min-width: 0;
-  padding: 0;
-}
-.stat-title {
-  font-size: 13px;
-  color: #b6b6b6;
-}
-/* 紫色卡片标题 */
-.task-stat-card .stat-title {
-  color: #7E44F2;
-}
-/* 蓝色卡片标题 */
-.stat-blue .stat-title {
-  color: #16BBF2;
-}
-/* 绿色卡片标题 */
-.stat-green .stat-title {
-  color: #31C2A5;
-}
-.stat-value {
-  font-size: 18px;
-  color: #fff;
-  font-weight: bold;
-  margin-top: 2px;
-}
-/* 紫色卡片的数值颜色 */
-.task-stat-card .stat-value {
-  color: #7E44F2;
-}
-.stat-blue {
-  background: linear-gradient(0deg, rgba(0, 212, 255, 0.20) 0%, rgba(0, 212, 255, 0.00) 100%);
-  border-bottom: 3px solid #00CFFF;
-}
-.stat-blue .stat-value {
-  color: #16BBF2;
-}
-.stat-green {
-  background: linear-gradient(0deg, rgba(0, 255, 170, 0.20) 0%, rgba(0, 255, 170, 0.00) 100%);
-  border-bottom: 3px solid #00FFAA;
-}
-.stat-green .stat-value {
-  color: #31C2A5;
-}
-.route-name {
-  color: #16BBF2;
-  font-weight: bold;
-  margin-left: 4px;
-}
-.remote-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  align-items: center;
-  padding: 0;
-  margin: 0;
-}
-.remote-card-item {
-  display: flex;                /* 恢复横向排列 */
-  flex-direction: row;
-  align-items: center;
-  width: 90%;
-  height: 42px;
-  margin: 0 auto;
-  gap: 18px;
-  border-radius: 4px;
-  background: rgba(1, 135, 191, 0.30);
-  padding: 0 12px 0 16px;
-  box-sizing: border-box;
-  position: relative;
-}
-.remote-card-icon {
-  width: 20px;
-  height: 20px;
-  filter: brightness(0) invert(1);
-  flex-shrink: 0;
-}
-.remote-card-texts {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  justify-content: center;
-  align-self: stretch;
-  gap: 0;
-  min-width: 0;
-}
-.remote-card-title {
-  color: #FFF;
-  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: 1px;
-  margin-bottom: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.remote-card-sub {
-  color: #FFF;
-  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: 1px;
-  margin-top: -1px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.remote-card-btn {
-  display: flex;
-  padding: 4px 16px;
-  justify-content: center;
-  align-items: center;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.23);
-  background: rgba(255, 255, 255, 0.65);
-  color: #5E5E5E;
-  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 150%;
-  letter-spacing: 1px;
-  outline: none;
-  cursor: not-allowed;
-  min-width: 56px;
-  height: 28px;         /* 按钮高度适配卡片 */
-  margin-left: auto;    /* 靠右对齐 */
-  transition: border 0.2s, background 0.2s;
-  align-self: center;   /* 垂直居中 */
-}
-.remote-card-btn:active,
-.remote-card-btn:focus {
-  border-color: #b0b3b8;
-}
-.remote-card-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-  background: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(0, 0, 0, 0.23);
-  color: #5E5E5E;
-}
-.remote-card-btn:not(:disabled) {
-  cursor: pointer;
-  opacity: 1;
-  background: #fff;
-  border: 1px solid #16bbf2;
-  color: #222;
-  box-shadow: 0 2px 8px 0 rgba(22, 187, 242, 0.08);
-  transition: background 0.2s, border 0.2s, color 0.2s, box-shadow 0.2s;
-}
-.remote-card-btn:not(:disabled):hover {
-  background: #e6f7ff;
-  border: 1.5px solid #16bbf2;
-  color: #16bbf2;
-  box-shadow: 0 4px 12px 0 rgba(22, 187, 242, 0.15);
-}
-.amap-maptype {
-  right: 16px !important;
-  bottom: 16px !important;
-  z-index: 20 !important;
-}
-.boxGrid-box {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  z-index: 2;
-  background: rgba(0, 12, 23, .5);
-  border-radius: 4px;
-  overflow: hidden;
-  padding: 12px 12px 0 12px; /* 增加内边距，顶部和左右有间距 */
-}
-.boxGrid-box-content {
-  flex: 1;
-  position: relative;
-  padding: 0;
-}
-.player_container {
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
-.player_item {
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
-.player_box {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  background: #000;
-  border-radius: 0;
-  overflow: hidden;
-}
-.boxGrid-box-bottom {
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  background: rgba(0, 12, 23, .8);
-  position: relative;
-  z-index: 3;
-  margin-top: 8px;
-}
-.svg-icon {
-  width: 20px;
-  height: 20px;
-  fill: #59C0FC;
-}
-.el-icon {
-  color: #59C0FC;
-  font-size: 20px;
-}
-.right-controls {
-  display: flex;
-  align-items: center;
-  position: relative;
-  cursor: pointer;
-}
-.screen-icon {
-  width: 20px;
-  height: 20px;
-  margin-right: 6px;
-}
-.el-icon.dropdown-icon {
-  color: #59C0FC;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-}
-.el-icon.dropdown-icon svg {
-  width: 20px;
-  height: 20px;
-  display: block;
-  fill: #59C0FC !important;
-}
-.screen-menu {
-  position: absolute;
-  bottom: 100%;
-  right: 0;
-  background: rgba(0, 12, 23, .9);
-  border: 1px solid rgba(89, 192, 252, 0.3);
-  border-radius: 4px;
-  padding: clamp(6px, 0.5vw, 8px) 0;
-  min-width: clamp(100px, 8vw, 120px);
-  margin-bottom: 8px;
-  z-index: 10;
-}
-.menu-item {
-  padding: clamp(6px, 0.5vw, 8px) clamp(12px, 1vw, 16px);
-  color: #fff;
-  font-size: clamp(12px, 0.9vw, 14px);
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  white-space: nowrap;
-}
-.menu-item:hover {
-  background: rgba(89, 192, 252, 0.1);
-  color: #59C0FC;
-}
-.screen-menu::after {
-  content: '';
-  position: absolute;
-  bottom: -5px;
-  right: 10px;
-  width: 10px;
-  height: 10px;
-  background: rgba(0, 12, 23, .9);
-  border-right: 1px solid rgba(89, 192, 252, 0.3);
-  border-bottom: 1px solid rgba(89, 192, 252, 0.3);
-  transform: rotate(45deg);
-}
-.right-controls .el-icon.dropdown-icon svg {
-  transition: transform 0.2s, fill 0.2s;
-}
-.right-controls.active .el-icon.dropdown-icon svg {
-  transform: rotate(180deg);
-  fill: #16bbf2 !important;
-}
-.drone-control-panel, .gimbal-control-panel {
-  background: none;
-  border: 1.5px solid #164159;
-  border-radius: 8px;
-  box-shadow: none;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-.drone-control-panel {
-  position: relative;
-  overflow: hidden;
-}
-.drone-btn-icon {
-  width: 22px;
-  height: 22px;
-  display: block;
-  margin: 0 auto 2px auto;
-}
-.drone-direction-grid button, .drone-bottom-row button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  background: none;
-  border: none;
-  box-shadow: none;
-  padding: 0;
-  cursor: pointer;
-  gap: 0px;
-}
-.drone-btn-iconbox {
-  width: 40px;
-  height: 40px;
-  border: none !important;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  margin-bottom: 0;
-  transition: background 0.2s, border 0.2s;
-}
-.drone-direction-grid button:hover .drone-btn-label,
-.drone-bottom-row button:hover .drone-btn-label {
-  color: #fff;
-}
-.drone-direction-grid button:hover .drone-btn-iconbox,
-.drone-bottom-row button:hover .drone-btn-iconbox {
-  background: #16bbf2;
-  border-color: #16bbf2;
-}
-.drone-direction-grid button:hover .drone-btn-label,
-.drone-bottom-row button:hover .drone-btn-label {
-  color: #fff !important;
-}
-/* 取消按钮整体高亮，只高亮图标框 */
-.drone-direction-grid button:hover,
-.drone-bottom-row button:hover {
-  background: none;
-  color: #fff;
-}
-.drone-btn-icon {
-  width: 22px;
-  height: 22px;
-  display: block;
-}
-.drone-btn-label {
-  color: #67d5fd;
-  font-size: 10px;
-  margin-top: 2px;
-  text-align: center;
-  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
-  font-weight: 400;
-  line-height: 1.2;
-}
-.drone-direction-grid button:hover .drone-btn-label {
-  color: #fff !important;
-}
-.big-drone-btn-icon {
-  width: 30px !important;
-  height: 30px !important;
-}
-.drone-direction-grid button:focus,
-.drone-direction-grid button:active {
-  outline: none !important;
-  box-shadow: none !important;
-  background: none !important;
-}
-.gimbal-btn-row button {
-  min-width: 90px;
-  height: 40px;
-  line-height: 40px;
-  text-align: center;
-  background: #0c3c56;
-  border-radius: 4px;
-  border: 1px solid rgba(38, 131, 182, 0.8);
-  color: #67d5fd;
-  cursor: pointer;
-  font-size: 16px;
-  white-space: nowrap;
-  transition: all 0.3s;
-  margin: 0 8px 0 0;
-  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
-  font-weight: 400;
-  padding: 0 18px;
-  outline: none;
-  box-shadow: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.gimbal-btn-row button:hover {
-  border-color: rgba(38, 131, 182, 0.8);
-  background: #0c4666;
-  color: #67d5fd;
-}
-</style>
-
-<style>
-.amap-maptype {
-  right: 16px !important;
-  bottom: 16px !important;
-  z-index: 20 !important;
-}
+/* ... 省略部分样式 ... */
 </style> 

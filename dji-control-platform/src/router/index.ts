@@ -61,6 +61,11 @@ const router = createRouter({
           path: 'roles',
           name: 'RoleManage',
           component: () => import('@/views/RoleManage.vue')
+        },
+        {
+          path: 'dock-control',
+          name: 'DockControl',
+          component: () => import('@/views/DockControl.vue')
         }
       ]
     }
