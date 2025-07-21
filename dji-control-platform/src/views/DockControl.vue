@@ -21,14 +21,14 @@
       <div class="main-flex">
         <!-- 左侧信息区 -->
         <section class="left-panel">
-          <!-- 无人机信息+IO卡片 -->
+          <!-- 机场信息卡片，结构和样式与DroneControl一致，图片为dock3.png -->
           <div class="card drone-info-card in-box-top-left">
             <div class="on1-l">
               <div class="on1-lt">
                 <!-- 左栏：图片+电池 -->
                 <div class="on1-ltl on1-ltl-main">
                   <div class="on1-ltlt drone-img-battery-block">
-                    <img class="plane-img" :src="plane2Img" alt="无人机" />
+                    <img class="plane-img" src="@/assets/source_data/dock3.png" alt="机场" />
                     <div class="battery-info-block">
                       <img class="battery-img" :src="batteryImg" alt="电池" />
                       <div class="battery-detail-list">
@@ -39,95 +39,34 @@
                     </div>
                   </div>
                 </div>
+                <!-- 竖线 -->
                 <div class="on1-lt-border-vertical"></div>
-                <!-- 任务信息面板移到竖线右侧10px -->
-                <div class="task-info-panel">
-                  <div class="task-progress-actions">
-                    <div class="task-progress-left">
-                      <div class="task-progress-title">
-                        <span>任务进度</span>
-                        <span>{{ progressPercent }}%</span>
-                      </div>
-                      <div class="task-progress-bar">
-                        <div class="el-slider__runway">
-                          <div class="el-slider__bar" :style="{ width: progressPercent + '%', left: '0%' }"></div>
-                          <div class="el-slider__button-wrapper" :style="{ left: progressPercent + '%' }">
-                            <div class="el-slider__button"></div>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="task-name">正在执行：<span class="route-name">{{ currentRouteName }}</span></div>
+                <!-- 右侧机场信息表格 -->
+                <div class="dock-info-table-custom">
+                  <div
+                    v-for="(item, idx) in dockInfoItems"
+                    :key="idx"
+                    class="dock-info-item"
+                  >
+                    <div class="dock-info-value">
+                      <template v-if="item.icon">
+                        <img :src="item.icon" class="dock-info-icon" />
+                      </template>
+                      {{ item.value }}
                     </div>
-                    <div class="task-progress-divider"></div>
-                    <div class="task-progress-actions-btns">
-                      <span class="span">暂停</span>
-                      <span class="span1">停止</span>
-                    </div>
-                  </div>
-                  <div class="task-stats-panel">
-                    <div class="task-stat-card stat-purple">
-                      <div class="stat-title">今日任务总数</div>
-                      <div class="stat-value">8</div>
-                    </div>
-                    <div class="task-stat-card stat-blue">
-                      <div class="stat-title">未执行/已执行</div>
-                      <div class="stat-value">3/8</div>
-                    </div>
-                    <div class="task-stat-card stat-green">
-                      <div class="stat-title">正常/异常</div>
-                      <div class="stat-value">6/2</div>
-                    </div>
+                    <div class="dock-info-label">{{ item.label }}</div>
                   </div>
                 </div>
                 <!-- 横线 -->
                 <div class="on1-lt-border-horizontal"></div>
               </div>
+              <!-- 可选：底部状态栏 -->
               <div class="robot-status-footer">
                 <span>飞行速度：线速度：0.00m/s ，角速度：0.00m/s</span>
                 <span>，风向：东南风</span>
                 <span>，降水：0mm</span>
                 <span>，温度：35℃</span>
                 <span>，湿度：52%</span>
-              </div>
-            </div>
-            <div class="on1-r">
-              <div class="remote-control-section">
-                <div class="remote-control-header">
-                  <span class="remote-control-text">远程控制</span>
-                  <div
-                    class="switch-container"
-                    :class="{ active: remoteEnabled }"
-                    @click="toggleRemote"
-                  >
-                    <div class="switch-toggle"></div>
-                  </div>
-                </div>
-                <div class="remote-card-list">
-                  <div class="remote-card-item">
-                    <img :src="droneCloseIcon" class="remote-card-icon" alt="电源" />
-                    <div class="remote-card-texts">
-                      <div class="remote-card-title">关机</div>
-                      <div class="remote-card-sub">飞行器电源</div>
-                    </div>
-                    <button class="remote-card-btn" :disabled="!remoteEnabled">开机</button>
-                  </div>
-                  <div class="remote-card-item">
-                    <img :src="droneBatteryIcon" class="remote-card-icon" alt="电池" />
-                    <div class="remote-card-texts">
-                      <div class="remote-card-title">未充电</div>
-                      <div class="remote-card-sub">飞行器充电</div>
-                    </div>
-                    <button class="remote-card-btn" :disabled="!remoteEnabled">充电</button>
-                  </div>
-                  <div class="remote-card-item">
-                    <img :src="drone4gIcon" class="remote-card-icon" alt="4G" />
-                    <div class="remote-card-texts">
-                      <div class="remote-card-title">已开启</div>
-                      <div class="remote-card-sub">增强图传</div>
-                    </div>
-                    <button class="remote-card-btn" :disabled="!remoteEnabled">关闭</button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -279,6 +218,8 @@ import AMapLoader from '@amap/amap-jsapi-loader'
 import droneCloseIcon from '@/assets/source_data/svg_data/drone_close.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
+import dockStars from '@/assets/source_data/svg_data/dock_control_svg/dock_stars.svg'
+import dockWifi from '@/assets/source_data/svg_data/dock_control_svg/dock_wifi.svg'
 
 const router = useRouter()
 const sidebarTabs = [
@@ -335,6 +276,24 @@ const handleTabClick = (key: string) => {
     router.push('/dashboard/dock-control')
   }
 }
+const dockInfoItems = [
+  { value: 'DJI Dock3', label: '机场名称' },
+  { value: '18 小时', label: '运行时长' },
+  { value: '12 架次', label: '作业架次' },
+  { value: 30, label: '机场搜星', icon: dockStars },
+  { value: '已标定', label: '标定状态' },
+  { value: '200KB/s', label: '网络状态', icon: dockWifi },
+  { value: '已配置', label: '备降点' },
+  { value: '空闲中', label: '空调状态' },
+  { value: '38.2℃', label: '舱内温度' },
+  { value: '44%', label: '舱内湿度' },
+  { value: '44.9℃', label: '舱外温度' },
+  { value: '无降水', label: '降水量' },
+  { value: '2.2m/s', label: '风速' },
+  { value: '2.12°', label: '倾斜角度' },
+  { value: '未连接', label: 'PoE接口' },
+  { value: '暂无', label: 'PoE功率' },
+]
 onMounted(() => {
   AMapLoader.load({
     key: '6f9eaf51960441fa4f813ea2d7e7cfff',
@@ -930,5 +889,159 @@ const updateProgress = (percent: number) => {
   padding: 0;
   margin-bottom: 0;
 }
-/* ... 省略部分样式 ... */
+.in-box-top-left .on1-l {
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+.in-box-top-left .on1-lt {
+  display: flex;
+  justify-content: flex-start;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+.on1-ltl-main {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
+  margin-top: 14px;
+  width: 220px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.on1-lt-border-horizontal {
+  position: absolute;
+  left: 0;
+  right: 0; /* 顶到最右侧 */
+  bottom: 10px;
+  height: 1.5px;
+  background: linear-gradient(90deg, #59c0fc 0%, #223a5e 100%);
+  opacity: 0.7;
+  border-radius: 1px;
+  z-index: 1;
+  display: block;
+  pointer-events: none;
+}
+.on1-lt-border-vertical {
+  position: absolute;
+  top: 0;
+  left: 220px;
+  width: 1.5px;
+  height: calc(100% - 10px);
+  background: linear-gradient(180deg, #59c0fc 0%, #223a5e 100%);
+  opacity: 0.7;
+  border-radius: 1px;
+  z-index: 2;
+  pointer-events: none;
+}
+.in-box-top-left .on1-ltl {
+  height: calc(100% - 40px);
+  padding: 0;
+  color: rgba(212, 237, 253, 0.6);
+  position: relative;
+}
+.in-box-top-left .on1-ltlt {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+.plane-img {
+  width: 120px;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin-left: 0;
+}
+.battery-info-block {
+  display: flex;
+  width: 90px;
+  height: 140px;
+  padding: 10px 12px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #004161 0%, rgba(5, 27, 38, 0.80) 100%);
+  box-sizing: border-box;
+}
+.battery-img {
+  width: 71px;
+  height: 44px;
+  object-fit: contain;
+  margin-bottom: 2px;
+}
+.battery-detail-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #D4EDFD;
+  font-size: 12px;
+  font-family: Inter, 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 150%;
+  letter-spacing: 1px;
+  text-align: center;
+  margin-left: 0;
+}
+.dock-info-table-custom {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 1px 0;
+  width: 100%;
+  margin-left: 24px;
+  min-width: 0;
+  align-items: stretch;
+}
+.dock-info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  padding: 0;
+  min-height: 32px;
+}
+.dock-info-value {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 0;
+}
+.dock-info-label {
+  color: #67d5fd;
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 0;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+.dock-info-icon {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  margin-right: 2px;
+}
 </style> 
