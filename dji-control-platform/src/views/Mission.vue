@@ -25,15 +25,17 @@
             <div class="mission-top-row">
               <span class="mission-lib-label">航线库</span>
               <div class="mission-top-selects">
-                <Treeselect v-model="selectedFolder" :options="folderOptions" placeholder="请选择文件夹" class="mission-select treeselect-custom" :append-to-body="false" />
-                <select v-model="selectedTrack" class="mission-select">
-                  <option v-for="track in trackList" :key="track" :value="track">{{ track }}</option>
-                </select>
+                <Treeselect v-model="selectedFolder" :options="folderOptions" :placeholder="folderPlaceholder" class="treeselect-custom" :append-to-body="false" />
+                <div class="custom-select-wrapper">
+                  <select v-model="selectedTrack" class="mission-select">
+                    <option v-for="track in trackList" :key="track" :value="track">{{ track }}</option>
+                  </select>
+                </div>
                 <div class="mission-top-btns">
                   <button class="mission-btn mission-btn-pause">删除文件夹</button>
                   <button class="mission-btn mission-btn-stop">删除航线</button>
-                  <button class="mission-btn mission-btn-normal">新增航线</button>
-                  <button class="mission-btn mission-btn-normal">下发任务</button>
+                  <button class="mission-btn mission-btn-pause">新增航线</button>
+                  <button class="mission-btn mission-btn-pause">下发任务</button>
                 </div>
               </div>
             </div>
@@ -120,6 +122,13 @@ const folderOptions = [
   }
 ]
 const selectedFolder = ref(null)
+// 动态 placeholder 逻辑
+const folderPlaceholder = computed(() => {
+  const val = selectedFolder.value;
+  const result = val ? '' : '请选择文件夹';
+  console.log('folderPlaceholder:', result, 'selectedFolder:', val);
+  return result;
+})
 </script>
 
 <style scoped>
@@ -279,8 +288,8 @@ const selectedFolder = ref(null)
 .mission-select {
   background: #16213a;
   color: #fff;
-  border: 1px solid #164159;
-  border-radius: 4px;
+  /* border: 1px solid #164159; */
+  border-radius: 4px; /* 只保留右侧圆角 */
   padding: 4px 12px;
   font-size: 14px;
   outline: none;
@@ -289,6 +298,11 @@ const selectedFolder = ref(null)
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
+  border-left: none; /* 让左侧边框消失 */
+  position: relative;
+  z-index: 1;
+  height: 32px;
+  line-height: 32px;
 }
 .mission-folder-select option[disabled] {
   color: #888;
@@ -396,23 +410,37 @@ const selectedFolder = ref(null)
 .treeselect-custom {
   width: 120px;
   min-width: 120px;
-  margin-right: 8px;
+  margin-right: -1px; /* 让边框重叠 */
+  z-index: 2;
 }
 .treeselect-custom:deep(.treeselect__control) {
-  background: #16213a !important;
+  background: transparent !important;
   border: 1px solid #164159 !important;
+  border-right: none !important;
   color: #fff !important;
-  border-radius: 4px !important;
+  border-radius: 4px 0 0 4px !important;
   font-size: 14px;
-  min-height: 32px;
-  height: 32px;
+  min-height: 28px;
+  height: 28px;
   box-sizing: border-box;
-  padding: 4px 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 12px !important;
   box-shadow: none !important;
+  line-height: normal !important;
 }
 .treeselect-custom:deep(.treeselect__value-container) {
-  background: transparent !important;
-  color: #fff !important;
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+.mission-select {
+  background: transparent;
+  height: 32px;
+  line-height: normal;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
 }
 .treeselect-custom:deep(.treeselect__single-value),
 .treeselect-custom:deep(.treeselect__placeholder) {
@@ -428,6 +456,28 @@ const selectedFolder = ref(null)
   border: 1px solid #164159 !important;
   border-radius: 4px !important;
   font-size: 14px;
+}
+.treeselect-custom:deep(.treeselect__input) {
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  color: #fff !important;
+  background: transparent !important;
+}
+.treeselect-custom:deep(input) {
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  color: #fff !important;
+  background: transparent !important;
 }
 </style>
 
@@ -458,11 +508,45 @@ const selectedFolder = ref(null)
 .treeselect-custom,
 .treeselect-custom .vue-treeselect,
 .treeselect-custom .vue-treeselect__control {
-  width: 120px !important;
-  min-width: 120px !important;
-  height: 32px !important;
-  min-height: 32px !important;
+  width: 300px !important;
+  min-width: 300px !important;
+  max-width: 300px !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+}
+.treeselect-custom:deep(.treeselect__control) {
+  min-height: 28px;
+  height: 28px;
+}
+.treeselect-custom:deep(.treeselect__input) {
+  height: 28px !important;
+  line-height: 28px !important;
+}
+.treeselect-custom:deep(input) {
+  height: 28px !important;
+  line-height: 28px !important;
+}
+.mission-select {
+  width: 190px;
+  min-width: 190px;
+  max-width: 190px;
+  height: 32px;
+  background: transparent;
+  box-shadow: 0 0 0 1px #164159 inset;
+  border-radius: 4px;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  outline: none;
+  margin-right: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 /* 悬浮、激活、展开时的边框色和背景色 */
@@ -507,5 +591,144 @@ const selectedFolder = ref(null)
 /* portal 容器也设为透明 */
 .vue-treeselect__portal-target {
   background: transparent !important;
+}
+.treeselect-custom:deep(.treeselect__control),
+.treeselect-custom:deep(.vue-treeselect__control),
+.treeselect-custom:deep(.treeselect__value-container),
+.treeselect-custom:deep(.vue-treeselect__value-container),
+.treeselect-custom:deep(.treeselect__single-value),
+.treeselect-custom:deep(.vue-treeselect__single-value),
+.treeselect-custom:deep(.treeselect__placeholder),
+.treeselect-custom:deep(.vue-treeselect__placeholder),
+.treeselect-custom:deep(.treeselect__multi-value) {
+  background: transparent !important;
+}
+.treeselect-custom:deep(.treeselect__value-container),
+.treeselect-custom:deep(.vue-treeselect__value-container) {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+</style>
+
+<style>
+.treeselect-custom .vue-treeselect__control,
+.treeselect-custom .treeselect__control,
+.treeselect-custom .vue-treeselect__value-container,
+.treeselect-custom .treeselect__value-container,
+.treeselect-custom .vue-treeselect__single-value,
+.treeselect-custom .treeselect__single-value,
+.treeselect-custom .vue-treeselect__placeholder,
+.treeselect-custom .treeselect__placeholder,
+.treeselect-custom .treeselect__multi-value {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.treeselect-custom .vue-treeselect__control,
+.treeselect-custom .treeselect__control {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 4px !important;
+  border: 1px solid #164159 !important;
+  border-right: none !important;
+}
+.treeselect-custom .vue-treeselect__value-container,
+.treeselect-custom .treeselect__value-container {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+  padding: 0 12px !important;
+}
+.treeselect-custom input,
+.treeselect-custom .treeselect__input {
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  color: #fff !important;
+  background: transparent !important;
+}
+</style>
+
+<style>
+.treeselect-custom .vue-treeselect__control,
+.treeselect-custom .treeselect__control {
+  width: 300px !important;
+  min-width: 300px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  background: transparent !important;
+  box-shadow: 0 0 0 1px #164159 inset !important;
+  border-radius: 4px !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 4px 12px !important;
+  font-size: 14px !important;
+}
+.treeselect-custom .vue-treeselect__value-container,
+.treeselect-custom .treeselect__value-container {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+  padding: 0 !important;
+}
+.treeselect-custom input,
+.treeselect-custom .treeselect__input {
+  height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: #fff !important;
+  background: transparent !important;
+  font-size: 14px !important;
+}
+.treeselect-custom .vue-treeselect__placeholder,
+.treeselect-custom .vue-treeselect__single-value,
+.treeselect-custom .treeselect__placeholder,
+.treeselect-custom .treeselect__single-value {
+  color: #fff !important;
+  font-size: 14px !important;
+  background: transparent !important;
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+</style>
+
+<style>
+.treeselect-custom .vue-treeselect__menu,
+.treeselect-custom .treeselect__menu {
+  width: 300px !important;
+  min-width: 300px !important;
+  max-width: 300px !important;
+  box-sizing: border-box !important;
+}
+</style>
+
+<style>
+.custom-select-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.custom-select-wrapper .mission-select {
+  padding-right: 32px !important;
+  background-image: none !important;
+}
+.custom-select-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 6px 6px 0 6px;
+  border-style: solid;
+  border-color: #fff transparent transparent transparent;
+  pointer-events: none;
 }
 </style>
