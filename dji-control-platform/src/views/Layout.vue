@@ -10,7 +10,7 @@
         <router-link to="/dashboard" class="nav-item" :class="{ active: $route.path === '/dashboard' }">
           首页
         </router-link>
-        <router-link to="/dashboard/control" class="nav-item" :class="{ active: $route.path === '/dashboard/control' }">
+        <router-link to="/dashboard/control" class="nav-item" :class="{ active: $route.path === '/dashboard/control' || $route.path === '/dashboard/dock-control' }">
           无人机控制
         </router-link>
         <router-link to="/dashboard/mission" class="nav-item" :class="{ active: $route.path.includes('mission') }">

@@ -43,27 +43,16 @@
                 <div class="on1-lt-border-vertical"></div>
                 <!-- 右侧机场信息表格 -->
                 <div class="dock-info-table-custom">
-                  <div
-                    v-for="(item, idx) in dockInfoItems"
-                    :key="idx"
-                    class="dock-info-item"
-                  >
-                    <div class="dock-info-value">
-                      <template v-if="item.icon">
-                        <img :src="item.icon" class="dock-info-icon" />
-                      </template>
-                      {{ item.value }}
-                    </div>
-                    <div class="dock-info-label">{{ item.label }}</div>
-                  </div>
+                  <DockInfoRow :items="dockInfoItems.slice(0, 8)" />
+                  <DockInfoRow :items="dockInfoItems.slice(8, 16)" />
                 </div>
                 <!-- 横线 -->
                 <div class="on1-lt-border-horizontal"></div>
               </div>
               <!-- 可选：底部状态栏 -->
               <div class="robot-status-footer">
-                <span>飞行速度：线速度：0.00m/s ，角速度：0.00m/s</span>
-                <span>，风向：东南风</span>
+                <span>风向：东南风</span>
+                <span>，风速：1.2m/s</span>
                 <span>，降水：0mm</span>
                 <span>，温度：35℃</span>
                 <span>，湿度：52%</span>
@@ -114,85 +103,85 @@
                 </div>
               </div>
             </div>
-            <div class="control-bottom">
-              <div class="drone-control-panel">
-                <div class="panel-title">无人机控制</div>
-                <div class="drone-direction-grid">
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left_round.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">左旋</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_forward.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
-                    <span class="drone-btn-label">前进</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right_round.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">右旋</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
-                    <span class="drone-btn-label">左移</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_back.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
-                    <span class="drone-btn-label">后退</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
-                    <span class="drone-btn-label">右移</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_up.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">上升</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_light.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">补光灯</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_down.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">下降</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_stop.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">急停</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_visible.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">隐蔽模式</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_fly.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">一键起飞</span>
-                  </button>
-                </div>
+            <div class="dock-control-panel">
+              <div class="panel-title">
+                机场控制
+                <span class="remote-switch-wrap" style="font-size:13px;font-weight:400;">
+                  远程调试
+                  <span class="switch-container" :class="{ active: remoteEnabled }" @click="toggleRemote"><span class="switch-toggle"></span></span>
+                </span>
               </div>
-              <div class="gimbal-control-panel">
-                <div class="panel-title">云台控制</div>
-                <div class="gimbal-group">
-                  <div class="gimbal-group-title">重置云台</div>
-                  <div class="gimbal-btn-row">
-                    <button>云台回中</button>
-                    <button>云台向下</button>
-                    <button>偏航回中</button>
-                    <button>俯仰向下</button>
+              <div class="dock-card-list">
+                <div class="dock-card-row">
+                  <div class="dock-card-item">
+                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_sys.svg" alt="sys" />
+                    <div class="dock-card-content">
+                      <div class="dock-card-title">工作中</div>
+                      <div class="dock-card-sub">机场系统</div>
+                    </div>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">开启</button>
+                  </div>
+                  <div class="dock-card-item">
+                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_box.svg" alt="box" />
+                    <div class="dock-card-content">
+                      <div class="dock-card-title">已关闭</div>
+                      <div class="dock-card-sub">舱盖状态</div>
+                    </div>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">开启</button>
+                  </div>
+                  <div class="dock-card-item">
+                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_air.svg" alt="air" />
+                    <div class="dock-card-content">
+                      <div class="dock-card-title">制冷中</div>
+                      <div class="dock-card-sub">空调</div>
+                    </div>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">停止</button>
                   </div>
                 </div>
-                <div class="gimbal-group">
-                  <div class="gimbal-group-title">功能按键</div>
-                  <div class="gimbal-btn-row">
-                    <button>开启分屏</button>
-                    <button>放大</button>
-                    <button>开始录像</button>
-                    <button>拍照</button>
+                <div class="dock-card-row">
+                  <div class="dock-card-item">
+                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_voice.svg" alt="voice" />
+                    <div class="dock-card-content">
+                      <div class="dock-card-title">未开启</div>
+                      <div class="dock-card-sub">静音模式</div>
+                    </div>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">开启</button>
                   </div>
-                  <div class="gimbal-btn-row">
-                    <button>关闭分屏</button>
-                    <button>缩小</button>
-                    <button>停止录像</button>
-                    <button>夜景模式</button>
+                  <div class="dock-card-item">
+                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_warning.svg" alt="warning" />
+                    <div class="dock-card-content">
+                      <div class="dock-card-title">未开启</div>
+                      <div class="dock-card-sub">机场声光报警</div>
+                    </div>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">开启</button>
                   </div>
+                  <div class="dock-card-item">
+                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_storage.svg" alt="storage" />
+                    <div class="dock-card-content">
+                      <div class="dock-card-title">3.5/50.6GB</div>
+                      <div class="dock-card-sub">机场存储</div>
+                    </div>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">重置</button>
+                  </div>
+                </div>
+                <div class="dock-card-row">
+                  <div class="dock-card-item">
+                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_sim.svg" alt="sim" />
+                    <div class="dock-card-content">
+                      <div class="dock-card-title">...</div>
+                      <div class="dock-card-sub">机场增强图传</div>
+                    </div>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">设置</button>
+                  </div>
+                  <div class="dock-card-item">
+                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_certificate.svg" alt="certificate8" />
+                    <div class="dock-card-content">
+                      <div class="dock-card-title">解禁证书</div>
+                      <div class="dock-card-sub">限飞解禁证书</div>
+                    </div>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">设置</button>
+                  </div>
+                  <div class="dock-card-item empty"></div>
                 </div>
               </div>
             </div>
@@ -220,6 +209,7 @@ import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
 import dockStars from '@/assets/source_data/svg_data/dock_control_svg/dock_stars.svg'
 import dockWifi from '@/assets/source_data/svg_data/dock_control_svg/dock_wifi.svg'
+import DockInfoRow from '@/components/DockInfoRow.vue'
 
 const router = useRouter()
 const sidebarTabs = [
@@ -479,6 +469,7 @@ const updateProgress = (percent: number) => {
   box-sizing: border-box;
   overflow: auto;
   padding-right: 18px;
+  padding-bottom: 20px;
 }
 .right-flex {
   display: flex;
@@ -668,8 +659,8 @@ const updateProgress = (percent: number) => {
   display: inline-block;
 }
 .video-card {
-  flex: 2;
-  /* 去掉背景色和阴影 */
+  flex: 3 1 0;
+  min-height: 0;
   background: none !important;
   border: 1.5px solid #164159;
   border-radius: 8px;
@@ -679,41 +670,124 @@ const updateProgress = (percent: number) => {
   justify-content: center;
   align-items: center;
   gap: 8px;
-  min-height: 320px;
+  padding: 0;
 }
-.video-player-placeholder {
+.boxGrid-box {
   width: 100%;
-  height: 260px;
-  background: #223a5e;
-  border-radius: 8px;
+  height: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #888;
-  font-size: 18px;
+  flex-direction: column;
+  position: relative;
+  z-index: 2;
+  background: rgba(0, 12, 23, .5);
+  border-radius: 4px;
+  overflow: hidden;
+  padding: 12px 12px 0 12px;
 }
-.video-controls-placeholder {
+.boxGrid-box-content {
+  flex: 1;
+  position: relative;
+  padding: 0;
+}
+.player_container {
   width: 100%;
+  height: 100%;
+  position: relative;
+}
+.player_item {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.player_box {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #000;
+  border-radius: 0;
+  overflow: hidden;
+}
+.boxGrid-box-bottom {
   height: 40px;
-  background: #16213a;
-  border-radius: 6px;
-  margin-top: 8px;
-  color: #59c0fc;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(0, 12, 23, .8);
+  position: relative;
+  z-index: 3;
+  margin-top: 8px;
+}
+.svg-icon {
+  width: 20px;
+  height: 20px;
+  fill: #59C0FC;
+}
+.el-icon {
+  color: #59C0FC;
+  font-size: 20px;
+}
+.right-controls {
+  display: flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+.screen-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+}
+.el-icon.dropdown-icon {
+  color: #59C0FC;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+}
+.el-icon.dropdown-icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  fill: #59C0FC !important;
+}
+.screen-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  background: rgba(0, 12, 23, .9);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 4px;
+  padding: clamp(6px, 0.5vw, 8px) 0;
+  min-width: clamp(100px, 8vw, 120px);
+  margin-bottom: 8px;
+  z-index: 10;
+}
+.menu-item {
+  padding: clamp(6px, 0.5vw, 8px) clamp(12px, 1vw, 16px);
+  color: #fff;
+  font-size: clamp(12px, 0.9vw, 14px);
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.menu-item:hover {
+  background: rgba(89, 192, 252, 0.1);
+  color: #59C0FC;
 }
 .control-bottom {
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
+  flex-direction: column;
   gap: 18px;
   margin-top: 8px;
 }
 .drone-control-panel {
-  flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 .gimbal-control-panel {
   flex: 2 1 0;
@@ -738,6 +812,46 @@ const updateProgress = (percent: number) => {
   margin-left: -16px;
   margin-right: -16px;
   margin-top: -12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.remote-switch-wrap {
+  display: flex;
+  align-items: center;
+  height: 32px;
+}
+.switch-container {
+  width: 40px;
+  height: 20px;
+  background: #B0B0B0;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  border: 1px solid #888;
+  transition: background 0.3s, border 0.3s;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 8px;
+  margin-right: 16px;
+}
+.switch-container.active {
+  background: #16bbf2;
+  border: 1px solid #16bbf2;
+}
+.switch-toggle {
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  transition: left 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.switch-container.active .switch-toggle {
+  left: 21px;
 }
 .drone-direction-grid {
   display: grid;
@@ -810,12 +924,7 @@ const updateProgress = (percent: number) => {
   align-items: center;
 }
 .sidebar-menu-bottom {
-  position: absolute;
-  bottom: 24px;
-  left: 0;
-  width: 100%;
-  display: flex;
-  justify-content: center;
+  display: none !important;
 }
 .sidebar-menu-bottom img {
   width: 28px;
@@ -1003,14 +1112,13 @@ const updateProgress = (percent: number) => {
   margin-left: 0;
 }
 .dock-info-table-custom {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 1px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
   width: 100%;
-  margin-left: 24px;
-  min-width: 0;
-  align-items: stretch;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
 }
 .dock-info-item {
   display: flex;
@@ -1023,7 +1131,7 @@ const updateProgress = (percent: number) => {
 }
 .dock-info-value {
   color: #fff;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -1031,8 +1139,8 @@ const updateProgress = (percent: number) => {
   margin-bottom: 0;
 }
 .dock-info-label {
-  color: #67d5fd;
-  font-size: 12px;
+  color: #67D5FD;
+  font-size: 14px;
   font-weight: 400;
   margin-top: 0;
   text-align: center;
@@ -1043,5 +1151,121 @@ const updateProgress = (percent: number) => {
   height: 18px;
   vertical-align: middle;
   margin-right: 2px;
+}
+.dock-control-panel {
+  background: none;
+  border: 1.5px solid #164159;
+  border-radius: 8px;
+  box-shadow: none;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.dock-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  margin-top: 8px;
+  height: 100%;
+}
+.dock-card-row {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  width: 100%;
+  flex: 1;
+}
+.dock-card-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: rgba(1, 135, 191, 0.30);
+  border-radius: 4px;
+  padding: 10px 16px;
+  min-height: 56px;
+  box-sizing: border-box;
+  position: relative;
+  gap: 0px;
+  flex: 1;
+  width: 0;
+}
+.dock-card-item.empty {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+.dock-card-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+.dock-card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.dock-card-title {
+  color: #FFF;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 1px;
+  margin-bottom: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dock-card-sub {
+  color: #FFF;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 1px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dock-card-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 4px;
+  border: 1px solid #16bbf2;
+  background: #fff;
+  color: #16bbf2;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  outline: none;
+  cursor: pointer;
+  min-width: unset;
+  margin-left: auto;
+  transition: border 0.2s, background 0.2s, color 0.2s;
+  box-shadow: none;
+}
+.dock-card-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: #f2f2f2;
+  border: 1px solid #b0b3b8;
+  color: #b0b3b8;
+}
+.dock-card-btn:not(:disabled):hover {
+  background: #e6f7ff;
+  border: 1.5px solid #16bbf2;
+  color: #16bbf2;
+}
+.dock-card-btn.active:not(:disabled) {
+  color: #222;
 }
 </style> 

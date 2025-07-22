@@ -93,7 +93,7 @@
             <div class="on1-r">
               <div class="remote-control-section">
                 <div class="remote-control-header">
-                  <span class="remote-control-text">远程控制</span>
+                  <span class="remote-control-text">远程调试</span>
                   <div
                     class="switch-container"
                     :class="{ active: remoteEnabled }"
@@ -864,22 +864,7 @@ const handleTabClick = (key: string) => {
   align-items: center;
 }
 .sidebar-menu-bottom {
-  position: absolute;
-  bottom: 24px;
-  left: 0;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-.sidebar-menu-bottom img {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
-  opacity: 0.85;
-  transition: opacity 0.2s;
-}
-.sidebar-menu-bottom img:hover {
-  opacity: 1;
+  display: none !important;
 }
 .sidebar-tab {
   width: 40px;
@@ -1777,6 +1762,73 @@ const handleTabClick = (key: string) => {
   border-color: rgba(38, 131, 182, 0.8);
   background: #0c4666;
   color: #67d5fd;
+}
+@media (max-width: 900px) {
+  .main-flex {
+    flex-direction: column;
+  }
+  .left-panel,
+  .right-panel {
+    max-width: 100%;
+    flex-basis: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+  .card,
+  .drone-info-card,
+  .map-card {
+    padding: 8px;
+    gap: 8px;
+  }
+  .panel-title {
+    font-size: clamp(12px, 2vw, 14px);
+    height: 28px;
+    line-height: 28px;
+  }
+  .remote-card-item {
+    height: 36px;
+    padding: 0 8px 0 8px;
+    gap: 8px;
+  }
+  .amap-container,
+  .video-card {
+    min-height: 160px;
+    max-height: 240px;
+  }
+  body, .main-content, .card, .panel-title {
+    font-size: clamp(12px, 2vw, 14px);
+  }
+}
+@media (max-width: 700px) {
+  .sidebar-menu {
+    width: 100vw;
+    min-width: 0;
+    max-width: 100vw;
+    flex-direction: row;
+    height: 56px;
+    padding: 0 8px;
+    border-radius: 0 0 10px 10px;
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+  }
+  .sidebar-tabs {
+    flex-direction: row;
+    gap: 12px;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+  }
+  .remote-card-btn,
+  .gimbal-btn-row button {
+    min-width: 48px;
+    height: 36px;
+    font-size: 13px;
+    padding: 0 10px;
+  }
 }
 </style>
 
