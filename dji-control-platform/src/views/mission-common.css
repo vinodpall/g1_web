@@ -1,0 +1,779 @@
+/* 公共样式：航线管理、任务记录等页面通用 */
+
+.drone-control-main {
+  display: flex;
+  height: calc(100vh - 84px);
+  background: #0a0f1c;
+  color: #fff;
+  position: fixed;
+  top: 84px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+}
+.sidebar-menu {
+  width: 4%;
+  min-width: 56px;
+  max-width: 100px;
+  background: linear-gradient(180deg, #004161cc 0%, #051b26cc 100%);
+  border-radius: 0 10px 10px 0;
+  box-shadow: 2px 0 12px 0 #00334a33;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 15px 0 15px;
+  border-right: 1.5px solid #164159;
+  z-index: 2;
+  margin-top: 20px;
+  margin-right: 20px;
+  height: calc(100% - 20px);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  overflow: auto;
+  position: relative;
+}
+.sidebar-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 40px;
+  align-items: center;
+}
+.sidebar-tab {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+  font-size: 16px;
+  font-family: 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
+  font-weight: 400;
+  color: #fff;
+  margin-top: 10px;
+  box-sizing: border-box;
+}
+.sidebar-tab:first-child {
+  margin-top: 0;
+}
+.sidebar-tab.active {
+  background: #01314f !important;
+  color: #67d5fd;
+  font-weight: 500;
+  box-shadow: 0 0 12px #59c0fc33;
+}
+.sidebar-tab:hover {
+  background: #164159;
+}
+.sidebar-tab img {
+  width: 23px;
+  height: 23px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  transition: filter 0.2s, box-shadow 0.2s;
+}
+.sidebar-tab.active img {
+  filter: brightness(0) invert(1) drop-shadow(0 0 8px #67d5fd) drop-shadow(0 0 2px #67d5fd);
+  opacity: 1;
+}
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  box-sizing: border-box;
+  margin: 20px 0 0 0;
+  height: calc(100% - 20px);
+}
+.main-flex {
+  display: flex;
+  height: 100%;
+  gap: 0.8vw;
+}
+.right-panel {
+  flex-basis: 100%;
+  max-width: 100%;
+  min-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  background: transparent;
+  padding-bottom: 0; /* 取消原有padding-bottom */
+  padding-right: 32px;
+}
+.mission-top-card {
+  margin-bottom: 4px;
+  background: linear-gradient(135deg, #0a2a3a 80%, #0a0f1c 100%);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px #0003;
+  padding: 18px 24px 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mission-top-header {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  color: #67d5fd;
+  font-weight: 600;
+  margin-bottom: 8px;
+  gap: 10px;
+}
+.mission-top-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  margin-right: 6px;
+}
+.mission-top-title {
+  font-size: 16px;
+  color: #67d5fd;
+  font-weight: 600;
+}
+.mission-top-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+.mission-lib-label {
+  font-size: 14px;
+  color: #fff;
+  margin-right: 8px;
+  min-width: 48px;
+}
+.mission-top-selects {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mission-select {
+  background: #16213a;
+  color: #fff;
+  /* border: 1px solid #164159; */
+  border-radius: 4px; /* 只保留右侧圆角 */
+  padding: 4px 12px;
+  font-size: 14px;
+  outline: none;
+  min-width: 120px;
+  margin-right: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  border-left: none; /* 让左侧边框消失 */
+  position: relative;
+  z-index: 1;
+  height: 32px;
+  line-height: 32px;
+}
+.mission-folder-select option[disabled] {
+  color: #888;
+}
+.mission-top-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+}
+.mission-btn {
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 4px 18px;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s, color 0.2s, border 0.2s;
+}
+.mission-btn-pause {
+  background: #0c3c56;
+  color: #67d5fd;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+}
+.mission-btn-pause:hover {
+  background: #0c4666;
+  color: #67d5fd;
+}
+.mission-btn-stop {
+  background: #561c1c;
+  color: #fd6767;
+  border: 1px solid rgba(182, 38, 38, 0);
+}
+.mission-btn-stop:hover {
+  background: #a94442;
+  color: #fff;
+}
+.mission-btn-normal {
+  background: #1a3a4a;
+  color: #fff;
+  border: 1px solid #164159;
+}
+.mission-btn-normal:hover {
+  background: #16bbf2;
+  color: #fff;
+  border: 1.5px solid #16bbf2;
+}
+.mission-btn:disabled,
+.mission-btn[disabled] {
+  opacity: 1 !important;
+  background: #0c3c56 !important;
+  color: #67d5fd !important;
+  border: 1px solid rgba(38, 131, 182, 0.8) !important;
+  cursor: not-allowed !important;
+}
+.mission-table-card {
+  background: linear-gradient(135deg, #0a2a3a 80%, #0a0f1c 100%);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px #0003;
+  padding: 0 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 20px;
+}
+.mission-table-header {
+  display: flex;
+  background: #164159;
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 14px 0 14px 24px;
+  border-radius: 8px 8px 0 0;
+}
+.mission-th {
+  flex: 1;
+  text-align: left;
+}
+.mission-th:last-child {
+  flex: 0 0 120px;
+  text-align: center;
+}
+.mission-table-body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.mission-tr {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #223a5e;
+  font-size: 15px;
+  color: #fff;
+  min-height: 44px;
+  padding-left: 24px;
+}
+.mission-td {
+  flex: 1;
+  text-align: left;
+}
+.mission-td:last-child {
+  flex: 0 0 120px;
+  text-align: center;
+}
+.mission-icons {
+  display: flex;
+  gap: 8px;
+}
+.mission-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.mission-icon img {
+  width: 90%;
+  height: 90%;
+  max-width: 22px;
+  max-height: 22px;
+  min-width: 18px;
+  min-height: 18px;
+  object-fit: contain;
+  display: block;
+  margin: auto;
+  padding: 0;
+  filter: brightness(0) invert(1);
+  background: transparent;
+  aspect-ratio: 1/1;
+}
+.treeselect-custom {
+  width: 120px;
+  min-width: 120px;
+  margin-right: -1px; /* 让边框重叠 */
+  z-index: 2;
+}
+.treeselect-custom:deep(.treeselect__control) {
+  background: transparent !important;
+  border: 1px solid #164159 !important;
+  border-right: none !important;
+  color: #fff !important;
+  border-radius: 4px 0 0 4px !important;
+  font-size: 14px;
+  min-height: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 12px !important;
+  box-shadow: none !important;
+  line-height: normal !important;
+}
+.treeselect-custom:deep(.treeselect__value-container) {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+.mission-select {
+  background: transparent;
+  height: 32px;
+  line-height: normal;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+}
+.treeselect-custom:deep(.treeselect__single-value),
+.treeselect-custom:deep(.treeselect__placeholder) {
+  color: #fff !important;
+  background: transparent !important;
+}
+.treeselect-custom:deep(.treeselect__control-arrow) {
+  color: #fff !important;
+}
+.treeselect-custom:deep(.treeselect__menu) {
+  background: #16213a !important;
+  color: #fff !important;
+  border: 1px solid #164159 !important;
+  border-radius: 4px !important;
+  font-size: 14px;
+}
+.treeselect-custom:deep(.treeselect__input) {
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  color: #fff !important;
+  background: transparent !important;
+}
+.treeselect-custom:deep(input) {
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  color: #fff !important;
+  background: transparent !important;
+}
+.mission-th, .mission-td {
+  text-align: center;
+}
+.mission-th:first-child,
+.mission-td:first-child,
+.mission-th:last-child,
+.mission-td:last-child {
+  flex: 0 0 120px;
+  max-width: 120px;
+  min-width: 120px;
+}
+.mission-th:nth-child(2),
+.mission-td:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+}
+.upload-dialog {
+  min-width: 440px;
+  max-width: 90vw;
+  padding: 36px 40px 28px 40px;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px #000a;
+  background: linear-gradient(135deg, #1a233a 80%, #16213a 100%);
+}
+.upload-dialog-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 32px;
+}
+.upload-file-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.upload-file-input {
+  display: none;
+}
+.upload-file-btn {
+  background: #0c3c56;
+  color: #67d5fd;
+  border: 1px solid #67d5fd;
+  border-radius: 6px;
+  padding: 6px 22px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  font-weight: 500;
+}
+.upload-file-btn:hover {
+  background: #67d5fd;
+  color: #0c3c56;
+}
+.upload-file-tip {
+  color: #8bb7d8;
+  font-size: 13px;
+}
+.upload-file-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #67d5fd;
+  font-size: 15px;
+  margin-top: 2px;
+  word-break: break-all;
+}
+.upload-file-icon {
+  flex-shrink: 0;
+}
+.upload-dialog-actions {
+  gap: 28px;
+}
+.mission-btn[disabled] {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* Treeselect 相关样式 */
+.vue-treeselect__control {
+  background: #16213a !important;
+  border: 1px solid #164159 !important;
+  color: #fff !important;
+  border-radius: 4px !important;
+  font-size: 14px;
+  min-height: 32px;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 4px 12px !important;
+  box-shadow: none !important;
+}
+.vue-treeselect__single-value,
+.vue-treeselect__placeholder {
+  color: #fff !important;
+  background: transparent !important;
+}
+.vue-treeselect__menu {
+  box-shadow: none !important;
+  background: #16213a !important;
+}
+.treeselect-custom,
+.treeselect-custom .vue-treeselect,
+.treeselect-custom .vue-treeselect__control {
+  width: 300px !important;
+  min-width: 300px !important;
+  max-width: 300px !important;
+  box-sizing: border-box !important;
+  flex-shrink: 0 !important;
+}
+.treeselect-custom:deep(.treeselect__control) {
+  min-height: 28px;
+  height: 28px;
+}
+.treeselect-custom:deep(.treeselect__input) {
+  height: 28px !important;
+  line-height: 28px !important;
+}
+.treeselect-custom:deep(input) {
+  height: 28px !important;
+  line-height: 28px !important;
+}
+.mission-select {
+  width: 190px;
+  min-width: 190px;
+  max-width: 190px;
+  height: 32px;
+  background: transparent;
+  box-shadow: 0 0 0 1px #164159 inset;
+  border-radius: 4px;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  outline: none;
+  margin-right: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.vue-treeselect__control:hover,
+.vue-treeselect--focused .vue-treeselect__control,
+.vue-treeselect--open .vue-treeselect__control {
+  border-color: #16bbf2 !important;
+  background: #16213a !important;
+  box-shadow: 0 0 0 2px rgba(22,187,242,0.15) !important;
+}
+.vue-treeselect__menu-container {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.vue-treeselect__menu {
+  background: #16213a !important;
+  color: #fff !important;
+  border: 1px solid #164159 !important;
+  border-radius: 4px !important;
+  font-size: 14px;
+  box-shadow: 0 2px 8px #0003 !important;
+}
+.vue-treeselect__option--highlight {
+  background: #223a5e !important;
+  color: #67d5fd !important;
+}
+.vue-treeselect__option--selected {
+  background: #164159 !important;
+  color: #67d5fd !important;
+}
+.vue-treeselect__option--selected.vue-treeselect__option--highlight {
+  background: #16bbf2 !important;
+  color: #fff !important;
+}
+.vue-treeselect__portal-target {
+  background: transparent !important;
+}
+.treeselect-custom:deep(.treeselect__control),
+.treeselect-custom:deep(.vue-treeselect__control),
+.treeselect-custom:deep(.treeselect__value-container),
+.treeselect-custom:deep(.vue-treeselect__value-container),
+.treeselect-custom:deep(.treeselect__single-value),
+.treeselect-custom:deep(.vue-treeselect__single-value),
+.treeselect-custom:deep(.treeselect__placeholder),
+.treeselect-custom:deep(.vue-treeselect__placeholder),
+.treeselect-custom:deep(.treeselect__multi-value) {
+  background: transparent !important;
+}
+.treeselect-custom:deep(.treeselect__value-container),
+.treeselect-custom:deep(.vue-treeselect__value-container) {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+.treeselect-custom .vue-treeselect__control,
+.treeselect-custom .treeselect__control {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 28px !important;
+  height: 28px !important;
+  border-radius: 4px !important;
+  border: 1px solid #164159 !important;
+  border-right: none !important;
+}
+.treeselect-custom .vue-treeselect__value-container,
+.treeselect-custom .treeselect__value-container {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+  padding: 0 12px !important;
+}
+.treeselect-custom input,
+.treeselect-custom .treeselect__input {
+  height: 28px !important;
+  line-height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  color: #fff !important;
+  background: transparent !important;
+}
+.treeselect-custom .vue-treeselect__control,
+.treeselect-custom .treeselect__control {
+  width: 300px !important;
+  min-width: 300px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  background: transparent !important;
+  box-shadow: 0 0 0 1px #164159 inset !important;
+  border-radius: 4px !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 4px 12px !important;
+  font-size: 14px !important;
+}
+.treeselect-custom .vue-treeselect__value-container,
+.treeselect-custom .treeselect__value-container {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+  padding: 0 !important;
+}
+.treeselect-custom input,
+.treeselect-custom .treeselect__input {
+  height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: #fff !important;
+  background: transparent !important;
+  font-size: 14px !important;
+}
+.treeselect-custom .vue-treeselect__placeholder,
+.treeselect-custom .vue-treeselect__single-value,
+.treeselect-custom .treeselect__placeholder,
+.treeselect-custom .treeselect__single-value {
+  color: #fff !important;
+  font-size: 14px !important;
+  background: transparent !important;
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+}
+.treeselect-custom .vue-treeselect__menu,
+.treeselect-custom .treeselect__menu {
+  width: 300px !important;
+  min-width: 300px !important;
+  max-width: 300px !important;
+  box-sizing: border-box !important;
+}
+.custom-select-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.custom-select-wrapper .mission-select {
+  padding-right: 32px !important;
+  background-image: none !important;
+}
+.custom-select-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 6px 6px 0 6px;
+  border-style: solid;
+  border-color: #fff transparent transparent transparent;
+  pointer-events: none;
+}
+.mission-table-body::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+.mission-table-body::-webkit-scrollbar-thumb {
+  background: #225c7a; /* 更暗的主题色 */
+  border-radius: 4px;
+  border: none;
+}
+.mission-table-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.mission-table-body::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
+}
+.mission-table-body {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #225c7a transparent; /* Firefox */
+}
+.custom-dialog-mask {
+  position: fixed;
+  z-index: 9999;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(10, 15, 28, 0.65);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.custom-dialog {
+  background: #16213a;
+  border-radius: 12px;
+  min-width: 420px;
+  max-width: 600px;
+  padding: 32px 36px 20px 36px;
+  box-shadow: 0 4px 32px #0008;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.custom-dialog-title {
+  font-size: 18px;
+  color: #67d5fd;
+  font-weight: 600;
+  margin-bottom: 18px;
+  text-align: center;
+}
+.custom-dialog-content {
+  font-size: 16px;
+  color: #fff;
+  margin-bottom: 28px;
+  text-align: center;
+}
+.custom-dialog-actions {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+}
+.mission-btn-cancel {
+  background: #232b3a;
+  color: #fff;
+  border: 1px solid #232b3a;
+}
+.mission-btn-cancel:hover {
+  background: #2d3648;
+  color: #fff;
+} 
+.mission-select,
+.mission-select option {
+  background: #16213a !important;
+  color: #fff !important;
+  border: none !important;
+} 
+.treeselect-track,
+.treeselect-track .vue-treeselect,
+.treeselect-track .vue-treeselect__control {
+  width: 150px !important;
+  min-width: 150px !important;
+  max-width: 150px !important;
+} 
+/* 让航线下拉框本身透明 */
+.mission-select.treeselect-track {
+  background: transparent !important;
+  border: 1px solid #2a3a4d;
+  color: #fff;
+}
+/* 下拉列表依然深色 */
+.mission-select.treeselect-track option {
+  background: #172233;
+  color: #fff;
+} 
+.mission-th:last-child,
+.mission-td:last-child {
+  text-align: center !important;
+  padding-left: 16px;
+  padding-right: 16px;
+  min-width: 180px;
+  max-width: 220px;
+} 
