@@ -48,6 +48,11 @@ const router = createRouter({
           component: () => import('@/views/DeviceManage.vue')
         },
         {
+          path: 'alarm-log',
+          name: 'AlarmLog',
+          component: () => import('@/views/AlarmLog.vue')
+        },
+        {
           path: 'alerts',
           name: 'Alerts',
           component: () => import('@/views/Alerts.vue')
