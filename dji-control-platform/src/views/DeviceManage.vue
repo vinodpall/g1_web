@@ -22,6 +22,7 @@
             <!-- 筛选区 -->
             <div class="device-top-card card">
               <div class="device-top-header">
+                <img src="@/assets/source_data/bg_data/card_logo.png" style="width:22px;height:22px;margin-right:8px;vertical-align:middle;" alt="logo" />
                 <span class="device-top-title">设备管理</span>
               </div>
               <div class="device-top-row">

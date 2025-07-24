@@ -18,52 +18,62 @@
       <div class="main-flex">
         <section class="right-panel">
           <!-- 筛选区 -->
-          <div class="alarm-top-card card">
-            <div class="alarm-top-header">
-              <span class="alarm-top-title">报警日志</span>
+          <div class="mission-top-card card">
+            <div class="mission-top-header">
+              <img src="@/assets/source_data/bg_data/card_logo.png" style="width:22px;height:22px;margin-right:8px;vertical-align:middle;" alt="logo" />
+              <span class="mission-top-title">报警日志</span>
             </div>
-            <div class="alarm-top-row">
-              <input v-model="filter.name" class="alarm-input" placeholder="设备名称" />
-              <div class="custom-select-wrapper">
-                <select v-model="filter.type" class="mission-select">
-                  <option value="">报警类型</option>
-                  <option value="system">系统告警</option>
-                  <option value="device">设备告警</option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                  </svg>
-                </span>
+            <div class="mission-top-row">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="color:#b8c7d9;min-width:64px;">设备名称：</span>
+                <input v-model="filter.name" class="alarm-input" placeholder="请输入设备名称" />
               </div>
-              <div class="custom-select-wrapper">
-                <select v-model="filter.level" class="mission-select">
-                  <option value="">报警等级</option>
-                  <option value="normal">普通</option>
-                  <option value="serious">严重</option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                  </svg>
-                </span>
+              <div style="display:flex;align-items:center;gap:8px;position:relative;">
+                <span style="color:#b8c7d9;min-width:64px;">报警类型：</span>
+                <div class="custom-select-wrapper">
+                  <select v-model="filter.type" class="mission-select">
+                    <option value="">请选择报警类型</option>
+                    <option value="system">系统告警</option>
+                    <option value="device">设备告警</option>
+                  </select>
+                  <span class="custom-select-arrow">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    </svg>
+                  </span>
+                </div>
               </div>
-              <button class="device-btn" @click="handleSearch">查询</button>
+              <div style="display:flex;align-items:center;gap:8px;position:relative;">
+                <span style="color:#b8c7d9;min-width:64px;">报警等级：</span>
+                <div class="custom-select-wrapper">
+                  <select v-model="filter.level" class="mission-select">
+                    <option value="">请选择报警等级</option>
+                    <option value="normal">普通</option>
+                    <option value="serious">严重</option>
+                  </select>
+                  <span class="custom-select-arrow">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    </svg>
+                  </span>
+                </div>
+              </div>
+              <button class="mission-btn mission-btn-pause" @click="handleSearch" style="min-width:72px;">查询</button>
             </div>
           </div>
           <!-- 列表区 -->
-          <div class="alarm-list-card card">
-            <div class="alarm-table-header">
-              <div class="alarm-th" v-for="col in columns" :key="col.key">{{ col.title }}</div>
+          <div class="mission-table-card card">
+            <div class="mission-table-header">
+              <div class="mission-th" v-for="col in columns" :key="col.key">{{ col.title }}</div>
             </div>
-            <div class="alarm-table-body">
-              <div class="alarm-tr" v-for="(row, idx) in alarmList" :key="row.id">
-                <div class="alarm-td">{{ idx + 1 }}</div>
-                <div class="alarm-td">{{ row.deviceName }}</div>
-                <div class="alarm-td">{{ row.type }}</div>
-                <div class="alarm-td">{{ row.content }}</div>
-                <div class="alarm-td">{{ row.level }}</div>
-                <div class="alarm-td">{{ row.time }}</div>
+            <div class="mission-table-body">
+              <div class="mission-tr" v-for="(row, idx) in alarmList" :key="row.id">
+                <div class="mission-td">{{ idx + 1 }}</div>
+                <div class="mission-td">{{ row.deviceName }}</div>
+                <div class="mission-td">{{ row.type }}</div>
+                <div class="mission-td">{{ row.content }}</div>
+                <div class="mission-td">{{ row.level }}</div>
+                <div class="mission-td">{{ row.time }}</div>
               </div>
             </div>
           </div>
@@ -110,36 +120,17 @@ const alarmList = ref([
   { id: 4, deviceName: '大疆机场3', type: '系统告警', content: '外部风速过快，不建议飞行', level: '严重', time: '2025-07-06 16:55:19' },
   // ...更多数据
 ])
+// 下拉箭头交互
+const typeSelectOpen = ref(false)
+const levelSelectOpen = ref(false)
+const handleTypeFocus = () => { typeSelectOpen.value = true }
+const handleTypeBlur = () => { typeSelectOpen.value = false }
+const handleLevelFocus = () => { levelSelectOpen.value = true }
+const handleLevelBlur = () => { levelSelectOpen.value = false }
 </script>
 
 <style scoped>
 @import './mission-common.css';
-.alarm-top-card {
-  margin-bottom: 4px;
-  background: linear-gradient(135deg, #0a2a3a 80%, #0a0f1c 100%);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px #0003;
-  padding: 18px 24px 12px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.alarm-top-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.alarm-top-title {
-  font-size: 16px;
-  color: #67d5fd;
-  font-weight: 600;
-}
-.alarm-top-row {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 4px;
-}
 .alarm-input {
   height: 32px;
   border-radius: 4px;
@@ -156,56 +147,39 @@ const alarmList = ref([
   border: 1.5px solid #16bbf2;
   box-shadow: 0 0 0 2px rgba(22,187,242,0.15);
 }
-.alarm-list-card {
-  background: linear-gradient(135deg, #0a2a3a 80%, #0a0f1c 100%);
-  border-radius: 12px;
-  box-shadow: 0 2px 8px #0003;
-  padding: 32px 32px 24px 32px;
-  margin-bottom: 20px;
-  min-height: 520px;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  flex: 1;
-  min-height: 0;
-  height: 100%;
+.custom-select-wrapper {
+  position: relative;
+  display: inline-block;
 }
-.alarm-table-header {
+.custom-select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
   display: flex;
-  background: #164159;
-  border-radius: 8px 8px 0 0;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+}
+.mission-select {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+/* 保证下拉菜单（option）背景色不变 */
+.mission-select option {
+  background: #172233;
   color: #fff;
-  font-weight: 600;
-  font-size: 15px;
-  padding: 0 0 0 0;
-  min-height: 48px;
-  align-items: center;
 }
-.alarm-th {
-  flex: 1;
-  padding: 12px 8px;
-  text-align: left;
-}
-.alarm-table-body {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-.alarm-tr {
-  display: flex;
-  border-bottom: 1px solid #18344a;
-  min-height: 44px;
-  align-items: center;
-  color: #d4edfd;
-  font-size: 14px;
-}
-.alarm-td {
-  flex: 1;
-  padding: 10px 8px;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* 其余 alarm-xxx 样式已移除，统一复用 mission-common.css */
+.mission-th:last-child,
+.mission-td:last-child {
+  min-width: 220px;
+  max-width: 320px;
+  text-align: center;
+  padding-left: 16px;
+  padding-right: 16px;
 }
 </style> 
