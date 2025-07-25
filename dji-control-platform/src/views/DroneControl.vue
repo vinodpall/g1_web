@@ -220,39 +220,41 @@
                     <span class="drone-btn-label">下降</span>
                   </button>
                   <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_stop.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">急停</span>
-                  </button>
-                  <button>
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_visible.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">隐蔽模式</span>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_control.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">获取控制权</span>
                   </button>
                   <button>
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_fly.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">一键起飞</span>
                   </button>
+                  <button>
+                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_land.svg" class="drone-btn-icon" /></span>
+                    <span class="drone-btn-label">一键返航</span>
+                  </button>
                 </div>
               </div>
               <div class="gimbal-control-panel">
                 <div class="panel-title">云台控制</div>
-                <div class="gimbal-group">
-                  <div class="gimbal-group-title">重置云台</div>
-                  <div class="gimbal-btn-row">
+                <div class="gimbal-btns-area">
+                  <div class="gimbal-dir-row">
+                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_up.svg" /></button>
+                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left.svg" /></button>
+                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_down.svg" /></button>
+                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right.svg" /></button>
+                  </div>
+                  <div class="gimbal-func-row">
                     <button>云台回中</button>
                     <button>云台向下</button>
                     <button>偏航回中</button>
                     <button>俯仰向下</button>
                   </div>
-                </div>
-                <div class="gimbal-group">
-                  <div class="gimbal-group-title">功能按键</div>
-                  <div class="gimbal-btn-row">
+                  <div class="gimbal-func-row">
                     <button>开启分屏</button>
                     <button>放大</button>
                     <button>开始录像</button>
                     <button>拍照</button>
                   </div>
-                  <div class="gimbal-btn-row">
+                  <div class="gimbal-func-row">
                     <button>关闭分屏</button>
                     <button>缩小</button>
                     <button>停止录像</button>
@@ -284,6 +286,10 @@ import AMapLoader from '@amap/amap-jsapi-loader'
 import droneCloseIcon from '@/assets/source_data/svg_data/drone_close.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
+import droneUpIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_up.svg'
+import droneDownIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_down.svg'
+import droneLeftIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_left.svg'
+import droneRightIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_right.svg'
 
 const router = useRouter()
 
@@ -1762,6 +1768,58 @@ const handleTabClick = (key: string) => {
   border-color: rgba(38, 131, 182, 0.8);
   background: #0c4666;
   color: #67d5fd;
+}
+.gimbal-btns-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+.gimbal-dir-row, .gimbal-func-row {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  width: 100%;
+  justify-content: space-between;
+}
+.gimbal-dir-btn {
+  width: 32px;
+  height: 32px;
+  background: #0c3c56;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.gimbal-dir-btn img {
+  width: 20px;
+  height: 20px;
+}
+.gimbal-dir-btn:hover {
+  background: #16bbf2;
+}
+.gimbal-func-row button {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  font-size: 13px;
+  background: #0c3c56;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+  border-radius: 4px;
+  color: #67d5fd;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  transition: background 0.2s, color 0.2s;
+}
+.gimbal-func-row button:hover {
+  background: #16bbf2;
+  color: #fff;
 }
 @media (max-width: 900px) {
   .main-flex {
