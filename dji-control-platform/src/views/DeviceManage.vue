@@ -50,49 +50,49 @@
               <div class="device-card-list">
                 <div
                   class="device-card"
-                  v-for="(device, idx) in deviceList.slice(0, 2)"
+                  v-for="(device, idx) in devices"
                   :key="device.id"
                 >
                   <div class="device-card-header">
-                    <span class="device-card-title">{{ device.name }}</span>
-                    <span class="device-card-delete" @click="handleDelete(device.id)">
+                    <span class="device-card-title">{{ device.device_name || device.nickname || '-' }}</span>
+                    <span class="device-card-delete" @click="handleDelete(device.id.toString())">
                       <img :src="rubbishIcon" alt="删除" />
                     </span>
                   </div>
                   <div class="device-card-body">
                     <div class="device-card-img-wrap">
-                      <img :src="device.img" class="device-card-img" />
+                      <img :src="getDeviceImage(device)" class="device-card-img" />
                     </div>
                     <div class="device-card-info">
-                      <div class="info-row"><span class="info-label">名称：</span><span class="info-value">{{ device.name }}</span></div>
-                      <div class="info-row"><span class="info-label">版本号：</span><span class="info-value">{{ device.version }}</span></div>
-                      <template v-if="device.type === 'dock'">
-                        <div class="info-row"><span class="info-label">主控sn：</span><span class="info-value">{{ device.sn }}</span></div>
-                        <div class="info-row"><span class="info-label">铭牌sn：</span><span class="info-value">{{ device.battery }}</span></div>
-                        <div class="info-row"><span class="info-label">保养服务：</span><span class="info-value">{{ device.flightHours }}天</span></div>
-                        <div class="info-row"><span class="info-label">行业无忧：</span><span class="info-value">{{ device.expire }}</span></div>
-                        <div class="info-row"><span class="info-label">状态：</span><span class="info-value">{{ device.status }}</span></div>
-                        <div class="info-row"><span class="info-label">告警信息：</span><span class="info-value">{{ device.warning }}</span></div>
+                      <div class="info-row"><span class="info-label">名称：</span><span class="info-value">{{ device.device_name || '-' }}</span></div>
+                      <div class="info-row"><span class="info-label">版本号：</span><span class="info-value">{{ device.firmware_version || device.version || '-' }}</span></div>
+                      <template v-if="device.child_sn">
+                        <div class="info-row"><span class="info-label">主控sn：</span><span class="info-value">{{ device.device_sn || '-' }}</span></div>
+                        <div class="info-row"><span class="info-label">铭牌sn：</span><span class="info-value">{{ device.child_sn || '-' }}</span></div>
+                        <div class="info-row"><span class="info-label">保养服务：</span><span class="info-value">{{ formatMaintenance(device) }}</span></div>
+                        <div class="info-row"><span class="info-label">行业无忧：</span><span class="info-value">{{ formatExpire(device) }}</span></div>
+                        <div class="info-row"><span class="info-label">状态：</span><span class="info-value">{{ formatStatus(device) }}</span></div>
+                        <div class="info-row"><span class="info-label">告警信息：</span><span class="info-value">{{ formatWarning(device) }}</span></div>
                         <div class="info-row">
                           <span class="info-label">机场直播：</span>
                           <span class="info-value">
-                            <button class="live-btn" @click="openVideoModal(device.liveUrl)">
+                            <button class="live-btn" @click="openVideoModal(device.url_normal || device.url_select)">
                               <img :src="videoIcon" alt="直播" />
                             </button>
                           </span>
                         </div>
                       </template>
                       <template v-else>
-                        <div class="info-row"><span class="info-label">机器sn：</span><span class="info-value">{{ device.sn }}</span></div>
-                        <div class="info-row"><span class="info-label">电池sn：</span><span class="info-value">{{ device.battery }}</span></div>
-                        <div class="info-row"><span class="info-label">保养服务：</span><span class="info-value">{{ device.flightHours }}航时/{{ device.days }}天</span></div>
-                        <div class="info-row"><span class="info-label">行业无忧：</span><span class="info-value">{{ device.expire }}</span></div>
-                        <div class="info-row"><span class="info-label">状态：</span><span class="info-value">{{ device.status }}</span></div>
-                        <div class="info-row"><span class="info-label">告警信息：</span><span class="info-value">{{ device.warning }}</span></div>
+                        <div class="info-row"><span class="info-label">机器sn：</span><span class="info-value">{{ device.device_sn || '-' }}</span></div>
+                        <div class="info-row"><span class="info-label">电池sn：</span><span class="info-value">{{ formatBatterySn(device) }}</span></div>
+                        <div class="info-row"><span class="info-label">保养服务：</span><span class="info-value">{{ formatMaintenance(device) }}</span></div>
+                        <div class="info-row"><span class="info-label">行业无忧：</span><span class="info-value">{{ formatExpire(device) }}</span></div>
+                        <div class="info-row"><span class="info-label">状态：</span><span class="info-value">{{ formatStatus(device) }}</span></div>
+                        <div class="info-row"><span class="info-label">告警信息：</span><span class="info-value">{{ formatWarning(device) }}</span></div>
                         <div class="info-row">
                           <span class="info-label">云台直播：</span>
                           <span class="info-value">
-                            <button class="live-btn" @click="openVideoModal(device.liveUrl)">
+                            <button class="live-btn" @click="openVideoModal(device.url_normal || device.url_select)">
                               <img :src="videoIcon" alt="直播" />
                             </button>
                           </span>
@@ -181,6 +181,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useDevices } from '../composables/useApi'
 import equipmengStoreIcon from '@/assets/source_data/svg_data/equipmeng_store.svg'
 import equipmentWarningsIcon from '@/assets/source_data/svg_data/equipment_warnings.svg'
 import dock3Img from '@/assets/source_data/dock3.png'
@@ -191,6 +192,10 @@ import AlarmLog from './AlarmLog.vue'
 
 const router = useRouter()
 const route = useRoute()
+
+// 使用设备管理API
+const { devices, loading, error, fetchDevices } = useDevices()
+
 const sidebarTabs = [
   { key: 'manage', label: '设备管理', icon: equipmengStoreIcon },
   { key: 'warning', label: '设备告警', icon: equipmentWarningsIcon }
@@ -307,6 +312,65 @@ const deviceList = ref([
     img: m4tdImg
   }
 ])
+
+// 页面加载时获取设备列表
+onMounted(async () => {
+  try {
+    await fetchDevices()
+  } catch (err) {
+    console.error('获取设备列表失败:', err)
+  }
+})
+
+// 辅助函数：获取设备图片
+const getDeviceImage = (device: any) => {
+  // 根据设备类型返回对应的图片
+  if (device.child_sn) {
+    // 机场类型
+    return dock3Img
+  } else {
+    // 无人机类型
+    return m4tdImg
+  }
+}
+
+// 辅助函数：格式化保养服务
+const formatMaintenance = (device: any) => {
+  // API中没有保养服务字段，返回默认值
+  return '180天'
+}
+
+// 辅助函数：格式化行业无忧
+const formatExpire = (device: any) => {
+  // API中没有行业无忧字段，返回默认值
+  return '2026-12-31'
+}
+
+// 辅助函数：格式化状态
+const formatStatus = (device: any) => {
+  // 根据bound_status和login_time判断状态
+  if (device.bound_status) {
+    if (device.login_time) {
+      return '在线'
+    } else {
+      return '离线'
+    }
+  } else {
+    return '未绑定'
+  }
+}
+
+// 辅助函数：格式化告警信息
+const formatWarning = (device: any) => {
+  // API中没有告警信息字段，返回默认值
+  return '暂无'
+}
+
+// 辅助函数：格式化电池SN
+const formatBatterySn = (device: any) => {
+  // API中没有电池SN字段，返回默认值
+  return '-'
+}
 </script>
 
 <style scoped>
@@ -750,5 +814,141 @@ const deviceList = ref([
   justify-content: flex-end;
   gap: 16px;
   margin-top: 40px;
+}
+
+/* 侧边栏样式 */
+.drone-control-main {
+  display: flex;
+  height: calc(100vh - 84px);
+  background: #0a0f1c;
+  color: #fff;
+  position: fixed;
+  top: 84px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+}
+
+.sidebar-menu {
+  width: 4%;
+  min-width: 56px;
+  max-width: 100px;
+  background: linear-gradient(180deg, #004161cc 0%, #051b26cc 100%);
+  border-radius: 0 10px 10px 0;
+  box-shadow: 2px 0 12px 0 #00334a33;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 15px 0 15px;
+  border-right: 1.5px solid #164159;
+  z-index: 2;
+  margin-top: 20px;
+  margin-right: 20px;
+  height: calc(100vh - 104px); /* 修改：使用视口高度减去顶部84px和margin-top 20px */
+  box-sizing: border-box;
+  flex-shrink: 0;
+  overflow: hidden; /* 修改：改为hidden避免滚动条 */
+  position: relative;
+}
+
+.sidebar-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 40px;
+  align-items: center;
+  flex: 1; /* 新增：让标签区域占据剩余空间 */
+  justify-content: flex-start; /* 新增：从顶部开始排列 */
+  padding-top: 20px; /* 新增：顶部留出一些空间 */
+}
+
+.sidebar-tab {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+  font-size: 16px;
+  font-family: 'Source Han Sans CN', 'Microsoft YaHei', Arial, sans-serif;
+  font-weight: 400;
+  color: #fff;
+  margin-top: 10px;
+  box-sizing: border-box;
+}
+
+.sidebar-tab:first-child {
+  margin-top: 0;
+}
+
+.sidebar-tab.active {
+  background: #01314f !important;
+  color: #67d5fd;
+  font-weight: 500;
+  box-shadow: 0 0 12px #59c0fc33;
+}
+
+.sidebar-tab:hover {
+  background: #164159;
+}
+
+.sidebar-tab img {
+  width: 23px;
+  height: 23px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  transition: filter 0.2s, box-shadow 0.2s;
+}
+
+.sidebar-tab.active img {
+  filter: brightness(0) invert(1) drop-shadow(0 0 8px #67d5fd) drop-shadow(0 0 2px #67d5fd);
+  opacity: 1;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  box-sizing: border-box;
+  margin: 20px 0 0 0;
+  height: calc(100vh - 104px); /* 修改：与侧边栏保持一致的高度计算 */
+}
+
+.main-flex {
+  display: flex;
+  height: 100%;
+  gap: 0.8vw;
+}
+
+.right-panel {
+  flex-basis: 100%;
+  max-width: 100%;
+  min-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  background: transparent;
+  padding-bottom: 0;
+  padding-right: 32px;
+}
+
+/* 高分辨率屏幕优化 */
+@media (min-width: 1920px) {
+  .sidebar-menu {
+    height: calc(100vh - 104px);
+    overflow: hidden;
+  }
+  .main-content {
+    height: calc(100vh - 104px);
+  }
+  .sidebar-tabs {
+    gap: 20px; /* 在高分辨率下稍微减少间距 */
+  }
 }
 </style>

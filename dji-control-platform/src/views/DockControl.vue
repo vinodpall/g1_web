@@ -105,7 +105,7 @@
             </div>
             <div class="dock-control-panel">
               <div class="panel-title">
-                机场控制
+                <span class="dock-title-text">机场控制</span>
                 <span class="remote-switch-wrap" style="font-size:13px;font-weight:400;">
                   远程调试
                   <span class="switch-container" :class="{ active: remoteEnabled }" @click="toggleRemote"><span class="switch-toggle"></span></span>
@@ -261,7 +261,7 @@ const selectScreenMode = (mode: string) => {
 const handleTabClick = (key: string) => {
   currentTab.value = key
   if (key === 'plane') {
-    router.push('/dashboard/control')
+    router.push('/dashboard/drone-control')
   } else if (key === 'stock') {
     router.push('/dashboard/dock-control')
   }
@@ -341,10 +341,10 @@ const updateProgress = (percent: number) => {
   z-index: 2;
   margin-top: 20px;
   margin-right: 20px; /* 新增：与主内容区间距20px */
-  height: calc(100% - 20px);
+  height: calc(100vh - 104px); /* 修改：使用视口高度减去顶部84px和margin-top 20px */
   box-sizing: border-box;
   flex-shrink: 0;
-  overflow: auto;
+  overflow: hidden; /* 修改：改为hidden避免滚动条 */
   position: relative;
 }
 .sidebar-menu ul {
@@ -383,7 +383,7 @@ const updateProgress = (percent: number) => {
   overflow: auto;
   box-sizing: border-box;
   margin: 20px 0 0 0;
-  height: calc(100% - 20px);
+  height: calc(100vh - 104px); /* 修改：与侧边栏保持一致的高度计算 */
 }
 .main-flex {
   display: flex;
@@ -789,13 +789,32 @@ const updateProgress = (percent: number) => {
   flex-direction: column;
   margin-bottom: 16px;
 }
-.gimbal-control-panel {
-  flex: 2 1 0;
-  min-width: 0;
+
+.dock-control-panel .panel-title {
+  text-align: center !important;
   display: flex;
-  flex-direction: column;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
 }
+
+.dock-title-text {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 1;
+}
+
+.remote-switch-wrap {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  position: relative;
+  z-index: 2;
+  margin-left: auto;
+}
+
 .panel-title {
   font-size: 13px;
   color: #fff;
@@ -816,10 +835,13 @@ const updateProgress = (percent: number) => {
   align-items: center;
   justify-content: space-between;
 }
-.remote-switch-wrap {
+
+.gimbal-control-panel {
+  flex: 2 1 0;
+  min-width: 0;
   display: flex;
-  align-items: center;
-  height: 32px;
+  flex-direction: column;
+  margin-bottom: 20px;
 }
 .switch-container {
   width: 40px;
@@ -922,6 +944,9 @@ const updateProgress = (percent: number) => {
   gap: 24px;
   width: 40px;
   align-items: center;
+  flex: 1; /* 新增：让标签区域占据剩余空间 */
+  justify-content: flex-start; /* 新增：从顶部开始排列 */
+  padding-top: 20px; /* 新增：顶部留出一些空间 */
 }
 .sidebar-menu-bottom {
   display: none !important;
@@ -1267,5 +1292,24 @@ const updateProgress = (percent: number) => {
 }
 .dock-card-btn.active:not(:disabled) {
   color: #222;
+}
+/* 地图类型控件样式 */
+:deep(.amap-maptype) {
+  color: #000 !important;
+  bottom: 110px !important; /* 从底部向上移动80px */
+  right: 16px !important;
+  z-index: 20 !important;
+}
+
+:deep(.amap-maptype-label) {
+  color: #000 !important;
+}
+
+:deep(.amap-maptype-list) {
+  color: #000 !important;
+}
+
+:deep(.amap-maptype-list-item) {
+  color: #000 !important;
 }
 </style> 

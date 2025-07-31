@@ -9,5 +9,14 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src')
     }
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://10.10.1.3:8000',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   }
 })

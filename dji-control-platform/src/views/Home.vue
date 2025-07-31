@@ -197,7 +197,7 @@
                 </div>
               </div>
               <div class="button-group">
-                <span class="span">下发任务</span>
+                <span class="span" @click="handleDispatchTask">下发任务</span>
                 <span class="span1">取消任务</span>
               </div>
             </div>
@@ -538,6 +538,11 @@ const lineChartRef = ref<HTMLElement | null>(null)
 const mapContainer = ref<HTMLElement | null>(null)
 let amapInstance: any = null
 
+// 基本功能函数
+const handleDispatchTask = () => {
+  console.log('下发任务')
+}
+
 // 初始化告警趋势图表
 const initAlarmTrendChart = () => {
   if (!alarmTrendChartRef.value) return
@@ -616,8 +621,6 @@ const initAlarmTrendChart = () => {
   }
   alarmTrendChart.setOption(option)
 }
-
-
 
 // 初始化任务饼图
 const initTaskPieCharts = () => {
@@ -900,10 +903,16 @@ const initLineChart = () => {
   lineChart.setOption(option)
 }
 
+// 组件挂载时初始化
 onMounted(() => {
-  initAlarmTrendChart()
-  initTaskPieCharts()
-  initLineChart()
+  // 初始化图表
+  nextTick(() => {
+    setTimeout(() => {
+      initAlarmTrendChart()
+      initTaskPieCharts()
+      initLineChart()
+    }, 100)
+  })
 
   window.addEventListener('resize', () => {
     alarmTrendChart?.resize()
@@ -911,38 +920,8 @@ onMounted(() => {
     taskPieChart2?.resize()
     lineChart?.resize()
   })
-  
-  // 添加图表动画效果
-  const animateCharts = () => {
-    if (taskPieChart1 && taskPieChart2) {
-      // 为第一个图表添加旋转动画
-      taskPieChart1.setOption({
-        series: [{
-          animation: true,
-          animationDuration: 3000,
-          animationEasingUpdate: 'cubicInOut'
-        }]
-      });
-      
-      // 为第二个图表添加旋转动画
-      taskPieChart2.setOption({
-        series: [{
-          animation: true,
-          animationDuration: 3000,
-          animationEasingUpdate: 'cubicInOut'
-        }]
-      });
-    }
-  };
-  
-  // 初始动画
-  animateCharts();
-  
-  // 每隔一段时间刷新动画效果
-  setInterval(() => {
-    animateCharts();
-  }, 10000);
 
+  // 初始化地图
   if (mapContainer.value) {
     AMapLoader.load({
       key: '6f9eaf51960441fa4f813ea2d7e7cfff',
@@ -957,14 +936,29 @@ onMounted(() => {
       })
       // 放大缩小工具放左上角
       amapInstance.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
+    }).catch((error) => {
+      console.warn('地图加载失败:', error)
     })
   }
 })
 
+// 组件卸载时清理
 onBeforeUnmount(() => {
   if (amapInstance) {
     amapInstance.destroy()
     amapInstance = null
+  }
+  if (alarmTrendChart) {
+    alarmTrendChart.dispose()
+  }
+  if (taskPieChart1) {
+    taskPieChart1.dispose()
+  }
+  if (taskPieChart2) {
+    taskPieChart2.dispose()
+  }
+  if (lineChart) {
+    lineChart.dispose()
   }
 })
 </script>

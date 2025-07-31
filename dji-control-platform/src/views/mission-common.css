@@ -27,10 +27,10 @@
   z-index: 2;
   margin-top: 20px;
   margin-right: 20px;
-  height: calc(100% - 20px);
+  height: calc(100vh - 104px); /* 修改：使用视口高度减去顶部84px和margin-top 20px */
   box-sizing: border-box;
   flex-shrink: 0;
-  overflow: auto;
+  overflow: hidden; /* 修改：改为hidden避免滚动条 */
   position: relative;
 }
 .sidebar-tabs {
@@ -39,6 +39,9 @@
   gap: 24px;
   width: 40px;
   align-items: center;
+  flex: 1; /* 新增：让标签区域占据剩余空间 */
+  justify-content: flex-start; /* 新增：从顶部开始排列 */
+  padding-top: 20px; /* 新增：顶部留出一些空间 */
 }
 .sidebar-tab {
   width: 40px;
@@ -87,7 +90,7 @@
   overflow: auto;
   box-sizing: border-box;
   margin: 20px 0 0 0;
-  height: calc(100% - 20px);
+  height: calc(100vh - 104px); /* 修改：与侧边栏保持一致的高度计算 */
 }
 .main-flex {
   display: flex;
@@ -776,4 +779,18 @@
   padding-right: 16px;
   min-width: 180px;
   max-width: 220px;
+} 
+
+/* 高分辨率屏幕优化 */
+@media (min-width: 1920px) {
+  .sidebar-menu {
+    height: calc(100vh - 104px);
+    overflow: hidden;
+  }
+  .main-content {
+    height: calc(100vh - 104px);
+  }
+  .sidebar-tabs {
+    gap: 20px; /* 在高分辨率下稍微减少间距 */
+  }
 } 

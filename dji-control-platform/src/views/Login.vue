@@ -56,10 +56,22 @@
               {{ loading ? '登录中...' : '登录' }}
             </button>
           </form>
-          
-          <div v-if="errorMessage" class="error-message">
-            {{ errorMessage }}
-          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 错误提示弹窗 -->
+    <div v-if="showErrorDialog" class="error-dialog-mask">
+      <div class="error-dialog">
+        <div class="error-dialog-header">
+          <div class="error-icon">⚠️</div>
+          <div class="error-title">登录失败</div>
+        </div>
+        <div class="error-dialog-content">
+          <div class="error-message">{{ errorMessage }}</div>
+        </div>
+        <div class="error-dialog-actions">
+          <button class="error-dialog-btn" @click="closeErrorDialog">确定</button>
         </div>
       </div>
     </div>
@@ -69,27 +81,29 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
-import { loginApi } from '@/api'
+import { useUserStore } from '../stores/user'
+import { useAuth } from '../composables/useApi'
 
 const router = useRouter()
 const userStore = useUserStore()
+const { login, loading, error } = useAuth()
 
 const loginForm = ref({
   username: 'admin',
-  password: '123456',
+  password: 'admin123',
   remember: false
 })
 
-const loading = ref(false)
 const errorMessage = ref('')
+const showErrorDialog = ref(false)
 
 const handleLogin = async () => {
   try {
-    loading.value = true
     errorMessage.value = ''
+    showErrorDialog.value = false
     
-    const response = await loginApi(loginForm.value.username, loginForm.value.password)
+    // 正确的代码 👇
+    const response = await login(loginForm.value)
     
     userStore.setUser(response.user)
     userStore.setToken(response.token)
@@ -97,9 +111,13 @@ const handleLogin = async () => {
     router.push('/dashboard')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '登录失败'
-  } finally {
-    loading.value = false
+    showErrorDialog.value = true
   }
+}
+
+const closeErrorDialog = () => {
+  showErrorDialog.value = false
+  errorMessage.value = ''
 }
 </script>
 
@@ -291,6 +309,80 @@ const handleLogin = async () => {
   color: #f44336;
   text-align: center;
   font-size: 0.9rem;
+}
+
+/* 错误提示弹窗样式 */
+.error-dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.error-dialog {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 400px;
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.error-dialog-header {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  background: #f44336;
+  color: white;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.error-icon {
+  margin-right: 10px;
+  font-size: 1.5rem;
+}
+
+.error-dialog-content {
+  padding: 20px;
+  text-align: center;
+  color: #333;
+  font-size: 1rem;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.error-dialog-actions {
+  padding: 15px 20px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  background: #f0f0f0;
+}
+
+.error-dialog-btn {
+  padding: 8px 15px;
+  background: #00bcd4;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background 0.3s ease;
+}
+
+.error-dialog-btn:hover {
+  background: #00acc1;
 }
 
 @media (max-width: 768px) {

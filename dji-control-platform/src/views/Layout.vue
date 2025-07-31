@@ -7,10 +7,10 @@
       </div>
       
       <nav class="nav-menu">
-        <router-link to="/dashboard" class="nav-item" :class="{ active: $route.path === '/dashboard' }">
+        <router-link to="/dashboard/home" class="nav-item" :class="{ active: $route.path === '/dashboard/home' }">
           首页
         </router-link>
-        <router-link to="/dashboard/control" class="nav-item" :class="{ active: $route.path === '/dashboard/control' || $route.path === '/dashboard/dock-control' }">
+        <router-link to="/dashboard/drone-control" class="nav-item" :class="{ active: $route.path === '/dashboard/drone-control' || $route.path === '/dashboard/dock-control' }">
           无人机控制
         </router-link>
         <router-link to="/dashboard/mission" class="nav-item" :class="{ active: $route.path.includes('mission') }">
@@ -29,10 +29,10 @@
         <div class="el-select">
           <div class="el-select__wrapper" 
                :class="{ 'is-active': isSelectActive }" 
-               @click="toggleSelect">
+               @click.stop="toggleSelect">
             <div class="el-select__selection">
               <div class="el-select__selected-item el-select__placeholder">
-                <span>{{ selectedDock?.name || '选择机场' }}</span>
+                <span>{{ selectedDock?.device_name || '选择机场' }}</span>
               </div>
             </div>
             <div class="el-select__suffix">
@@ -41,6 +41,21 @@
                   <path fill="currentColor" d="M831.872 340.864 512 652.672 192.128 340.864a30.592 30.592 0 0 0-42.752 0 29.12 29.12 0 0 0 0 41.6L489.664 714.24a32 32 0 0 0 44.672 0l340.288-331.712a29.12 29.12 0 0 0 0-41.728 30.592 30.592 0 0 0-42.752 0z"></path>
                 </svg>
               </i>
+            </div>
+          </div>
+          
+          <!-- 下拉选项 -->
+          <div class="el-select__dropdown" v-show="isSelectActive" @click.stop>
+            <div class="el-select__dropdown-list">
+              <div 
+                v-for="dock in docks" 
+                :key="dock.device_sn"
+                class="el-select__dropdown-item"
+                :class="{ 'is-selected': dock.device_sn === selectedDockSn }"
+                @click="selectDock(dock.device_sn)"
+              >
+                {{ dock.device_name }}
+              </div>
             </div>
           </div>
         </div>
@@ -53,7 +68,7 @@
         </span>
 
         <!-- 用户信息 -->
-        <div class="user-info" @click="toggleUserMenu" v-click-outside="closeUserMenu">
+        <div class="user-info" @click="toggleUserMenu">
           <img src="/src/assets/source_data/avatar.jpg" alt="avatar" class="avatar" />
           <div class="right-sel">
             <span class="name">{{ user?.name || 'admin' }}</span>
@@ -79,15 +94,10 @@
 </template>
 
 <script setup lang="ts">
-interface Dock {
-  id: string;
-  name: string;
-}
-
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
-import { useDeviceStore } from '@/stores/device'
+import { useUserStore } from '../stores/user'
+import { useDeviceStore } from '../stores/device'
 // 导入背景图片
 import titleBg from '/src/assets/source_data/bg_data/title.png'
 
@@ -96,14 +106,14 @@ const userStore = useUserStore()
 const deviceStore = useDeviceStore()
 
 const user = computed(() => userStore.user)
-const availableDocks = computed(() => deviceStore.availableDocks as Dock[])
-const selectedDockId = computed({
-  get: () => deviceStore.selectedDockId,
+const docks = computed(() => deviceStore.docks)
+const selectedDockSn = computed({
+  get: () => deviceStore.selectedDockSn,
   set: (value) => deviceStore.setSelectedDock(value)
 })
 
 const selectedDock = computed(() => {
-  return availableDocks.value.find(dock => dock.id === selectedDockId.value)
+  return docks.value.find(dock => dock.device_sn === selectedDockSn.value)
 })
 
 const isSelectActive = ref(false)
@@ -115,8 +125,24 @@ const toggleSelect = () => {
 
 const handleDockChange = () => {
   // 处理机场选择逻辑
-  console.log('当前选中的机场:', selectedDock.value?.name)
+  console.log('当前选中的机场:', selectedDock.value?.device_name)
 }
+
+const selectDock = (sn: string) => {
+  selectedDockSn.value = sn
+  isSelectActive.value = false
+}
+
+// 点击外部关闭下拉列表
+const closeSelect = (event: Event) => {
+  const target = event.target as Element
+  if (!target.closest('.el-select')) {
+    isSelectActive.value = false
+  }
+}
+
+// 监听点击事件
+document.addEventListener('click', closeSelect)
 
 const isUserMenuVisible = ref(false)
 
@@ -125,20 +151,27 @@ const toggleUserMenu = (e: Event) => {
   isUserMenuVisible.value = !isUserMenuVisible.value
 }
 
-const closeUserMenu = () => {
-  isUserMenuVisible.value = false
-}
-
 const handleChangePassword = () => {
   // 处理修改密码逻辑
-  closeUserMenu()
+  console.log('修改密码')
+  isUserMenuVisible.value = false
 }
 
 const handleLogout = () => {
   // 处理退出登录逻辑
+  console.log('退出登录')
+  userStore.logout()
   router.push('/login')
-  closeUserMenu()
+  isUserMenuVisible.value = false
 }
+
+// 点击其他地方关闭用户菜单
+const closeUserMenu = () => {
+  isUserMenuVisible.value = false
+}
+
+// 监听点击事件
+document.addEventListener('click', closeUserMenu)
 
 const isStopActive = ref(false)
 
@@ -187,6 +220,7 @@ const toggleStop = () => {
   position: sticky;
   top: 0;
   z-index: 100;
+  gap: clamp(10px, 2vw, 20px);
 }
 
 /* 左侧Logo和标题 */
@@ -199,6 +233,9 @@ const toggleStop = () => {
   min-width: 0;
   margin-left: -40px;
   margin-top: 5px;
+  flex-shrink: 0;
+  flex: 0 0 auto;
+  width: clamp(280px, 30vw, 400px);
 }
 
 .logo {
@@ -210,7 +247,7 @@ const toggleStop = () => {
 
 .title {
   font-family: 'YouSheBiaoTiHei', 'Microsoft YaHei', '黑体', 'SimHei', sans-serif;
-  font-size: 34px;
+  font-size: clamp(20px, 2.5vw, 34px); /* 使用clamp自动缩放 */
   font-weight: normal;
   letter-spacing: 1px;
   text-align: left;
@@ -227,6 +264,7 @@ const toggleStop = () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: clamp(200px, 25vw, 400px); /* 使用clamp自动缩放最大宽度 */
 }
 
 /* 中间导航菜单 */
@@ -237,16 +275,19 @@ const toggleStop = () => {
   position: relative;
   z-index: 1;
   flex: 1;
-  justify-content: flex-start;
-  margin-left: 8vw;
+  justify-content: center;
+  margin-left: 0;
   list-style: none;
   height: 54px;
   margin-top: 26px;
   border-radius: 0;
+  padding-left: clamp(8vw, 12vw, 18vw); /* 增加内边距范围 */
+  padding-right: clamp(8vw, 12vw, 18vw);
+  min-width: 0;
 }
 
 .nav-item {
-  width: 100px;
+  width: clamp(80px, 8vw, 120px); /* 使用clamp自动缩放宽度 */
   height: 54px;
   background: url('/src/assets/source_data/bg_data/title_dark.png') no-repeat;
   background-position: bottom center;
@@ -255,13 +296,14 @@ const toggleStop = () => {
   justify-content: center;
   font-family: Source Han Sans CN;
   font-weight: 400;
-  font-size: 18px;
+  font-size: clamp(14px, 1.2vw, 18px); /* 使用clamp自动缩放字体大小 */
   color: #9f9f9f;
   font-style: normal;
   text-transform: none;
   cursor: pointer;
-  margin-right: 70px;
+  margin-right: clamp(40px, 4vw, 70px); /* 使用clamp自动缩放间距 */
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .nav-item:hover {
@@ -286,10 +328,14 @@ const toggleStop = () => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: clamp(15px, 2vw, 20px);
+  gap: clamp(10px, 1.5vw, 15px);
   position: relative;
   z-index: 1;
-  margin-right: clamp(15px, 2vw, 20px);
+  margin-right: clamp(10px, 1.5vw, 15px);
+  flex-shrink: 0;
+  min-width: 0;
+  flex: 0 0 auto;
+  width: clamp(250px, 30vw, 350px); /* 增加宽度范围 */
 }
 
 /* 机场选择器样式 */
@@ -299,8 +345,8 @@ const toggleStop = () => {
   --el-border-color: rgba(255, 255, 255, 0.2);
   --el-fill-color-blank: rgba(255, 255, 255, 0.1);
   
-  width: 150px;
-  margin-right: 20px;
+  width: clamp(140px, 15vw, 180px); /* 增加宽度范围 */
+  margin-right: clamp(10px, 1.5vw, 15px);
   display: inline-block;
   position: relative;
   vertical-align: middle;
@@ -337,11 +383,17 @@ const toggleStop = () => {
   color: #fff;
   font-size: 14px;
   line-height: 24px;
+  white-space: nowrap; /* 防止文字换行 */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .el-select__placeholder {
   color: #fff;
   margin-right: 20px;
+  white-space: nowrap; /* 防止文字换行 */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .el-select__suffix {
@@ -388,10 +440,51 @@ const toggleStop = () => {
   transform: rotate(180deg);
 }
 
+/* 下拉选项样式 */
+.el-select__dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background-color: rgba(15, 25, 45, 0.95);
+  border: 1px solid rgba(0, 188, 212, 0.3);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.el-select__dropdown-list {
+  padding: 4px 0;
+  margin: 0;
+  list-style: none;
+}
+
+.el-select__dropdown-item {
+  padding: 10px 16px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.el-select__dropdown-item:hover {
+  background: rgba(0, 188, 212, 0.2);
+  color: #00bcd4;
+}
+
+.el-select__dropdown-item.is-selected {
+  background: rgba(0, 188, 212, 0.3);
+  color: #00bcd4;
+  font-weight: bold;
+}
+
 /* 急停按钮样式 */
 .stop-btn {
-  width: 44px;
-  height: 44px;
+  width: clamp(40px, 4vw, 48px); /* 缩小尺寸 */
+  height: clamp(40px, 4vw, 48px); /* 缩小尺寸 */
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -402,6 +495,7 @@ const toggleStop = () => {
   background-size: contain;
   border: none;
   outline: none;
+  flex-shrink: 0;
 }
 
 .stop-btn:active {
@@ -414,7 +508,7 @@ const toggleStop = () => {
 }
 
 .stop-content {
-  display: none;
+  display: none; /* 隐藏文字内容 */
 }
 
 .stop-icon {
@@ -447,13 +541,13 @@ const toggleStop = () => {
 .right-sel {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 80px;
+  gap: 6px; /* 减少间距 */
+  min-width: clamp(60px, 8vw, 80px); /* 调整最小宽度 */
 }
 
 .name {
   color: #fff;
-  font-size: 18px;
+  font-size: clamp(14px, 1.2vw, 16px); /* 调整字体大小 */
   font-weight: bold;
   font-family: Source Han Sans CN;
 }
@@ -602,6 +696,69 @@ const toggleStop = () => {
   .dock-selector {
     max-width: clamp(50px, 10vw, 80px);
     padding: 4px clamp(15px, 2.5vw, 20px) 4px 8px;
+  }
+}
+
+/* 新增：高分辨率屏幕优化 */
+@media (min-width: 1920px) {
+  .nav-menu {
+    padding-left: 12vw;
+    padding-right: 12vw;
+  }
+  
+  .nav-item {
+    margin-right: 55px;
+  }
+  
+  .nav-item:last-child {
+    margin-right: 0;
+  }
+  
+  .header-left {
+    width: 420px;
+  }
+  
+  .header-right {
+    width: 320px;
+  }
+  
+  .el-select {
+    width: 160px;
+  }
+  
+  .stop-btn {
+    width: 45px;
+    height: 45px;
+  }
+}
+
+/* 新增：超高分辨率屏幕优化 */
+@media (min-width: 2560px) {
+  .nav-menu {
+    padding-left: 20vw;
+    padding-right: 20vw;
+  }
+  
+  .nav-item {
+    margin-right: 40px;
+    width: 100px;
+  }
+  
+  .header-left {
+    width: 360px;
+  }
+  
+  .header-right {
+    width: 300px;
+  }
+  
+  .el-select {
+    width: 170px;
+  }
+  
+  .stop-btn {
+    width: 42px;
+    height: 42px;
   }
 }
 </style>

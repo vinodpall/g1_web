@@ -237,11 +237,14 @@
                 <div class="panel-title">云台控制</div>
                 <div class="gimbal-btns-area">
                   <div class="gimbal-dir-row">
-                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_up.svg" /></button>
-                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left.svg" /></button>
-                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_down.svg" /></button>
-                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right.svg" /></button>
+                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/camera_up.svg" /></button>
                   </div>
+                  <div class="gimbal-dir-row">
+                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/camera_left.svg" /></button>
+                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/camera_down.svg" /></button>
+                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/camera_right.svg" /></button>
+                  </div>
+                  <div class="gimbal-separator"></div>
                   <div class="gimbal-func-row">
                     <button>云台回中</button>
                     <button>云台向下</button>
@@ -290,6 +293,10 @@ import droneUpIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_u
 import droneDownIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_down.svg'
 import droneLeftIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_left.svg'
 import droneRightIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_right.svg'
+import cameraUpIcon from '@/assets/source_data/svg_data/camera_up.svg'
+import cameraDownIcon from '@/assets/source_data/svg_data/camera_down.svg'
+import cameraLeftIcon from '@/assets/source_data/svg_data/camera_left.svg'
+import cameraRightIcon from '@/assets/source_data/svg_data/camera_right.svg'
 
 const router = useRouter()
 
@@ -374,7 +381,7 @@ const updateProgress = (percent: number) => {
 const handleTabClick = (key: string) => {
   currentTab.value = key
   if (key === 'plane') {
-    router.push('/dashboard/control')
+    router.push('/dashboard/drone-control')
   } else if (key === 'stock') {
     router.push('/dashboard/dock-control')
   }
@@ -411,10 +418,10 @@ const handleTabClick = (key: string) => {
   z-index: 2;
   margin-top: 20px;
   margin-right: 20px; /* 新增：与主内容区间距20px */
-  height: calc(100% - 20px);
+  height: calc(100vh - 104px); /* 修改：使用视口高度减去顶部84px和margin-top 20px */
   box-sizing: border-box;
   flex-shrink: 0;
-  overflow: auto;
+  overflow: hidden; /* 修改：改为hidden避免滚动条 */
   position: relative;
 }
 .sidebar-menu ul {
@@ -453,7 +460,7 @@ const handleTabClick = (key: string) => {
   overflow: auto;
   box-sizing: border-box;
   margin: 20px 0 0 0;
-  height: calc(100% - 20px);
+  height: calc(100vh - 104px); /* 修改：与侧边栏保持一致的高度计算 */
 }
 .main-flex {
   display: flex;
@@ -868,6 +875,9 @@ const handleTabClick = (key: string) => {
   gap: 24px;
   width: 40px;
   align-items: center;
+  flex: 1; /* 新增：让标签区域占据剩余空间 */
+  justify-content: flex-start; /* 新增：从顶部开始排列 */
+  padding-top: 20px; /* 新增：顶部留出一些空间 */
 }
 .sidebar-menu-bottom {
   display: none !important;
@@ -1525,8 +1535,27 @@ const handleTabClick = (key: string) => {
 }
 .amap-maptype {
   right: 16px !important;
-  bottom: 16px !important;
+  bottom: 80px !important; /* 从底部向上移动80px */
   z-index: 20 !important;
+}
+
+/* 地图类型控件样式 */
+:deep(.amap-maptype) {
+  color: #000 !important;
+  bottom: 110px !important; /* 确保深度选择器也生效 */
+  right: 16px !important;
+}
+
+:deep(.amap-maptype-label) {
+  color: #000 !important;
+}
+
+:deep(.amap-maptype-list) {
+  color: #000 !important;
+}
+
+:deep(.amap-maptype-list-item) {
+  color: #000 !important;
 }
 .boxGrid-box {
   width: 100%;
@@ -1783,6 +1812,13 @@ const handleTabClick = (key: string) => {
   width: 100%;
   justify-content: space-between;
 }
+.gimbal-dir-row:first-child {
+  justify-content: center;
+}
+.gimbal-dir-row:nth-child(2) {
+  justify-content: center;
+  gap: 32px;
+}
 .gimbal-dir-btn {
   width: 32px;
   height: 32px;
@@ -1797,8 +1833,8 @@ const handleTabClick = (key: string) => {
   transition: background 0.2s, color 0.2s;
 }
 .gimbal-dir-btn img {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
 }
 .gimbal-dir-btn:hover {
   background: #16bbf2;
@@ -1820,6 +1856,14 @@ const handleTabClick = (key: string) => {
 .gimbal-func-row button:hover {
   background: #16bbf2;
   color: #fff;
+}
+.gimbal-separator {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(89, 192, 252, 0.3) 0%, #59c0fc 50%, rgba(89, 192, 252, 0.3) 100%);
+  margin: 8px 0;
+  opacity: 0.7;
+  border-radius: 1px;
 }
 @media (max-width: 900px) {
   .main-flex {
@@ -1888,12 +1932,18 @@ const handleTabClick = (key: string) => {
     padding: 0 10px;
   }
 }
-</style>
 
-<style>
-.amap-maptype {
-  right: 16px !important;
-  bottom: 16px !important;
-  z-index: 20 !important;
+/* 新增：高分辨率屏幕优化 */
+@media (min-width: 1920px) {
+  .sidebar-menu {
+    height: calc(100vh - 104px);
+    overflow: hidden;
+  }
+  .main-content {
+    height: calc(100vh - 104px);
+  }
+  .sidebar-tabs {
+    gap: 20px; /* 在高分辨率下稍微减少间距 */
+  }
 }
 </style> 
