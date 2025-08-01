@@ -1,5 +1,5 @@
 import { ref, reactive, readonly } from 'vue'
-import { authApi, userApi, dockApi, droneApi, missionApi, alertApi, systemApi, deviceApi, roleApi, hmsApi, livestreamApi, waylineApi } from '../api/services'
+import { authApi, userApi, dockApi, droneApi, missionApi, alertApi, systemApi, deviceApi, roleApi, hmsApi, livestreamApi, waylineApi, controlApi } from '../api/services'
 import { apiClient } from '../api/config'
 import type { User, Dock, Drone, Mission, Alert, Device, Role, HmsAlert } from '../types'
 import { useDeviceStore } from '../stores/device'
@@ -83,13 +83,11 @@ export function useAuth() {
         
         // 缓存设备SN到本地
         const dockSns = deviceResponse.filter(device => {
-          const deviceType = `${device.device_type_info?.domain}-${device.device_type_info?.device_type}-${device.device_type_info?.sub_type}`
-          return deviceType === '3-3-0'
+          return device.device_type_info?.device_type === 3
         }).map(device => device.device_sn)
         
         const droneSns = deviceResponse.filter(device => {
-          const deviceType = `${device.device_type_info?.domain}-${device.device_type_info?.device_type}-${device.device_type_info?.sub_type}`
-          return deviceType === '0-100-0'
+          return device.device_type_info?.device_type === 100
         }).map(device => device.device_sn)
         
         localStorage.setItem('cached_dock_sns', JSON.stringify(dockSns))
@@ -110,6 +108,10 @@ export function useAuth() {
           console.log('登录后开始获取视频容量信息...')
           const capacityResponse = await livestreamApi.getCapacity()
           console.log('视频容量信息获取成功:', capacityResponse)
+          
+          // 缓存capacity数据到localStorage
+          localStorage.setItem('livestream_capacity', JSON.stringify(capacityResponse))
+          console.log('capacity数据已缓存到localStorage')
           
           if (capacityResponse.available_devices && capacityResponse.available_devices.length > 0) {
             const firstDevice = capacityResponse.available_devices[0]
@@ -502,15 +504,13 @@ export function useDevices() {
   // 缓存设备SN到本地
   const cacheDeviceSns = (deviceList: Device[]) => {
     // 根据device_type区分机场和无人机
-    // 3-3-0 是机场，0-100-0 是无人机
+    // device_type=3 是机场，device_type=100 是无人机
     const dockSns = deviceList.filter(device => {
-      const deviceType = `${device.device_type_info?.domain}-${device.device_type_info?.device_type}-${device.device_type_info?.sub_type}`
-      return deviceType === '3-3-0'
+      return device.device_type_info?.device_type === 3
     }).map(device => device.device_sn)
     
     const droneSns = deviceList.filter(device => {
-      const deviceType = `${device.device_type_info?.domain}-${device.device_type_info?.device_type}-${device.device_type_info?.sub_type}`
-      return deviceType === '0-100-0'
+      return device.device_type_info?.device_type === 100
     }).map(device => device.device_sn)
     
     localStorage.setItem('cached_dock_sns', JSON.stringify(dockSns))

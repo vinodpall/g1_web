@@ -183,43 +183,43 @@
               <div class="drone-control-panel">
                 <div class="panel-title">无人机控制</div>
                 <div class="drone-direction-grid">
-                  <button>
+                  <button @mousedown="() => startControl('turn_left')" @mouseup="stopControl" @mouseleave="stopControl">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left_round.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">左旋</span>
                   </button>
-                  <button>
+                  <button @mousedown="() => startControl('forward')" @mouseup="stopControl" @mouseleave="stopControl">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_forward.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">前进</span>
                   </button>
-                  <button>
+                  <button @mousedown="() => startControl('turn_right')" @mouseup="stopControl" @mouseleave="stopControl">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right_round.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">右旋</span>
                   </button>
-                  <button>
+                  <button @mousedown="() => startControl('left')" @mouseup="stopControl" @mouseleave="stopControl">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">左移</span>
                   </button>
-                  <button>
+                  <button @mousedown="() => startControl('backward')" @mouseup="stopControl" @mouseleave="stopControl">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_back.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">后退</span>
                   </button>
-                  <button>
+                  <button @mousedown="() => startControl('right')" @mouseup="stopControl" @mouseleave="stopControl">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">右移</span>
                   </button>
-                  <button>
+                  <button @mousedown="() => startControl('up')" @mouseup="stopControl" @mouseleave="stopControl">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_up.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">上升</span>
                   </button>
-                  <button>
+                  <button @click="handleEnterDrcMode">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_light.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">补光灯</span>
+                    <span class="drone-btn-label">DRC</span>
                   </button>
-                  <button>
+                  <button @mousedown="() => startControl('down')" @mouseup="stopControl" @mouseleave="stopControl">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_down.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">下降</span>
                   </button>
-                  <button>
+                  <button @click="handleGetControlAuthority">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_control.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">获取控制权</span>
                   </button>
@@ -227,7 +227,7 @@
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_fly.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">一键起飞</span>
                   </button>
-                  <button>
+                  <button @click="handleReturnHome">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_land.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">一键返航</span>
                   </button>
@@ -237,12 +237,12 @@
                 <div class="panel-title">云台控制</div>
                 <div class="gimbal-btns-area">
                   <div class="gimbal-dir-row">
-                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/camera_up.svg" /></button>
+                    <button class="gimbal-dir-btn" @click="handleGimbalControl('down')"><img src="@/assets/source_data/svg_data/camera_up.svg" /></button>
                   </div>
                   <div class="gimbal-dir-row">
-                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/camera_left.svg" /></button>
-                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/camera_down.svg" /></button>
-                    <button class="gimbal-dir-btn"><img src="@/assets/source_data/svg_data/camera_right.svg" /></button>
+                    <button class="gimbal-dir-btn" @click="handleGimbalControl('left')"><img src="@/assets/source_data/svg_data/camera_left.svg" /></button>
+                    <button class="gimbal-dir-btn" @click="handleGimbalControl('up')"><img src="@/assets/source_data/svg_data/camera_down.svg" /></button>
+                    <button class="gimbal-dir-btn" @click="handleGimbalControl('right')"><img src="@/assets/source_data/svg_data/camera_right.svg" /></button>
                   </div>
                   <div class="gimbal-separator"></div>
                   <div class="gimbal-func-row">
@@ -253,13 +253,13 @@
                   </div>
                   <div class="gimbal-func-row">
                     <button>开启分屏</button>
-                    <button>放大</button>
+                    <button @click="handleZoom('in')">放大</button>
                     <button>开始录像</button>
                     <button>拍照</button>
                   </div>
                   <div class="gimbal-func-row">
                     <button>关闭分屏</button>
-                    <button>缩小</button>
+                    <button @click="handleZoom('out')">缩小</button>
                     <button>停止录像</button>
                     <button>夜景模式</button>
                   </div>
@@ -276,6 +276,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import { controlApi, drcApi } from '@/api/services'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
@@ -318,6 +319,12 @@ const currentRouteName = ref('测试航线A') // 当前航线名称
 const amapInstance = ref<any>(null)
 const amapApiRef = ref<any>(null); // 新增
 const remoteEnabled = ref(false);
+
+// 控制相关的状态
+const controlInterval = ref<NodeJS.Timer | null>(null)
+const currentControlType = ref<string | null>(null)
+const CONTROL_INTERVAL_MS = 100 // 每100ms发送一次控制指令
+const CONTROL_SPEED = 0.5 // 默认控制速度
 const toggleRemote = () => {
   remoteEnabled.value = !remoteEnabled.value;
 };
@@ -366,13 +373,6 @@ onMounted(() => {
   })
 })
 
-onBeforeUnmount(() => {
-  if (amapInstance.value) {
-    amapInstance.value.destroy()
-    amapInstance.value = null
-  }
-})
-
 // 测试方法：动态改变进度
 const updateProgress = (percent: number) => {
   progressPercent.value = Math.max(0, Math.min(100, percent))
@@ -387,7 +387,469 @@ const handleTabClick = (key: string) => {
   }
 }
 
-// 仅结构占位，后续资源和交互等你补充
+// 获取缓存的capacity数据
+const getCachedCapacity = () => {
+  const cachedData = localStorage.getItem('livestream_capacity')
+  if (cachedData) {
+    try {
+      return JSON.parse(cachedData)
+    } catch (error) {
+      console.error('解析capacity缓存数据失败:', error)
+      return null
+    }
+  }
+  return null
+}
+
+// 根据设备SN获取camera_index (payload_index)
+const getCameraIndexByDeviceSn = (deviceSn: string) => {
+  const capacity = getCachedCapacity()
+  if (!capacity || !capacity.available_devices) {
+    console.warn('没有找到capacity缓存数据')
+    return null
+  }
+  
+  const device = capacity.available_devices.find((d: any) => d.sn === deviceSn)
+  if (!device || !device.camera_list || device.camera_list.length === 0) {
+    console.warn(`设备 ${deviceSn} 没有找到摄像头信息`)
+    return null
+  }
+  
+  // 返回第一个摄像头的camera_index作为payload_index
+  return device.camera_list[0].camera_index
+}
+
+// 获取最佳的payload_index（switchable_video_types最多的摄像头）
+const getBestPayloadIndex = () => {
+  const capacity = getCachedCapacity()
+  if (!capacity || !capacity.available_devices || capacity.available_devices.length === 0) {
+    console.warn('没有找到capacity缓存数据或可用设备')
+    return null
+  }
+  
+  const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
+  
+  // 找到无人机设备，并获取switchable_video_types最多的摄像头
+  let bestCamera = null
+  let maxSwitchableTypes = 0
+  
+  for (const device of capacity.available_devices) {
+    // 检查是否是无人机设备
+    if (cachedDroneSns.includes(device.sn)) {
+      console.log('找到无人机设备:', device.sn)
+      
+      // 遍历该设备的摄像头
+      if (device.camera_list && device.camera_list.length > 0) {
+        for (const camera of device.camera_list) {
+          // 找到switchable_video_types最多的摄像头
+          if (camera.video_list && camera.video_list.length > 0) {
+            const firstVideo = camera.video_list[0]
+            if (firstVideo.switchable_video_types) {
+              const typesCount = firstVideo.switchable_video_types.length
+              
+              if (typesCount > maxSwitchableTypes) {
+                maxSwitchableTypes = typesCount
+                bestCamera = camera
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return bestCamera ? bestCamera.camera_index : null
+}
+
+// 变焦倍率缓存管理
+const ZOOM_FACTOR_KEY = 'camera_zoom_factor'
+const MIN_ZOOM = 1
+const MAX_ZOOM = 200
+
+// 获取当前变焦倍率
+const getCurrentZoomFactor = (): number => {
+  const cached = localStorage.getItem(ZOOM_FACTOR_KEY)
+  if (cached) {
+    try {
+      const factor = parseInt(cached, 10)
+      return isNaN(factor) ? MIN_ZOOM : Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, factor))
+    } catch (error) {
+      console.warn('解析变焦倍率缓存失败:', error)
+    }
+  }
+  return MIN_ZOOM
+}
+
+// 设置变焦倍率到缓存
+const setZoomFactor = (factor: number): number => {
+  const clampedFactor = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, factor))
+  localStorage.setItem(ZOOM_FACTOR_KEY, clampedFactor.toString())
+  console.log('变焦倍率已缓存:', clampedFactor)
+  return clampedFactor
+}
+
+// 获取控制权按钮点击处理
+const handleGetControlAuthority = async () => {
+  try {
+    console.log('开始获取控制权...')
+    
+    // 获取缓存的设备列表
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
+    
+    console.log('缓存的机场SN列表:', cachedDockSns)
+    console.log('缓存的无人机SN列表:', cachedDroneSns)
+    
+    if (cachedDockSns.length === 0) {
+      console.error('没有找到缓存的机场SN')
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    // 使用第一个机场SN作为API调用的设备SN
+    const dockSn = cachedDockSns[0]
+    console.log('使用机场SN:', dockSn)
+    
+    // 从capacity缓存数据中获取payload_index
+    const capacity = getCachedCapacity()
+    if (!capacity || !capacity.available_devices || capacity.available_devices.length === 0) {
+      console.error('没有找到capacity缓存数据或可用设备')
+      alert('没有找到可用的设备，请重新登录')
+      return
+    }
+    
+    // 获取最佳的payload_index
+    const payloadIndex = getBestPayloadIndex()
+    if (!payloadIndex) {
+      console.error('没有找到合适的载荷摄像头')
+      alert('没有找到可用的载荷信息')
+      return
+    }
+    
+    console.log('选择的payload_index:', payloadIndex)
+    
+    // 同时调用两个API，都使用机场SN
+    console.log('开始调用飞行控制权限API，使用机场SN:', dockSn)
+    const flightPromise = controlApi.getFlightAuthority(dockSn)
+    
+    console.log('开始调用载荷控制权限API，使用机场SN:', dockSn, 'payload_index:', payloadIndex)
+    const payloadPromise = controlApi.getPayloadAuthority(dockSn, payloadIndex)
+    
+    // 等待两个API都完成
+    const [flightResult, payloadResult] = await Promise.all([flightPromise, payloadPromise])
+    
+    console.log('飞行控制权限结果:', flightResult)
+    console.log('载荷控制权限结果:', payloadResult)
+    
+    // 检查结果并提示用户
+    if (flightResult.code === 0 && payloadResult.code === 0) {
+      alert('控制权获取成功！')
+    } else {
+      const errorMsg = `控制权获取失败:\n飞行控制: ${flightResult.message}\n载荷控制: ${payloadResult.message}`
+      alert(errorMsg)
+    }
+    
+  } catch (error: any) {
+    console.error('获取控制权失败:', error)
+    alert(`获取控制权失败: ${error.message || error}`)
+  }
+}
+
+// 云台控制处理函数
+const handleGimbalControl = async (direction: 'up' | 'down' | 'left' | 'right') => {
+  try {
+    console.log(`开始云台${direction}控制...`)
+    
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      console.error('没有找到缓存的机场SN')
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    // 使用第一个机场SN
+    const dockSn = cachedDockSns[0]
+    console.log('使用机场SN:', dockSn)
+    
+    // 获取最佳的payload_index
+    const payloadIndex = getBestPayloadIndex()
+    if (!payloadIndex) {
+      console.error('没有找到合适的载荷摄像头')
+      alert('没有找到可用的载荷信息')
+      return
+    }
+    
+    console.log('使用payload_index:', payloadIndex, '控制方向:', direction)
+    
+    // 调用云台控制API
+    const result = await controlApi.gimbalDirectionControl(dockSn, payloadIndex, direction)
+    console.log('云台控制结果:', result)
+    
+    // 检查结果
+    if (result.code === 0) {
+      console.log(`云台${direction}控制成功`)
+      // 不需要弹窗提示，云台控制是实时操作
+    } else {
+      console.error(`云台${direction}控制失败:`, result.message)
+      alert(`云台${direction}控制失败: ${result.message}`)
+    }
+    
+  } catch (error: any) {
+    console.error(`云台${direction}控制失败:`, error)
+    alert(`云台${direction}控制失败: ${error.message || error}`)
+  }
+}
+
+// 一键返航处理函数
+const handleReturnHome = async () => {
+  try {
+    console.log('开始一键返航...')
+    
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      console.error('没有找到缓存的机场SN')
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    // 使用第一个机场SN
+    const dockSn = cachedDockSns[0]
+    console.log('使用机场SN:', dockSn)
+    
+    // 弹出确认对话框
+    const confirmed = confirm('确定要执行一键返航吗？')
+    if (!confirmed) {
+      console.log('用户取消一键返航操作')
+      return
+    }
+    
+    // 调用一键返航API
+    console.log('调用一键返航API，使用机场SN:', dockSn)
+    const result = await controlApi.returnHome(dockSn)
+    console.log('一键返航结果:', result)
+    
+    // 检查结果并提示用户
+    if (result.code === 0) {
+      alert('一键返航指令发送成功！')
+      console.log('一键返航指令发送成功')
+    } else {
+      console.error('一键返航失败:', result.message)
+      alert(`一键返航失败: ${result.message}`)
+    }
+    
+  } catch (error: any) {
+    console.error('一键返航失败:', error)
+    alert(`一键返航失败: ${error.message || error}`)
+  }
+}
+
+// 变焦控制处理函数
+const handleZoom = async (direction: 'in' | 'out') => {
+  try {
+    const action = direction === 'in' ? '放大' : '缩小'
+    console.log(`开始${action}...`)
+    
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      console.error('没有找到缓存的机场SN')
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    // 使用第一个机场SN
+    const dockSn = cachedDockSns[0]
+    console.log('使用机场SN:', dockSn)
+    
+    // 获取最佳的payload_index
+    const payloadIndex = getBestPayloadIndex()
+    if (!payloadIndex) {
+      console.error('没有找到合适的载荷摄像头')
+      alert('没有找到可用的载荷信息')
+      return
+    }
+    
+    // 获取当前变焦倍率并计算新倍率
+    const currentFactor = getCurrentZoomFactor()
+    let newFactor: number
+    
+    if (direction === 'in') {
+      // 放大：增加1倍
+      newFactor = currentFactor + 1
+    } else {
+      // 缩小：减少1倍
+      newFactor = currentFactor - 1
+    }
+    
+    // 检查倍率边界
+    if (newFactor < MIN_ZOOM) {
+      alert(`已达到最小变焦倍率 ${MIN_ZOOM}x`)
+      return
+    }
+    if (newFactor > MAX_ZOOM) {
+      alert(`已达到最大变焦倍率 ${MAX_ZOOM}x`)
+      return
+    }
+    
+    console.log(`${action}: ${currentFactor}x -> ${newFactor}x`)
+    
+    // 调用变焦API
+    const result = await controlApi.cameraZoom(dockSn, payloadIndex, newFactor)
+    console.log('变焦控制结果:', result)
+    
+    // 检查结果
+    if (result.code === 0) {
+      // 成功后更新缓存
+      setZoomFactor(newFactor)
+      console.log(`${action}成功，当前倍率: ${newFactor}x`)
+      // 可选：显示当前倍率提示
+      // alert(`${action}成功，当前倍率: ${newFactor}x`)
+    } else {
+      console.error(`${action}失败:`, result.message)
+      alert(`${action}失败: ${result.message}`)
+    }
+    
+  } catch (error: any) {
+    const action = direction === 'in' ? '放大' : '缩小'
+    console.error(`${action}失败:`, error)
+    alert(`${action}失败: ${error.message || error}`)
+  }
+}
+
+// DRC模式处理函数
+const handleEnterDrcMode = async () => {
+  try {
+    console.log('开始进入DRC模式...')
+    
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      console.error('没有找到缓存的机场SN')
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    // 使用第一个机场SN
+    const dockSn = cachedDockSns[0]
+    console.log('使用机场SN:', dockSn)
+    
+    // 调用DRC进入模式API
+    console.log('调用DRC进入模式API，使用机场SN:', dockSn)
+    const result = await drcApi.enterDrcMode(dockSn)
+    console.log('DRC模式结果:', result)
+    
+    // 检查结果并提示用户
+    if (result.code === 0) {
+      alert('进入DRC模式！')
+      console.log('DRC模式进入成功')
+    } else {
+      console.error('进入DRC模式失败:', result.message)
+      alert(`进入DRC模式失败: ${result.message}`)
+    }
+    
+  } catch (error: any) {
+    console.error('进入DRC模式失败:', error)
+    alert(`进入DRC模式失败: ${error.message || error}`)
+  }
+}
+
+// 开始控制
+const startControl = (type: string) => {
+  console.log(`开始控制: ${type}`)
+  
+  // 获取缓存的机场SN
+  const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+  if (cachedDockSns.length === 0) {
+    console.error('没有找到缓存的机场SN')
+    alert('没有找到可用的机场设备')
+    return
+  }
+  
+  const dockSn = cachedDockSns[0]
+  currentControlType.value = type
+  
+  // 立即发送第一次控制指令
+  sendControlCommand(dockSn, type)
+  
+  // 设置定时器，持续发送控制指令
+  controlInterval.value = setInterval(() => {
+    sendControlCommand(dockSn, type)
+  }, CONTROL_INTERVAL_MS)
+}
+
+// 停止控制
+const stopControl = () => {
+  console.log('停止控制')
+  
+  // 清除定时器
+  if (controlInterval.value) {
+    clearInterval(controlInterval.value)
+    controlInterval.value = null
+  }
+  
+  // DRC的简单控制不需要发送停止指令
+  // 只需要停止发送控制指令即可
+  
+  currentControlType.value = null
+}
+
+// 发送控制指令
+const sendControlCommand = async (dockSn: string, type: string) => {
+  const control: any = {
+    forward: 0,
+    right: 0,
+    up: 0,
+    turn_right: 0
+  }
+  
+  // 根据控制类型设置参数
+  switch (type) {
+    case 'forward':
+      control.forward = CONTROL_SPEED
+      break
+    case 'backward':
+      control.forward = -CONTROL_SPEED
+      break
+    case 'left':
+      control.right = -CONTROL_SPEED
+      break
+    case 'right':
+      control.right = CONTROL_SPEED
+      break
+    case 'up':
+      control.up = CONTROL_SPEED
+      break
+    case 'down':
+      control.up = -CONTROL_SPEED
+      break
+    case 'turn_left':
+      control.turn_right = -CONTROL_SPEED
+      break
+    case 'turn_right':
+      control.turn_right = CONTROL_SPEED
+      break
+  }
+  
+  try {
+    const result = await drcApi.simpleControl(dockSn, control)
+    console.log(`控制指令发送成功 (${type}):`, control)
+  } catch (error) {
+    console.error(`控制指令发送失败 (${type}):`, error)
+    // 发生错误时停止控制
+    stopControl()
+  }
+}
+
+// 组件卸载时清理定时器
+onBeforeUnmount(() => {
+  stopControl()
+  if (amapInstance.value) {
+    amapInstance.value.destroy()
+    amapInstance.value = null
+  }
+})
 </script>
 
 <style scoped>

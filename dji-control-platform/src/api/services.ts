@@ -381,7 +381,93 @@ export const livestreamApi = {
       protocol: string
     }>(`/livestream/devices/${deviceSn}/livestream/start`, data)
   }
-} 
+}
+
+// 控制权限接口
+export const controlApi = {
+  // 获取飞行控制权限
+  getFlightAuthority: (deviceSn: string) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/authority/flight`)
+  },
+
+  // 获取载荷控制权限
+  getPayloadAuthority: (deviceSn: string, payloadIndex: string) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/authority/payload`, {
+      payload_index: payloadIndex
+    })
+  },
+
+  // 云台方向控制
+  gimbalDirectionControl: (deviceSn: string, payloadIndex: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/gimbal/direction-control`, {
+      payload_index: payloadIndex,
+      direction: direction,
+      speed: 10,
+      locked: false
+    })
+  },
+
+  // 一键返航
+  returnHome: (deviceSn: string) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/return-home`)
+  },
+
+  // 摄像头变焦控制
+  cameraZoom: (deviceSn: string, payloadIndex: string, zoomFactor: number) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/camera/zoom`, {
+      payload_index: payloadIndex,
+      camera_type: "zoom",
+      zoom_factor: zoomFactor
+    })
+  }
+}
+
+// DRC模式接口
+export const drcApi = {
+  // 进入DRC模式
+  enterDrcMode: (deviceSn: string) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/drc/devices/${deviceSn}/drc/enter`, {
+      osd_frequency: 10,
+      hsi_frequency: 4
+    })
+  },
+
+  // 简单控制
+  simpleControl: (deviceSn: string, control: {
+    forward?: number
+    right?: number
+    up?: number
+    turn_right?: number
+  }) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/drc/devices/${deviceSn}/drc/control/simple`, {
+      forward: control.forward || 0,
+      right: control.right || 0,
+      up: control.up || 0,
+      turn_right: control.turn_right || 0
+    })
+  }
+}
 
 // 任务记录相关接口
 export const waylineApi = {
@@ -581,6 +667,6 @@ export const waylineApi = {
         status: number
         create_time: string
       }
-    }>(`/api/v1/wayline/workspaces/${workspaceId}/flight-tasks`, data)
+    }>(`/wayline/workspaces/${workspaceId}/flight-tasks`, data)
   }
 } 
