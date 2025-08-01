@@ -125,3 +125,29 @@ export interface Device {
   }
   full_device_type: string
 }
+
+export interface HmsAlert {
+  device_sn: string
+  level: number
+  module: number
+  hms_key: string
+  message_zh: string
+  message_en: string
+  id: number
+  hms_id: string
+  tid: string
+  bid: string
+  create_time: number
+  update_time: number
+  code: string
+  device_type: string
+  in_the_sky: number
+  imminent: number
+  args: {
+    sensor_index: number
+    component_index: number
+  }
+  raw_data: string
+  is_read: boolean
+  read_time: number
+}

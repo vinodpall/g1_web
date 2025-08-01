@@ -387,7 +387,30 @@
   text-align: center;
 }
 .mission-th:first-child,
-.mission-td:first-child,
+.mission-td:first-child {
+  flex: 0 0 100px;
+  max-width: 100px;
+  min-width: 100px;
+}
+.mission-th:nth-child(2),
+.mission-td:nth-child(2) {
+  flex: 0 0 200px;
+  max-width: 200px;
+  min-width: 200px;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+}
+.mission-th:nth-child(3),
+.mission-td:nth-child(3) {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+}
 .mission-th:last-child,
 .mission-td:last-child {
   flex: 0 0 120px;

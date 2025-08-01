@@ -25,10 +25,9 @@
             <div class="mission-top-row">
               <span class="mission-lib-label">航线库</span>
               <div class="mission-top-selects">
-                <Treeselect v-model="selectedRecordFolder" :options="folderOptions" :placeholder="recordFolderPlaceholder" class="treeselect-custom" :append-to-body="false" />
                 <div style="position: relative; display: inline-block;">
                   <select
-                    v-model="selectedRecordTrack"
+                    v-model="selectedWaylineFile"
                     ref="recordTrackSelectRef"
                     class="mission-select treeselect-track"
                     style="width: 90px;"
@@ -37,14 +36,13 @@
                     @blur="onRecordTrackSelectBlur"
                     @focus="onRecordTrackSelectFocus"
                     @change="onRecordTrackSelectChange"
+                    :disabled="waylineFileLoading"
                   >
-                    <option v-for="item in recordTrackList" :key="item" :value="item">{{ item }}</option>
+                    <option value="">全部</option>
+                    <option v-for="file in waylineFiles" :key="file.wayline_id" :value="file.wayline_id">
+                      {{ file.name }}
+                    </option>
                   </select>
-                  <span
-                    v-if="!selectedRecordTrack"
-                    class="select-placeholder"
-                    style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #888; pointer-events: none; font-size: 14px;"
-                  >请选择航线</span>
                   <span
                     class="custom-select-arrow"
                     @click="openRecordTrackSelect"
@@ -63,18 +61,37 @@
           <div class="mission-table-card card">
             <div class="mission-table-header">
               <div class="mission-th">序号</div>
+              <div class="mission-th">任务名称</div>
               <div class="mission-th">航线名称</div>
+              <div class="mission-th">任务类型</div>
+              <div class="mission-th">状态</div>
               <div class="mission-th">开始时间</div>
               <div class="mission-th">结束时间</div>
               <div class="mission-th">创建人</div>
             </div>
             <div class="mission-table-body">
-              <div class="mission-tr" v-for="(record, idx) in recordTableData" :key="record.id">
+              <div v-if="loading" class="mission-loading">
+                加载中...
+              </div>
+              <div v-else-if="error" class="mission-error">
+                {{ error }}
+              </div>
+              <div v-else-if="jobs.length === 0" class="mission-empty">
+                暂无任务记录
+              </div>
+              <div v-else class="mission-tr" v-for="(job, idx) in jobs" :key="job.job_id">
                 <div class="mission-td">{{ idx + 1 }}</div>
-                <div class="mission-td">{{ record.name }}</div>
-                <div class="mission-td">{{ record.startTime }}</div>
-                <div class="mission-td">{{ record.endTime }}</div>
-                <div class="mission-td">{{ record.creator }}</div>
+                <div class="mission-td">{{ job.name }}</div>
+                <div class="mission-td">{{ job.file_name || job.name }}</div>
+                <div class="mission-td">{{ getTaskTypeText(job.task_type) }}</div>
+                <div class="mission-td">
+                  <span :class="['status-badge', getStatusClass(job.status)]">
+                    {{ getStatusText(job.status) }}
+                  </span>
+                </div>
+                <div class="mission-td">{{ formatTimestamp(job.begin_time) }}</div>
+                <div class="mission-td">{{ formatTimestamp(job.completed_time) }}</div>
+                <div class="mission-td">{{ job.username }}</div>
               </div>
             </div>
           </div>
@@ -85,16 +102,44 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import Treeselect from 'vue3-treeselect'
-import 'vue3-treeselect/dist/vue3-treeselect.css'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
+import { useWaylineJobs, useDevices } from '../composables/useApi'
 
 const router = useRouter()
 const route = useRoute()
+
+// 使用任务记录API
+const { jobs, waylineFiles, loading, error, pagination, fetchJobs, fetchWaylineFiles, clearJobs } = useWaylineJobs()
+const { getCachedWorkspaceId } = useDevices()
+
+// 航线文件相关
+const selectedWaylineFile = ref('')
+const waylineFileLoading = ref(false)
+
+// 加载航线文件列表
+const loadWaylineFiles = async () => {
+  const workspaceId = getCachedWorkspaceId()
+  if (!workspaceId) {
+    console.error('未找到workspace_id，无法加载航线文件')
+    return
+  }
+  
+  waylineFileLoading.value = true
+  try {
+    await fetchWaylineFiles(workspaceId, {
+      page: 1,
+      page_size: 100
+    })
+  } catch (err) {
+    console.error('加载航线文件失败:', err)
+  } finally {
+    waylineFileLoading.value = false
+  }
+}
 
 const sidebarTabs = [
   { key: 'list', label: '航线管理', icon: trackListIcon, path: '/dashboard/mission' },
@@ -108,38 +153,110 @@ const handleTabClick = (tab: any) => {
   }
 }
 
-// 多级文件夹树结构，与Mission.vue一致
-const folderOptions = [
-  {
-    id: 'root',
-    label: '常熟素材采集',
-    children: [
-      {
-        id: 'a',
-        label: '东南街道',
-        children: [
-          { id: 'a-1', label: '路灯' },
-          { id: 'a-2', label: '大楼' }
-        ]
-      },
-      {
-        id: 'b',
-        label: '西北街道',
-        children: [
-          { id: 'b-1', label: '高架桥' }
-        ]
-      }
-    ]
+// 格式化时间戳
+const formatTimestamp = (timestamp: string) => {
+  if (!timestamp) return '-'
+  const date = new Date(timestamp)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+// 获取任务状态文本
+const getStatusText = (status: number) => {
+  const statusMap: { [key: number]: string } = {
+    [-1]: '未知状态',
+    [0]: '待执行',
+    [1]: '已发送',
+    [2]: '执行中',
+    [3]: '已暂停',
+    [4]: '已取消',
+    [5]: '执行成功',
+    [6]: '执行失败'
   }
-]
-const selectedRecordFolder = ref(null)
-const recordFolderPlaceholder = computed(() => {
-  const val = selectedRecordFolder.value;
-  return val ? '' : '请选择文件夹';
+  return statusMap[status] || '未知'
+}
+
+// 获取任务状态样式
+const getStatusClass = (status: number) => {
+  const statusClassMap: { [key: number]: string } = {
+    [-1]: 'status-unknown',
+    [0]: 'status-pending',
+    [1]: 'status-sent',
+    [2]: 'status-running',
+    [3]: 'status-paused',
+    [4]: 'status-cancelled',
+    [5]: 'status-success',
+    [6]: 'status-failed'
+  }
+  return statusClassMap[status] || 'status-unknown'
+}
+
+// 获取任务类型文本
+const getTaskTypeText = (taskType: number) => {
+  const taskTypeMap: { [key: number]: string } = {
+    [0]: '立即任务',
+    [1]: '定时任务',
+    [2]: '条件任务'
+  }
+  return taskTypeMap[taskType] || '未知'
+}
+
+// 加载任务记录数据
+const loadJobRecords = async () => {
+  const workspaceId = getCachedWorkspaceId()
+  console.log('获取到的workspace_id:', workspaceId)
+  console.log('localStorage中的workspace_id:', localStorage.getItem('workspace_id'))
+  console.log('localStorage中的user:', localStorage.getItem('user'))
+  console.log('当前选中的航线文件:', selectedWaylineFile.value)
+  
+  // 先清空现有数据
+  clearJobs()
+  
+  if (!workspaceId) {
+    console.error('未找到workspace_id，无法加载任务记录')
+    // 尝试从用户信息中获取
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr)
+        console.log('从localStorage解析的用户数据:', userData)
+        if (userData.workspace_id) {
+          console.log('从用户数据中找到workspace_id:', userData.workspace_id)
+          await fetchJobs(userData.workspace_id, {
+            page: 1,
+            page_size: 10,
+            file_id: selectedWaylineFile.value || undefined
+          })
+          return
+        }
+      } catch (err) {
+        console.error('解析用户数据失败:', err)
+      }
+    }
+    return
+  }
+  
+  await fetchJobs(workspaceId, {
+    page: 1,
+    page_size: 10,
+    file_id: selectedWaylineFile.value || undefined
+  })
+}
+
+// 页面加载时获取数据
+onMounted(async () => {
+  await Promise.all([
+    loadWaylineFiles(),
+    loadJobRecords()
+  ])
 })
 
-const recordTrackList = ['航线1', '航线2', '航线3']
-const selectedRecordTrack = ref('')
 const recordTrackSelectRef = ref<HTMLSelectElement | null>(null)
 const isRecordTrackSelectOpen = ref(false)
 function openRecordTrackSelect() {
@@ -157,6 +274,9 @@ function onRecordTrackSelectFocus() {
 }
 function onRecordTrackSelectChange() {
   isRecordTrackSelectOpen.value = false
+  // 航线切换时清空当前数据并刷新任务列表
+  console.log('航线切换，当前选中:', selectedWaylineFile.value)
+  loadJobRecords()
 }
 function onRecordTrackSelectMousedown() {
   isRecordTrackSelectOpen.value = true
@@ -169,16 +289,85 @@ function onRecordTrackSelectKeydown(e: KeyboardEvent) {
     isRecordTrackSelectOpen.value = false
   }
 }
-
-const recordTableData = Array.from({ length: 18 }, (_, i) => ({
-  id: i + 1,
-  name: '楼宇巡检',
-  startTime: '2025-07-06 15:47:20',
-  endTime: '2025-07-06 15:57:40',
-  creator: '张三'
-}))
 </script>
 
 <style>
 @import './mission-common.css';
+
+/* 任务状态样式 */
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-pending {
+  background: rgba(144, 147, 153, 0.2);
+  color: #909399;
+  border: 1px solid rgba(144, 147, 153, 0.3);
+}
+
+.status-sent {
+  background: rgba(64, 158, 255, 0.2);
+  color: #409eff;
+  border: 1px solid rgba(64, 158, 255, 0.3);
+}
+
+.status-running {
+  background: rgba(64, 158, 255, 0.2);
+  color: #409eff;
+  border: 1px solid rgba(64, 158, 255, 0.3);
+}
+
+.status-paused {
+  background: rgba(230, 162, 60, 0.2);
+  color: #e6a23c;
+  border: 1px solid rgba(230, 162, 60, 0.3);
+}
+
+.status-cancelled {
+  background: rgba(144, 147, 153, 0.2);
+  color: #909399;
+  border: 1px solid rgba(144, 147, 153, 0.3);
+}
+
+.status-completed {
+  background: rgba(103, 194, 58, 0.2);
+  color: #67c23a;
+  border: 1px solid rgba(103, 194, 58, 0.3);
+}
+
+.status-success {
+  background: rgba(103, 194, 58, 0.2);
+  color: #67c23a;
+  border: 1px solid rgba(103, 194, 58, 0.3);
+}
+
+.status-failed {
+  background: rgba(245, 108, 108, 0.2);
+  color: #f56c6c;
+  border: 1px solid rgba(245, 108, 108, 0.3);
+}
+
+.status-unknown {
+  background: rgba(144, 147, 153, 0.2);
+  color: #909399;
+  border: 1px solid rgba(144, 147, 153, 0.3);
+}
+
+/* 加载和错误状态样式 */
+.mission-loading,
+.mission-error,
+.mission-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #909399;
+  font-size: 14px;
+}
+
+.mission-error {
+  color: #f56c6c;
+}
 </style>

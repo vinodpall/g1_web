@@ -83,7 +83,7 @@ const router = createRouter({
         {
           path: 'alarm-log',
           name: 'AlarmLog',
-          component: () => import('../views/AlarmLog.vue'),
+          component: () => import('../views/DeviceManage.vue'),
           meta: { 
             requiresAuth: true
           }

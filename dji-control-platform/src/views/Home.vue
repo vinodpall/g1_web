@@ -257,16 +257,41 @@
             <div class="player_container">
               <div class="player_item">
                 <div class="player_box" id="player_box1">
-                  <!-- 视频播放器将在这里初始化 -->
+                  <!-- 视频播放器 -->
+                  <video 
+                    ref="videoElement"
+                    style="width: 100%; height: 100%; object-fit: cover;"
+                    muted
+                    playsinline
+                    webkit-playsinline
+                  >
+                    您的浏览器不支持视频播放
+                  </video>
                 </div>
               </div>
             </div>
           </div>
           <div class="boxGrid-box-bottom">
             <div class="left-controls">
-              <svg class="icon svg-icon" aria-hidden="true">
-                <use xlink:href="#icon-jiugongge"></use>
-              </svg>
+              <!-- 视频时间显示 -->
+              <div class="video-time">
+                <span class="time-display">{{ currentTime }}</span>
+              </div>
+              <!-- 播放控制按钮 -->
+              <div class="play-controls">
+                <button 
+                  class="play-btn" 
+                  @click="togglePlay"
+                  :class="{ 'paused': !isVideoPlaying }"
+                >
+                  <svg v-if="isVideoPlaying" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                  </svg>
+                  <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="right-controls" @click="toggleScreenMenu">
               <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
@@ -299,23 +324,23 @@
             <thead>
               <tr>
                 <th>设备名称</th>
-                <th>识别时间</th>
+                <th>报警内容</th>
                 <th>报警类型</th>
                 <th>告警等级</th>
-                <th>报警内容</th>
+                <th>告警时间</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(item, index) in currentAlarmData" :key="index">
                 <td>{{ item.deviceName }}</td>
-                <td>{{ item.time }}</td>
+                <td>{{ item.content }}</td>
                 <td>{{ item.type }}</td>
                 <td>
                   <span :style="{ color: item.level === '严重' ? '#FF8000' : '' }">
                     {{ item.level }}
                   </span>
                 </td>
-                <td>{{ item.content }}</td>
+                <td>{{ item.time }}</td>
               </tr>
             </tbody>
           </table>
@@ -432,44 +457,23 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { useHmsAlerts, useDevices } from '../composables/useApi'
 import * as echarts from 'echarts'
 import AMapLoader from '@amap/amap-jsapi-loader'
+import flvjs from 'flv.js'
 
-// 当前选中的标签
+const router = useRouter()
+
+// 使用HMS报警API和设备管理API
+const { hmsAlerts, loading, error, fetchDeviceHms, setAllAlerts } = useHmsAlerts()
+const { getCachedDeviceSns } = useDevices()
+
+// 当前标签页
 const currentTab = ref('device')
 
-// 设置任务状态（正常/异常）
-const taskStatus = ref('normal') // 'normal' 或 'error'
-
-// 切换任务状态
-const toggleTaskStatus = () => {
-  taskStatus.value = taskStatus.value === 'normal' ? 'error' : 'normal'
-}
-
 // 设备告警数据
-const deviceAlarmData = ref([
-  {
-    deviceName: 'M4TD',
-    time: '2025-07-01 12:56:24',
-    type: '常规告警',
-    level: '严重',
-    content: '风速过大'
-  },
-  {
-    deviceName: 'M4TD',
-    time: '2025-07-01 12:56:24',
-    type: '常规告警',
-    level: '严重',
-    content: '雷雨天气'
-  },
-  {
-    deviceName: 'M4TD',
-    time: '2025-07-01 12:56:24',
-    type: '常规告警',
-    level: '严重',
-    content: '电池电量低'
-  }
-])
+const deviceAlarmData = ref<any[]>([])
 
 // 巡检告警数据
 const inspectionAlarmData = ref([
@@ -495,6 +499,89 @@ const inspectionAlarmData = ref([
     content: '呼吸灯缺失'
   }
 ])
+
+// 获取最新的三条报警数据
+const loadLatestAlarmData = async () => {
+  try {
+    console.log('首页开始获取最新报警数据')
+    const { dockSns, droneSns } = getCachedDeviceSns()
+    const allSns = [...dockSns, ...droneSns]
+    
+    if (allSns.length === 0) {
+      console.log('没有缓存设备，跳过获取报警数据')
+      return
+    }
+    
+    // 获取所有设备的报警数据
+    const allAlerts: any[] = []
+    
+    for (const sn of allSns) {
+      try {
+        console.log('加载设备报警数据:', sn)
+        const response = await fetchDeviceHms(sn)
+        if (response && response.length > 0) {
+          allAlerts.push(...response)
+        }
+      } catch (err) {
+        console.error(`获取设备 ${sn} 报警数据失败:`, err)
+      }
+    }
+    
+    // 按时间排序，取最新的三条
+    const sortedAlerts = allAlerts
+      .sort((a, b) => b.create_time - a.create_time)
+      .slice(0, 3)
+    
+    // 转换为首页需要的格式
+    deviceAlarmData.value = sortedAlerts.map(alert => {
+      const deviceType = dockSns.includes(alert.device_sn) ? '机场' : '无人机'
+      return {
+        deviceName: alert.device_sn,
+        time: formatTimestamp(alert.create_time),
+        type: deviceType,
+        level: alert.level === 1 ? '普通' : '严重',
+        content: alert.message_zh
+      }
+    })
+    
+    console.log('首页报警数据加载完成:', deviceAlarmData.value)
+  } catch (err) {
+    console.error('获取最新报警数据失败:', err)
+  }
+}
+
+// 格式化时间
+const formatTime = (seconds: number) => {
+  // 处理NaN和Infinity的情况
+  if (isNaN(seconds) || !isFinite(seconds) || seconds < 0) {
+    return '00:00'
+  }
+  
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+// 格式化时间戳为日期时间字符串
+const formatTimestamp = (timestamp: number) => {
+  const date = new Date(timestamp)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+// 设置任务状态（正常/异常）
+const taskStatus = ref('normal') // 'normal' 或 'error'
+
+// 切换任务状态
+const toggleTaskStatus = () => {
+  taskStatus.value = taskStatus.value === 'normal' ? 'error' : 'normal'
+}
 
 // 计算当前显示的数据
 const currentAlarmData = computed(() => {
@@ -537,6 +624,282 @@ const lineChartRef = ref<HTMLElement | null>(null)
 // 地图容器ref和地图实例
 const mapContainer = ref<HTMLElement | null>(null)
 let amapInstance: any = null
+
+// 视频播放器相关
+const videoStreamUrl = ref<string>('')
+const videoPlayer = ref<any>(null)
+const videoElement = ref<HTMLVideoElement | null>(null)
+
+// 视频播放控制相关
+const isVideoPlaying = ref(false)
+const currentTime = ref('00:00')
+const totalTime = ref('00:00')
+
+// 初始化视频播放器
+const initVideoPlayer = () => {
+  const savedVideoUrl = localStorage.getItem('video_stream_url')
+  if (savedVideoUrl) {
+    videoStreamUrl.value = savedVideoUrl
+    console.log('从localStorage获取到视频流地址:', savedVideoUrl)
+    
+    // 延迟初始化播放器，确保DOM已经渲染
+    nextTick(() => {
+      startVideoPlayback()
+    })
+  } else {
+    console.log('没有找到视频流地址')
+  }
+}
+
+// 开始视频播放
+const startVideoPlayback = () => {
+  if (!videoElement.value || !videoStreamUrl.value) {
+    console.log('视频元素或地址不存在')
+    return
+  }
+
+  console.log('开始视频播放，地址:', videoStreamUrl.value)
+
+  try {
+    // 销毁之前的播放器实例
+    if (videoPlayer.value) {
+      videoPlayer.value.destroy()
+      videoPlayer.value = null
+    }
+
+    // 添加视频事件监听器
+    if (videoElement.value) {
+      videoElement.value.addEventListener('play', () => {
+        isVideoPlaying.value = true
+      })
+      
+      videoElement.value.addEventListener('pause', () => {
+        isVideoPlaying.value = false
+      })
+      
+      videoElement.value.addEventListener('timeupdate', updateVideoTime)
+      
+      videoElement.value.addEventListener('loadedmetadata', () => {
+        updateVideoTime()
+      })
+    }
+
+    // 检查是否是webrtc地址
+    if (videoStreamUrl.value.startsWith('webrtc://')) {
+      console.log('检测到webrtc地址，使用WebRTC播放')
+      startWebRTCPlayback()
+    } else if (videoStreamUrl.value.startsWith('rtmp://')) {
+      console.log('检测到rtmp地址，使用flv.js播放')
+      
+      if (flvjs.isSupported()) {
+        console.log('浏览器支持flv.js，开始播放flv视频')
+        
+        // 将rtmp地址转换为http-flv地址
+        const flvUrl = videoStreamUrl.value.replace(/^rtmp:\/\/[^\/]+/, 'http://10.10.1.3:8000')
+        console.log('转换后的flv地址:', flvUrl)
+        
+        // 创建flv播放器
+        videoPlayer.value = flvjs.createPlayer({
+          type: 'flv',
+          url: flvUrl,
+          isLive: true,
+          hasAudio: false,
+          hasVideo: true
+        }, {
+          enableStashBuffer: false,
+          stashInitialSize: 128,
+          enableWorker: true,
+          lazyLoad: false,
+          autoCleanupSourceBuffer: true
+        })
+
+        // 绑定到video元素
+        videoPlayer.value.attachMediaElement(videoElement.value)
+        videoPlayer.value.load()
+        videoPlayer.value.play()
+
+        console.log('flv播放器初始化成功')
+      } else {
+        console.error('浏览器不支持flv.js')
+      }
+    } else {
+      console.log('未知地址格式，尝试直接播放:', videoStreamUrl.value)
+      videoElement.value.src = videoStreamUrl.value
+      videoElement.value.load()
+      videoElement.value.play().catch(error => {
+        console.error('视频播放失败:', error)
+      })
+    }
+  } catch (error) {
+    console.error('视频播放器初始化失败:', error)
+  }
+}
+
+// WebRTC播放器实例
+let pc: RTCPeerConnection | null = null
+let isPlaying = false
+
+// 构建SRS API地址
+const buildApiUrl = (webrtcUrl: string) => {
+  try {
+    // webrtc://server:8000/app/stream -> http://server:1985
+    const url = new URL(webrtcUrl)
+    return `http://${url.hostname}:1985`
+  } catch (error) {
+    console.error('解析WebRTC URL失败:', error)
+    // 后备方案
+    return webrtcUrl.replace('webrtc://', 'http://').replace(':8000', ':1985').split('/')[0]
+  }
+}
+
+// 开始WebRTC播放
+const startWebRTCPlayback = async () => {
+  if (isPlaying) {
+    console.log('WebRTC已在播放中，先停止当前播放')
+    stopWebRTCPlayback()
+  }
+
+  const serverUrl = videoStreamUrl.value
+  if (!serverUrl) {
+    console.error('请输入服务器地址')
+    return
+  }
+
+  try {
+    console.log('正在连接WebRTC...')
+    
+    // 确保之前的连接已清理
+    if (pc) {
+      pc.close()
+      pc = null
+    }
+    
+    // 创建新的RTCPeerConnection
+    pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' }
+      ]
+    })
+
+    // 处理远程流
+    pc.ontrack = (e) => {
+      console.log('收到远程流:', e.streams[0])
+      if (videoElement.value) {
+        videoElement.value.srcObject = e.streams[0]
+        videoElement.value.play().catch(err => console.error('播放失败:', err))
+      }
+    }
+
+    // ICE连接状态监听
+    pc.oniceconnectionstatechange = () => {
+      console.log('ICE连接状态:', pc?.iceConnectionState)
+      if (pc?.iceConnectionState === 'connected') {
+        console.log('WebRTC连接成功，正在播放...')
+        isPlaying = true
+      } else if (pc?.iceConnectionState === 'failed') {
+        console.error('WebRTC连接失败')
+        stopWebRTCPlayback()
+      }
+    }
+
+    // 创建offer
+    const offer = await pc.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true
+    })
+    
+    await pc.setLocalDescription(offer)
+
+    // 构建SRS API地址
+    const apiUrl = buildApiUrl(serverUrl)
+    console.log('API地址:', apiUrl)
+    
+    console.log('发送的请求数据:', {
+      sdp: offer.sdp,
+      streamurl: serverUrl
+    })
+
+    const response = await fetch(`${apiUrl}/rtc/v1/play/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sdp: offer.sdp,
+        streamurl: serverUrl
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`服务器响应错误: ${response.status}`)
+    }
+
+    const data = await response.json()
+    
+    if (data.code !== 0) {
+      throw new Error(`SRS错误: ${data.msg}`)
+    }
+
+    // 设置远程描述
+    await pc.setRemoteDescription({
+      type: 'answer',
+      sdp: data.sdp
+    })
+
+    console.log('WebRTC连接建立成功')
+
+  } catch (error) {
+    console.error('WebRTC播放失败:', error)
+    stopWebRTCPlayback()
+  }
+}
+
+// 停止WebRTC播放
+const stopWebRTCPlayback = () => {
+  if (pc) {
+    pc.close()
+    pc = null
+  }
+
+  if (videoElement.value) {
+    videoElement.value.srcObject = null
+  }
+  
+  isPlaying = false
+  console.log('WebRTC播放已停止')
+}
+
+// 停止视频播放
+const stopVideoPlayback = () => {
+  // 停止WebRTC播放
+  stopWebRTCPlayback()
+  
+  if (videoPlayer.value) {
+    videoPlayer.value.pause()
+    videoPlayer.value.unload()
+    videoPlayer.value.detachMediaElement()
+    videoPlayer.value.destroy()
+    videoPlayer.value = null
+    console.log('flv播放器已停止')
+  }
+  
+  if (videoElement.value) {
+    videoElement.value.pause()
+    videoElement.value.src = ''
+    videoElement.value.load()
+    console.log('原生video播放器已停止')
+  }
+}
+
+// 重新加载视频
+const reloadVideo = () => {
+  console.log('重新加载视频')
+  stopVideoPlayback()
+  // 增加延迟确保资源完全清理
+  setTimeout(() => {
+    startVideoPlayback()
+  }, 500)
+}
 
 // 基本功能函数
 const handleDispatchTask = () => {
@@ -903,8 +1266,24 @@ const initLineChart = () => {
   lineChart.setOption(option)
 }
 
+// 监听视频流地址变化
+watch(() => videoStreamUrl.value, (newUrl) => {
+  if (newUrl) {
+    console.log('视频流地址已更新，重新初始化播放器')
+    nextTick(() => {
+      startVideoPlayback()
+    })
+  }
+})
+
 // 组件挂载时初始化
 onMounted(() => {
+  // 获取最新报警数据
+  loadLatestAlarmData()
+  
+  // 初始化视频播放器
+  initVideoPlayer()
+  
   // 初始化图表
   nextTick(() => {
     setTimeout(() => {
@@ -944,6 +1323,15 @@ onMounted(() => {
 
 // 组件卸载时清理
 onBeforeUnmount(() => {
+  // 停止视频播放
+  stopVideoPlayback()
+  
+  // 清理WebRTC资源
+  if (pc) {
+    pc.close()
+    pc = null
+  }
+  
   if (amapInstance) {
     amapInstance.destroy()
     amapInstance = null
@@ -961,6 +1349,39 @@ onBeforeUnmount(() => {
     lineChart.dispose()
   }
 })
+
+// 切换播放/暂停
+const togglePlay = () => {
+  if (!videoElement.value) return
+  
+  if (isVideoPlaying.value) {
+    videoElement.value.pause()
+  } else {
+    videoElement.value.play()
+  }
+}
+
+// 更新视频时间
+const updateVideoTime = () => {
+  if (!videoElement.value) return
+  
+  const current = videoElement.value.currentTime
+  const duration = videoElement.value.duration
+  
+  // 处理无效的currentTime
+  if (isNaN(current) || !isFinite(current) || current < 0) {
+    currentTime.value = '00:00'
+  } else {
+    currentTime.value = formatTime(current)
+  }
+  
+  // 处理无效的duration
+  if (duration && !isNaN(duration) && isFinite(duration) && duration > 0) {
+    totalTime.value = formatTime(duration)
+  } else {
+    totalTime.value = '00:00'
+  }
+}
 </script>
 
 <style scoped>
@@ -1679,17 +2100,17 @@ onBeforeUnmount(() => {
 
 .tableOne th:nth-child(2),
 .tableOne td:nth-child(2) {
-  width: 25%;
+  width: 35%;
 }
 
 .tableOne th:nth-child(3),
 .tableOne td:nth-child(3) {
-  width: 20%;
+  width: 15%;
 }
 
 .tableOne th:nth-child(4),
 .tableOne td:nth-child(4) {
-  width: 15%;
+  width: 10%;
 }
 
 .tableOne th:nth-child(5),
@@ -3065,5 +3486,101 @@ onBeforeUnmount(() => {
   font-size: 22px;
   cursor: pointer;
   z-index: 41;
+}
+
+.video-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.time-display,
+.time-separator,
+.time-display {
+  font-size: 14px;
+}
+
+.play-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.play-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.play-btn svg {
+  width: 24px;
+  height: 24px;
+  fill: #59C0FC;
+}
+
+.paused {
+  fill: #FF4D4F;
+}
+
+.left-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.video-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+}
+
+.time-display {
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+}
+
+.time-separator {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.play-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.play-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-btn:hover {
+  background: rgba(89, 192, 252, 0.1);
+}
+
+.play-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: #59C0FC;
+  transition: fill 0.3s ease;
+}
+
+.play-btn.paused svg {
+  fill: #FF4D4F;
+}
+
+.play-btn.paused:hover {
+  background: rgba(255, 77, 79, 0.1);
 }
 </style>

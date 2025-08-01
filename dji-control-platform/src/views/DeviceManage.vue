@@ -17,7 +17,9 @@
     <main class="main-content">
       <div class="main-flex">
         <section class="right-panel">
-          <AlarmLog v-if="currentTab === 'warning'" />
+          <AlarmLog 
+            v-if="currentTab === 'warning'" 
+          />
           <template v-else>
             <!-- 筛选区 -->
             <div class="device-top-card card">
@@ -196,6 +198,15 @@ const route = useRoute()
 // 使用设备管理API
 const { devices, loading, error, fetchDevices } = useDevices()
 
+// 加载设备列表
+const loadDevices = async () => {
+  try {
+    await fetchDevices()
+  } catch (err) {
+    console.error('获取设备列表失败:', err)
+  }
+}
+
 const sidebarTabs = [
   { key: 'manage', label: '设备管理', icon: equipmengStoreIcon },
   { key: 'warning', label: '设备告警', icon: equipmentWarningsIcon }
@@ -210,7 +221,18 @@ const syncTabWithRoute = () => {
     currentTab.value = 'manage'
   }
 }
-onMounted(syncTabWithRoute)
+
+// 页面加载时获取设备列表和同步路由
+onMounted(async () => {
+  console.log('DeviceManage组件加载')
+  // 同步路由状态
+  syncTabWithRoute()
+  // 加载设备列表
+  await loadDevices()
+  console.log('设备列表加载完成:', devices.value)
+})
+
+// 监听路由变化
 watch(() => route.path, syncTabWithRoute)
 
 const handleTabClick = (key: string) => {
@@ -312,15 +334,6 @@ const deviceList = ref([
     img: m4tdImg
   }
 ])
-
-// 页面加载时获取设备列表
-onMounted(async () => {
-  try {
-    await fetchDevices()
-  } catch (err) {
-    console.error('获取设备列表失败:', err)
-  }
-})
 
 // 辅助函数：获取设备图片
 const getDeviceImage = (device: any) => {

@@ -1,5 +1,5 @@
 import { apiClient, type ApiResponse, type PaginatedResponse } from './config'
-import type { User, Dock, Drone, Mission, MissionRecord, Alert, Role, Device } from '../types'
+import type { User, Dock, Drone, Mission, MissionRecord, Alert, Role, Device, HmsAlert } from '../types'
 
 // 认证相关接口
 export const authApi = {
@@ -328,5 +328,259 @@ export const deviceApi = {
   // 删除设备
   deleteDevice: (deviceSn: string) => {
     return apiClient.delete(`/devices/${deviceSn}`)
+  }
+} 
+
+// HMS报警日志接口
+export const hmsApi = {
+  // 获取设备的HMS报警日志
+  getDeviceHms: (deviceSn: string) => {
+    return apiClient.get<HmsAlert[]>(`/hms/devices/${deviceSn}/hms`)
+  }
+}
+
+// 视频流接口
+export const livestreamApi = {
+  // 获取视频容量信息
+  getCapacity: () => {
+    return apiClient.get<{
+      available_devices: Array<{
+        sn: string
+        available_video_number: number
+        coexist_video_number_max: number
+        camera_list: Array<{
+          camera_index: string
+          available_video_number: number
+          coexist_video_number_max: number
+          video_list: Array<{
+            video_index: string
+            video_type: string
+            switchable_video_types: string[]
+          }>
+        }>
+      }>
+      total_devices: number
+      total_cameras: number
+      total_videos: number
+    }>('/livestream/capacity')
+  },
+
+  // 启动视频流
+  startLivestream: (deviceSn: string, data: {
+    video_id: string
+  }) => {
+    return apiClient.post<{
+      message: string
+      bid: string
+      push_url: string
+      play_urls: {
+        rtmp: string
+        http_flv: string
+        hls: string
+      }
+      protocol: string
+    }>(`/livestream/devices/${deviceSn}/livestream/start`, data)
+  }
+} 
+
+// 任务记录相关接口
+export const waylineApi = {
+  // 获取任务记录列表
+  getJobs: (workspaceId: string, params?: { 
+    page?: number; 
+    page_size?: number; 
+    status?: number;
+    task_type?: number;
+    wayline_type?: number;
+    file_id?: string;
+  }) => {
+    return apiClient.get<{
+      code: number
+      message: string
+      data: {
+        data: Array<{
+          job_id: string
+          name: string
+          file_id: string
+          file_name: string
+          dock_sn: string
+          dock_name: string
+          workspace_id: string
+          task_type: number
+          wayline_type: number
+          status: number
+          progress: number | null
+          out_of_control_action: number
+          rth_altitude: number
+          media_count: number
+          uploaded_count: number
+          username: string
+          begin_time: string
+          end_time: string | null
+          execute_time: string | null
+          completed_time: string | null
+          error_code: string | null
+          create_time: string
+          update_time: string
+          uploading: boolean
+        }>
+        pagination: {
+          page: number
+          page_size: number
+          total: number
+          pages: number
+        }
+      }
+    }>(`/wayline/workspaces/${workspaceId}/jobs`, params)
+  },
+
+  // 获取航线文件列表
+  getWaylineFiles: (workspaceId: string, params?: {
+    page?: number
+    page_size?: number
+    name?: string
+  }) => {
+    return apiClient.get<{
+      code: number
+      message: string
+      data: {
+        data: Array<{
+          wayline_id: string
+          name: string
+          object_key: string
+          sign: string
+          drone_model_key: string
+          payload_model_keys: string
+          template_types: string
+          favorited: boolean
+          create_time: string
+          update_time: string
+          waypoint_count: number
+          action_count: number
+          action_types: string[]
+          height_range: {
+            min: number
+            max: number
+          }
+        }>
+        pagination: {
+          total: number
+          page: number
+          page_size: number
+        }
+      }
+    }>(`/wayline/workspaces/${workspaceId}/files`, params)
+  },
+
+  // 获取航线详情
+  getWaylineDetail: (workspaceId: string, waylineId: string) => {
+    return apiClient.get<{
+      code: number
+      message: string
+      data: {
+        wayline_id: string
+        name: string
+        object_key: string
+        sign: string
+        drone_model_key: string
+        payload_model_keys: string
+        template_types: string
+        favorited: boolean
+        create_time: string
+        update_time: string
+        mission_config: {
+          flyToWaylineMode: string
+          finishAction: string
+          exitOnRCLost: string
+          executeRCLostAction: string
+          takeOffSecurityHeight: string
+          globalTransitionalSpeed: string
+          globalRTHHeight: string
+          droneInfo: any
+          payloadInfo: any
+        }
+        waylines: Array<{
+          templateId: string
+          waylineId: string
+          executeHeightMode: string
+          autoFlightSpeed: string
+          waypointCount: number
+          waypoints: Array<{
+            index: number
+            coordinates: [number, number]
+            executeHeight: number
+            waypointSpeed: number
+            headingParam: {
+              mode: string
+              angle: string
+              pathMode: string
+            }
+            turnParam: {
+              mode: string
+              dampingDist: string
+            }
+            actions: Array<{
+              actionId: string
+              type: string
+              typeName: string
+              params: any
+              trigger: {
+                type: string
+                param: string
+              }
+              groupInfo: {
+                actionGroupId: string
+                startIndex: string
+                endIndex: string
+                mode: string
+              }
+            }>
+          }>
+        }>
+        summary: {
+          totalWaypoints: number
+          totalActions: number
+          actionTypes: string[]
+          waypointRange: {
+            minHeight: number
+            maxHeight: number
+          }
+          speedRange: {
+            min: number
+            max: number
+          }
+        }
+      }
+    }>(`/wayline/workspaces/${workspaceId}/files/${waylineId}`)
+  },
+
+  // 创建任务
+  createJob: (workspaceId: string, data: {
+    name: string
+    dock_sn: string
+    file_id: string
+    task_type: number
+    out_of_control_action: number
+    rth_altitude: number
+    rth_mode: number
+    exit_wayline_when_rc_lost: number
+    wayline_precision_type: number
+    begin_time?: string | null
+    end_time?: string | null
+  }) => {
+    return apiClient.post<{
+      code: number
+      message: string
+      data: {
+        job_id: string
+        name: string
+        file_id: string
+        dock_sn: string
+        workspace_id: string
+        task_type: number
+        status: number
+        create_time: string
+      }
+    }>(`/api/v1/wayline/workspaces/${workspaceId}/flight-tasks`, data)
   }
 } 
