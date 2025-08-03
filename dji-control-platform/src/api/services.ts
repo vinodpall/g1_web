@@ -393,6 +393,14 @@ export const controlApi = {
     }>(`/control/devices/${deviceSn}/authority/flight`)
   },
 
+  // 释放飞行控制权限
+  releaseFlightAuthority: (deviceSn: string) => {
+    return apiClient.delete<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/authority/flight`)
+  },
+
   // 获取载荷控制权限
   getPayloadAuthority: (deviceSn: string, payloadIndex: string) => {
     return apiClient.post<{
@@ -401,6 +409,36 @@ export const controlApi = {
     }>(`/control/devices/${deviceSn}/authority/payload`, {
       payload_index: payloadIndex
     })
+  },
+
+  // 释放载荷控制权限
+  releasePayloadAuthority: (deviceSn: string, payloadIndex: string) => {
+    return apiClient.delete<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/authority/payload/${payloadIndex}`)
+  },
+
+  // 获取权限状态
+  getAuthorityStatus: (deviceSn: string) => {
+    return apiClient.get<{
+      message: string
+      code: number
+      data: {
+        flight_authority: {
+          username: string
+          user_id: string
+          obtained_at: number
+        } | null
+        payload_authorities: {
+          [payloadIndex: string]: {
+            username: string
+            user_id: string
+            obtained_at: number
+          }
+        }
+      }
+    }>(`/control/devices/${deviceSn}/authority`)
   },
 
   // 云台方向控制
@@ -439,6 +477,33 @@ export const controlApi = {
 
 // DRC模式接口
 export const drcApi = {
+  // 检查DRC是否准备就绪
+  checkDrcReady: (deviceSn: string) => {
+    return apiClient.get<{
+      code: number
+      message: string
+      data: {
+        ready: boolean
+        checks: {
+          online: boolean
+          mode_valid: boolean
+          drone_flying: boolean
+          battery_ok: boolean
+          no_emergency: boolean
+          position_valid: boolean
+        }
+        failed_checks: string[]
+        current_status: {
+          mode_code: number
+          drone_in_dock: number
+          height: number
+          battery_percent: number
+          emergency_state: number
+        }
+      }
+    }>(`/drc/devices/${deviceSn}/drc/ready`)
+  },
+
   // 进入DRC模式
   enterDrcMode: (deviceSn: string) => {
     return apiClient.post<{

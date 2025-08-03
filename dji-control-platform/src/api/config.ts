@@ -41,11 +41,11 @@ export class ApiClient {
       Object.assign(headers, options.headers)
     }
     
-    // 调试信息：检查Authorization头
-    console.log('API请求URL:', url)
-    console.log('完整请求URL:', window.location.origin + url)
-    console.log('请求头:', headers)
-    console.log('Authorization头:', headers['Authorization'])
+    // 调试信息：检查Authorization头（开发时使用，生产环境注释）
+    // console.log('API请求URL:', url)
+    // console.log('完整请求URL:', window.location.origin + url)
+    // console.log('请求头:', headers)
+    // console.log('Authorization头:', headers['Authorization'])
     
     const config: RequestInit = {
       headers,

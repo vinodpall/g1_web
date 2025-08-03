@@ -260,7 +260,7 @@
                   <!-- 视频播放器 -->
                   <video 
                     ref="videoElement"
-                    style="width: 100%; height: 100%; object-fit: cover;"
+                    style="width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;"
                     muted
                     playsinline
                     webkit-playsinline
@@ -291,7 +291,16 @@
                     <path d="M8 5v14l11-7z"/>
                   </svg>
                 </button>
+                <!-- 全屏按钮放在播放按钮右侧 -->
+                <button class="fullscreen-btn" @click="toggleFullscreen" title="全屏">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                  </svg>
+                </button>
               </div>
+            </div>
+            <div class="center-controls">
+              <!-- 中央控制区域现在为空 -->
             </div>
             <div class="right-controls" @click="toggleScreenMenu">
               <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
@@ -669,6 +678,9 @@ const startVideoPlayback = () => {
 
     // 添加视频事件监听器
     if (videoElement.value) {
+      // 强制设置视频样式
+      videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+      
       videoElement.value.addEventListener('play', () => {
         isVideoPlaying.value = true
       })
@@ -681,6 +693,11 @@ const startVideoPlayback = () => {
       
       videoElement.value.addEventListener('loadedmetadata', () => {
         updateVideoTime()
+      })
+      
+      // 确保视频加载后也应用样式
+      videoElement.value.addEventListener('loadeddata', () => {
+        videoElement.value!.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
       })
     }
 
@@ -718,6 +735,11 @@ const startVideoPlayback = () => {
         videoPlayer.value.load()
         videoPlayer.value.play()
 
+        // 强制设置flv播放器的视频元素样式
+        if (videoElement.value) {
+          videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+        }
+
         console.log('flv播放器初始化成功')
       } else {
         console.error('浏览器不支持flv.js')
@@ -726,6 +748,10 @@ const startVideoPlayback = () => {
       console.log('未知地址格式，尝试直接播放:', videoStreamUrl.value)
       videoElement.value.src = videoStreamUrl.value
       videoElement.value.load()
+      
+      // 强制设置原生视频播放器样式
+      videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+      
       videoElement.value.play().catch(error => {
         console.error('视频播放失败:', error)
       })
@@ -786,6 +812,10 @@ const startWebRTCPlayback = async () => {
       console.log('收到远程流:', e.streams[0])
       if (videoElement.value) {
         videoElement.value.srcObject = e.streams[0]
+        
+        // 强制设置WebRTC视频播放器样式
+        videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+        
         videoElement.value.play().catch(err => console.error('播放失败:', err))
       }
     }
@@ -1382,6 +1412,51 @@ const updateVideoTime = () => {
     totalTime.value = '00:00'
   }
 }
+
+// 全屏功能
+const toggleFullscreen = () => {
+  const playerElement = document.querySelector('.player_box')
+  
+  if (!playerElement) {
+    console.warn('视频播放器元素未找到')
+    return
+  }
+
+  try {
+    if (!document.fullscreenElement) {
+      // 进入全屏
+      if (playerElement.requestFullscreen) {
+        playerElement.requestFullscreen()
+      } else if ((playerElement as any).webkitRequestFullscreen) {
+        // Safari
+        (playerElement as any).webkitRequestFullscreen()
+      } else if ((playerElement as any).mozRequestFullScreen) {
+        // Firefox
+        (playerElement as any).mozRequestFullScreen()
+      } else if ((playerElement as any).msRequestFullscreen) {
+        // IE/Edge
+        (playerElement as any).msRequestFullscreen()
+      }
+    } else {
+      // 退出全屏
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      } else if ((document as any).webkitExitFullscreen) {
+        // Safari
+        (document as any).webkitExitFullscreen()
+      } else if ((document as any).mozCancelFullScreen) {
+        // Firefox
+        (document as any).mozCancelFullScreen()
+      } else if ((document as any).msExitFullscreen) {
+        // IE/Edge
+        (document as any).msExitFullscreen()
+      }
+    }
+  } catch (error) {
+    console.error('全屏操作失败:', error)
+    alert('全屏功能暂时不可用，请检查浏览器设置')
+  }
+}
 </script>
 
 <style scoped>
@@ -1955,28 +2030,85 @@ const updateVideoTime = () => {
 .boxGrid-box-content {
   flex: 1;
   position: relative;
-  padding: 0;
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
 }
 
 .player_container {
-  width: 100%;
-  height: 100%;
-  position: relative;
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+  overflow: hidden !important;
+  background: #000 !important;
 }
 
 .player_item {
-  width: 100%;
-  height: 100%;
-  position: relative;
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
 
 .player_box {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  background: #000;
-  border-radius: 0;
-  overflow: hidden;
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+  background: #000 !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+/* 强制视频元素填满整个容器 */
+.player_box video,
+.player_box canvas,
+.player_box img,
+.player_box > * {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: fill !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+  display: block !important;
+}
+
+/* 专门针对 flv.js 播放器的样式 */
+.player_box .flv-player,
+.player_box .flv-player *,
+.player_box .video-js,
+.player_box .video-js *,
+.player_box .vjs-tech {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: fill !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  outline: none !important;
+  box-sizing: border-box !important;
+}
+
+/* WebRTC 和其他流媒体播放器 */
+.player_box canvas[data-webrtc],
+.player_box video[data-webrtc] {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: fill !important;
+  transform: none !important;
 }
 
 .boxGrid-box-bottom {
@@ -3582,5 +3714,37 @@ const updateVideoTime = () => {
 
 .play-btn.paused:hover {
   background: rgba(255, 77, 79, 0.1);
+}
+
+.center-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 移除绝对定位，因为现在center-controls为空 */
+}
+
+.fullscreen-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #59C0FC; /* 设置默认颜色 */
+}
+
+.fullscreen-btn:hover {
+  background: rgba(89, 192, 252, 0.1);
+  color: #16bbf2; /* 悬停时改变颜色 */
+}
+
+.fullscreen-btn svg {
+  width: 24px;
+  height: 24px;
+  transition: color 0.3s ease;
+  fill: currentColor; /* 使用当前文字颜色 */
 }
 </style>

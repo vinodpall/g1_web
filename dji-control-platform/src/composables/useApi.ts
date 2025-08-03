@@ -4,7 +4,162 @@ import { apiClient } from '../api/config'
 import type { User, Dock, Drone, Mission, Alert, Device, Role, HmsAlert } from '../types'
 import { useDeviceStore } from '../stores/device'
 
-// 认证相关的组合式API
+// 视频缓存管理
+const VIDEO_CACHE_KEY = 'video_devices_cache'
+const VIDEO_CACHE_VERSION_KEY = 'video_cache_version'
+
+// 视频设备信息结构
+interface VideoDeviceInfo {
+  deviceSn: string
+  deviceType: 'dock' | 'drone_visible' | 'drone_infrared'
+  cameraIndex: string
+  videoIndex: string
+  videoId: string
+  switchableVideoTypes: string[]
+  lastUpdate: number
+}
+
+interface VideoCacheData {
+  version: string
+  devices: VideoDeviceInfo[]
+  lastUpdate: number
+}
+
+// 缓存视频设备信息
+const cacheVideoDevices = (capacityData: any, dockSns: string[], droneSns: string[]) => {
+  const videoDevices: VideoDeviceInfo[] = []
+  const now = Date.now()
+  
+  console.log('开始缓存视频设备信息...')
+  
+  if (capacityData.available_devices) {
+    for (const device of capacityData.available_devices) {
+      if (device.camera_list && device.camera_list.length > 0) {
+        for (const camera of device.camera_list) {
+          if (camera.video_list && camera.video_list.length > 0) {
+            for (const video of camera.video_list) {
+              const videoId = `${device.sn}/${camera.camera_index}/${video.video_index}`
+              const switchableTypes = video.switchable_video_types || []
+              
+              // 判断设备类型
+              let deviceType: 'dock' | 'drone_visible' | 'drone_infrared'
+              if (dockSns.includes(device.sn)) {
+                deviceType = 'dock'
+              } else if (droneSns.includes(device.sn)) {
+                // 根据switchable_video_types数量判断是可见光还是红外
+                deviceType = switchableTypes.length > 2 ? 'drone_visible' : 'drone_infrared'
+              } else {
+                continue // 跳过未知设备类型
+              }
+              
+              videoDevices.push({
+                deviceSn: device.sn,
+                deviceType,
+                cameraIndex: camera.camera_index,
+                videoIndex: video.video_index,
+                videoId,
+                switchableVideoTypes: switchableTypes,
+                lastUpdate: now
+              })
+              
+              console.log(`缓存视频设备: ${deviceType} - ${device.sn} - ${videoId} - types: ${switchableTypes.length}`)
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  const cacheData: VideoCacheData = {
+    version: '1.0',
+    devices: videoDevices,
+    lastUpdate: now
+  }
+  
+  localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify(cacheData))
+  console.log(`视频设备缓存完成，共缓存 ${videoDevices.length} 个视频设备`)
+  
+  return videoDevices
+}
+
+// 获取缓存的视频设备信息
+const getCachedVideoDevices = (): VideoDeviceInfo[] => {
+  const cacheStr = localStorage.getItem(VIDEO_CACHE_KEY)
+  if (!cacheStr) {
+    return []
+  }
+  
+  try {
+    const cacheData: VideoCacheData = JSON.parse(cacheStr)
+    return cacheData.devices || []
+  } catch (error) {
+    console.error('解析视频设备缓存失败:', error)
+    return []
+  }
+}
+
+// 检查缓存是否需要更新
+const shouldUpdateVideoCache = (capacityData: any): boolean => {
+  const cacheStr = localStorage.getItem(VIDEO_CACHE_KEY)
+  if (!cacheStr) {
+    console.log('没有视频缓存，需要创建')
+    return true
+  }
+  
+  try {
+    const cacheData: VideoCacheData = JSON.parse(cacheStr)
+    const cacheDeviceCount = cacheData.devices.length
+    
+    // 计算当前capacity数据中的视频设备数量
+    let currentDeviceCount = 0
+    if (capacityData.available_devices) {
+      for (const device of capacityData.available_devices) {
+        if (device.camera_list) {
+          for (const camera of device.camera_list) {
+            if (camera.video_list) {
+              currentDeviceCount += camera.video_list.length
+            }
+          }
+        }
+      }
+    }
+    
+    if (cacheDeviceCount !== currentDeviceCount) {
+      console.log(`视频设备数量不一致，缓存: ${cacheDeviceCount}, 当前: ${currentDeviceCount}，需要更新`)
+      return true
+    }
+    
+    // 检查时间是否超过30分钟
+    const thirtyMinutes = 30 * 60 * 1000
+    if (Date.now() - cacheData.lastUpdate > thirtyMinutes) {
+      console.log('视频缓存超过30分钟，需要更新')
+      return true
+    }
+    
+    console.log('视频缓存有效，无需更新')
+    return false
+  } catch (error) {
+    console.error('检查视频缓存失败:', error)
+    return true
+  }
+}
+
+// 根据类型获取最佳视频设备
+const getBestVideoDevice = (deviceType: 'dock' | 'drone_visible' | 'drone_infrared'): VideoDeviceInfo | null => {
+  const cachedDevices = getCachedVideoDevices()
+  const devices = cachedDevices.filter(device => device.deviceType === deviceType)
+  
+  if (devices.length === 0) {
+    console.warn(`没有找到类型为 ${deviceType} 的视频设备`)
+    return null
+  }
+  
+  // 优先选择switchable_video_types最多的设备
+  devices.sort((a, b) => b.switchableVideoTypes.length - a.switchableVideoTypes.length)
+  
+  console.log(`选择最佳 ${deviceType} 视频设备:`, devices[0])
+  return devices[0]
+}
 export function useAuth() {
   const user = ref<User | null>(null)
   const token = ref<string | null>(null)
@@ -113,48 +268,71 @@ export function useAuth() {
           localStorage.setItem('livestream_capacity', JSON.stringify(capacityResponse))
           console.log('capacity数据已缓存到localStorage')
           
-          if (capacityResponse.available_devices && capacityResponse.available_devices.length > 0) {
-            const firstDevice = capacityResponse.available_devices[0]
-            console.log('第一个可用设备:', firstDevice)
+          // 检查是否需要更新视频设备缓存
+          if (shouldUpdateVideoCache(capacityResponse)) {
+            console.log('更新视频设备缓存...')
+            cacheVideoDevices(capacityResponse, dockSns, droneSns)
+          }
+          
+          // 优先选择机场视频流
+          const dockVideoDevice = getBestVideoDevice('dock')
+          if (dockVideoDevice) {
+            console.log('选择机场视频设备:', dockVideoDevice)
             
-            if (firstDevice.camera_list && firstDevice.camera_list.length > 0) {
-              const firstCamera = firstDevice.camera_list[0]
-              console.log('第一个摄像头:', firstCamera)
-              
-              if (firstCamera.video_list && firstCamera.video_list.length > 0) {
-                const firstVideo = firstCamera.video_list[0]
-                console.log('第一个视频:', firstVideo)
-                
-                // 构建video_id: {sn}/{camera_index}/{video_index}
-                const videoId = `${firstDevice.sn}/${firstCamera.camera_index}/${firstVideo.video_index}`
-                console.log('构建的video_id:', videoId)
-                
-                // 启动视频流，只传递video_id
-                console.log('开始启动视频流...')
-                const livestreamResponse = await livestreamApi.startLivestream(firstDevice.sn, {
-                  video_id: videoId
-                })
-                console.log('视频流启动成功:', livestreamResponse)
-                
-                // 处理push_url地址，替换为webrtc地址
-                const pushUrl = livestreamResponse.push_url
-                const webrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
-                console.log('原始push_url:', pushUrl)
-                console.log('转换后的webrtc地址:', webrtcUrl)
-                
-                // 保存视频流地址到localStorage
-                localStorage.setItem('video_stream_url', webrtcUrl)
-                localStorage.setItem('video_bid', livestreamResponse.bid)
-                
-                console.log('视频流地址已保存到localStorage')
-              } else {
-                console.warn('没有可用的视频流')
-              }
-            } else {
-              console.warn('没有可用的摄像头')
+            // 获取机场SN用于API调用
+            if (dockSns.length === 0) {
+              console.error('没有找到机场设备，无法启动视频流')
+              return
             }
+            const dockSn = dockSns[0] // 使用第一个机场SN
+            console.log('登录 - 使用机场SN调用视频流接口:', dockSn)
+            
+            // 启动视频流，使用机场SN作为device_sn，传递video_id参数
+            console.log('开始启动机场视频流...')
+            const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
+              video_id: dockVideoDevice.videoId
+            })
+            console.log('机场视频流启动成功:', livestreamResponse)
+            
+            // 处理push_url地址，替换为webrtc地址
+            const pushUrl = livestreamResponse.push_url
+            const webrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            console.log('原始push_url:', pushUrl)
+            console.log('转换后的webrtc地址:', webrtcUrl)
+            
+            // 保存视频流地址到localStorage
+            localStorage.setItem('video_stream_url', webrtcUrl)
+            localStorage.setItem('video_bid', livestreamResponse.bid)
+            localStorage.setItem('current_video_type', 'dock')
+            
+            console.log('机场视频流地址已保存到localStorage')
           } else {
-            console.warn('没有可用的设备')
+            // 如果没有机场视频，尝试无人机可见光视频
+            const droneVisibleDevice = getBestVideoDevice('drone_visible')
+            if (droneVisibleDevice) {
+              console.log('没有机场视频，选择无人机可见光视频设备:', droneVisibleDevice)
+              
+              if (dockSns.length === 0) {
+                console.error('没有找到机场设备，无法启动视频流')
+                return
+              }
+              const dockSn = dockSns[0]
+              
+              const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
+                video_id: droneVisibleDevice.videoId
+              })
+              
+              const pushUrl = livestreamResponse.push_url
+              const webrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+              
+              localStorage.setItem('video_stream_url', webrtcUrl)
+              localStorage.setItem('video_bid', livestreamResponse.bid)
+              localStorage.setItem('current_video_type', 'drone_visible')
+              
+              console.log('无人机可见光视频流地址已保存到localStorage')
+            } else {
+              console.warn('没有找到可用的视频设备')
+            }
           }
         } catch (videoError) {
           console.warn('登录时获取视频流失败:', videoError)

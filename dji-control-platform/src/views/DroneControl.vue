@@ -149,16 +149,55 @@
                   <div class="player_container">
                     <div class="player_item">
                       <div class="player_box" id="player_box1">
-                        <!-- 视频播放器将在这里初始化 -->
+                        <!-- 视频播放器 -->
+                        <video 
+                          ref="videoElement"
+                          style="width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;"
+                          muted
+                          playsinline
+                          webkit-playsinline
+                        >
+                          您的浏览器不支持视频播放
+                        </video>
                       </div>
                     </div>
                   </div>
                 </div>
                 <div class="boxGrid-box-bottom">
                   <div class="left-controls">
-                    <svg class="icon svg-icon" aria-hidden="true">
-                      <use xlink:href="#icon-jiugongge"></use>
-                    </svg>
+                    <!-- 视频时间显示 -->
+                    <div class="video-time">
+                      <span class="time-display">{{ currentTime }}</span>
+                    </div>
+                    <!-- 播放控制按钮 -->
+                    <div class="play-controls">
+                      <button 
+                        class="play-btn" 
+                        @click="togglePlay"
+                        :class="{ 'paused': !isVideoPlaying }"
+                      >
+                        <svg v-if="isVideoPlaying" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                        </svg>
+                        <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M8 5v14l11-7z"/>
+                        </svg>
+                      </button>
+                      <!-- 全屏按钮放在播放按钮右侧 -->
+                      <button class="fullscreen-btn" @click="toggleFullscreen" title="全屏">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="center-controls">
+                    <button class="refresh-video-btn" @click="reloadVideo" :disabled="refreshingVideo" title="刷新无人机视频">
+                      <svg width="20" height="20" viewBox="0 0 1024 1024" :class="{ 'rotating': refreshingVideo }">
+                        <path fill="#59C0FC" d="M764 196H332c-126.016 0-228 101.984-228 228v176c0 126.016 101.984 228 228 228h432c126.016 0 228-101.984 228-228V424c0-126.016-101.984-228-228-228zM332 260h432c89.472 0 164 74.528 164 164v176c0 89.472-74.528 164-164 164H332c-89.472 0-164-74.528-164-164V424c0-89.472 74.528-164 164-164z"/>
+                        <path fill="#59C0FC" d="M512 352c-88.224 0-160 71.776-160 160s71.776 160 160 160 160-71.776 160-160-71.776-160-160-160z m0 256c-52.928 0-96-43.072-96-96s43.072-96 96-96 96 43.072 96 96-43.072 96-96 96z"/>
+                      </svg>
+                    </button>
                   </div>
                   <div class="right-controls" :class="{ active: showScreenMenu }" @click="toggleScreenMenu">
                     <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
@@ -181,47 +220,115 @@
             </div>
             <div class="control-bottom">
               <div class="drone-control-panel">
-                <div class="panel-title">无人机控制</div>
+                <div class="panel-title">
+                  <div class="drc-status-indicator" :class="{ 'ready': drcStatus.ready, 'not-ready': !drcStatus.ready }"></div>
+                  <div class="panel-title-text">无人机控制</div>
+                  <button 
+                    class="drc-mode-btn" 
+                    :class="{ 'active': isDrcModeActive, 'disabled': !drcStatus.ready }"
+                    :disabled="!drcStatus.ready"
+                    @click="handleToggleDrcMode"
+                  >
+                    {{ isDrcModeActive ? '退出' : 'DRC' }}
+                  </button>
+                </div>
                 <div class="drone-direction-grid">
-                  <button @mousedown="() => startControl('turn_left')" @mouseup="stopControl" @mouseleave="stopControl">
+                  <button 
+                    @mousedown="() => startControl('turn_left')" 
+                    @mouseup="stopControl" 
+                    @mouseleave="stopControl"
+                    :disabled="!isDrcModeActive"
+                    :class="{ disabled: !isDrcModeActive }"
+                  >
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left_round.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">左旋</span>
                   </button>
-                  <button @mousedown="() => startControl('forward')" @mouseup="stopControl" @mouseleave="stopControl">
+                  <button 
+                    @mousedown="() => startControl('forward')" 
+                    @mouseup="stopControl" 
+                    @mouseleave="stopControl"
+                    :disabled="!isDrcModeActive"
+                    :class="{ disabled: !isDrcModeActive }"
+                  >
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_forward.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">前进</span>
                   </button>
-                  <button @mousedown="() => startControl('turn_right')" @mouseup="stopControl" @mouseleave="stopControl">
+                  <button 
+                    @mousedown="() => startControl('turn_right')" 
+                    @mouseup="stopControl" 
+                    @mouseleave="stopControl"
+                    :disabled="!isDrcModeActive"
+                    :class="{ disabled: !isDrcModeActive }"
+                  >
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right_round.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">右旋</span>
                   </button>
-                  <button @mousedown="() => startControl('left')" @mouseup="stopControl" @mouseleave="stopControl">
+                  <button 
+                    @mousedown="() => startControl('left')" 
+                    @mouseup="stopControl" 
+                    @mouseleave="stopControl"
+                    :disabled="!isDrcModeActive"
+                    :class="{ disabled: !isDrcModeActive }"
+                  >
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_left.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">左移</span>
                   </button>
-                  <button @mousedown="() => startControl('backward')" @mouseup="stopControl" @mouseleave="stopControl">
+                  <button 
+                    @mousedown="() => startControl('backward')" 
+                    @mouseup="stopControl" 
+                    @mouseleave="stopControl"
+                    :disabled="!isDrcModeActive"
+                    :class="{ disabled: !isDrcModeActive }"
+                  >
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_back.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">后退</span>
                   </button>
-                  <button @mousedown="() => startControl('right')" @mouseup="stopControl" @mouseleave="stopControl">
+                  <button 
+                    @mousedown="() => startControl('right')" 
+                    @mouseup="stopControl" 
+                    @mouseleave="stopControl"
+                    :disabled="!isDrcModeActive"
+                    :class="{ disabled: !isDrcModeActive }"
+                  >
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_right.svg" class="drone-btn-icon big-drone-btn-icon" /></span>
                     <span class="drone-btn-label">右移</span>
                   </button>
-                  <button @mousedown="() => startControl('up')" @mouseup="stopControl" @mouseleave="stopControl">
+                  <button 
+                    @mousedown="() => startControl('up')" 
+                    @mouseup="stopControl" 
+                    @mouseleave="stopControl"
+                    :disabled="!isDrcModeActive"
+                    :class="{ disabled: !isDrcModeActive }"
+                  >
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_up.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">上升</span>
                   </button>
-                  <button @click="handleEnterDrcMode">
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_light.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">DRC</span>
-                  </button>
-                  <button @mousedown="() => startControl('down')" @mouseup="stopControl" @mouseleave="stopControl">
+                  <div class="drone-btn-placeholder"></div>
+                  <button 
+                    @mousedown="() => startControl('down')" 
+                    @mouseup="stopControl" 
+                    @mouseleave="stopControl"
+                    :disabled="!isDrcModeActive"
+                    :class="{ disabled: !isDrcModeActive }"
+                  >
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_down.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">下降</span>
                   </button>
-                  <button @click="handleGetControlAuthority">
-                    <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_control.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">获取控制权</span>
+                  <button 
+                    @click="handleToggleControlAuthority"
+                    :disabled="controlAuthorityStatus.isLoading"
+                    :class="{ 'authority-granted': hasControlAuthority }"
+                  >
+                    <span class="drone-btn-iconbox" :class="{ 'authority-granted': hasControlAuthority }">
+                      <img 
+                        src="@/assets/source_data/svg_data/drone_control_svg/drone_control.svg" 
+                        class="drone-btn-icon" 
+                        :class="{ 'authority-granted': hasControlAuthority }"
+                      />
+                    </span>
+                    <span class="drone-btn-label" :class="{ 'authority-granted': hasControlAuthority }">
+                      {{ controlAuthorityStatus.isLoading ? '处理中...' : (hasControlAuthority ? '释放控制权' : '获取控制权') }}
+                    </span>
                   </button>
                   <button>
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_fly.svg" class="drone-btn-icon" /></span>
@@ -234,34 +341,36 @@
                 </div>
               </div>
               <div class="gimbal-control-panel">
-                <div class="panel-title">云台控制</div>
+                <div class="panel-title">
+                  <div class="panel-title-text">云台控制</div>
+                </div>
                 <div class="gimbal-btns-area">
                   <div class="gimbal-dir-row">
-                    <button class="gimbal-dir-btn" @click="handleGimbalControl('down')"><img src="@/assets/source_data/svg_data/camera_up.svg" /></button>
+                    <button class="gimbal-dir-btn" :disabled="!isGimbalControlEnabled" @click="handleGimbalControl('down')"><img src="@/assets/source_data/svg_data/camera_up.svg" /></button>
                   </div>
                   <div class="gimbal-dir-row">
-                    <button class="gimbal-dir-btn" @click="handleGimbalControl('left')"><img src="@/assets/source_data/svg_data/camera_left.svg" /></button>
-                    <button class="gimbal-dir-btn" @click="handleGimbalControl('up')"><img src="@/assets/source_data/svg_data/camera_down.svg" /></button>
-                    <button class="gimbal-dir-btn" @click="handleGimbalControl('right')"><img src="@/assets/source_data/svg_data/camera_right.svg" /></button>
+                    <button class="gimbal-dir-btn" :disabled="!isGimbalControlEnabled" @click="handleGimbalControl('left')"><img src="@/assets/source_data/svg_data/camera_left.svg" /></button>
+                    <button class="gimbal-dir-btn" :disabled="!isGimbalControlEnabled" @click="handleGimbalControl('up')"><img src="@/assets/source_data/svg_data/camera_down.svg" /></button>
+                    <button class="gimbal-dir-btn" :disabled="!isGimbalControlEnabled" @click="handleGimbalControl('right')"><img src="@/assets/source_data/svg_data/camera_right.svg" /></button>
                   </div>
                   <div class="gimbal-separator"></div>
                   <div class="gimbal-func-row">
-                    <button>云台回中</button>
-                    <button>云台向下</button>
-                    <button>偏航回中</button>
-                    <button>俯仰向下</button>
+                    <button :disabled="!isGimbalControlEnabled">云台回中</button>
+                    <button :disabled="!isGimbalControlEnabled">云台向下</button>
+                    <button :disabled="!isGimbalControlEnabled">偏航回中</button>
+                    <button :disabled="!isGimbalControlEnabled">俯仰向下</button>
                   </div>
                   <div class="gimbal-func-row">
-                    <button>开启分屏</button>
-                    <button @click="handleZoom('in')">放大</button>
-                    <button>开始录像</button>
-                    <button>拍照</button>
+                    <button :disabled="!isGimbalControlEnabled">开启分屏</button>
+                    <button :disabled="!isGimbalControlEnabled" @click="handleZoom('in')">放大</button>
+                    <button :disabled="!isGimbalControlEnabled">开始录像</button>
+                    <button :disabled="!isGimbalControlEnabled">拍照</button>
                   </div>
                   <div class="gimbal-func-row">
-                    <button>关闭分屏</button>
-                    <button @click="handleZoom('out')">缩小</button>
-                    <button>停止录像</button>
-                    <button>夜景模式</button>
+                    <button :disabled="!isGimbalControlEnabled">关闭分屏</button>
+                    <button :disabled="!isGimbalControlEnabled" @click="handleZoom('out')">缩小</button>
+                    <button :disabled="!isGimbalControlEnabled">停止录像</button>
+                    <button :disabled="!isGimbalControlEnabled">夜景模式</button>
                   </div>
                 </div>
               </div>
@@ -274,9 +383,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { controlApi, drcApi } from '@/api/services'
+import { controlApi, drcApi, livestreamApi } from '../api/services'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
@@ -286,6 +395,7 @@ import cameraIcon from '@/assets/source_data/svg_data/camera.svg'
 import plane2Img from '@/assets/source_data/plane_2.png'
 import batteryImg from '@/assets/source_data/Battery.png'
 import AMapLoader from '@amap/amap-jsapi-loader'
+import flvjs from 'flv.js'
 // 新增 drone_ 系列图标
 import droneCloseIcon from '@/assets/source_data/svg_data/drone_close.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
@@ -320,11 +430,64 @@ const amapInstance = ref<any>(null)
 const amapApiRef = ref<any>(null); // 新增
 const remoteEnabled = ref(false);
 
+// DRC状态管理
+const drcStatus = ref({
+  ready: false,
+  checks: {
+    online: false,
+    mode_valid: false,
+    drone_flying: false,
+    battery_ok: false,
+    no_emergency: false,
+    position_valid: false
+  },
+  failed_checks: [] as string[],
+  current_status: {
+    mode_code: 0,
+    drone_in_dock: 0,
+    height: 0,
+    battery_percent: 0,
+    emergency_state: 0
+  }
+})
+const drcStatusInterval = ref<number | null>(null)
+
+// DRC模式状态管理
+const isDrcModeActive = ref(false)
+
+// 云台控制权限状态
+const isGimbalControlEnabled = ref(false)
+
+// 控制权状态管理
+const controlAuthorityStatus = ref({
+  hasFlightAuthority: false,
+  hasPayloadAuthority: false,
+  isLoading: false
+})
+
 // 控制相关的状态
-const controlInterval = ref<NodeJS.Timer | null>(null)
+const controlInterval = ref<number | null>(null)
 const currentControlType = ref<string | null>(null)
 const CONTROL_INTERVAL_MS = 100 // 每100ms发送一次控制指令
 const CONTROL_SPEED = 0.5 // 默认控制速度
+
+// DRC状态相关
+const DRC_STATUS_CHECK_INTERVAL = 5000 // 每5秒检查一次DRC状态
+
+// 视频流相关状态管理
+const videoStreamUrl = ref<string>('')
+const videoPlayer = ref<any>(null)
+const videoElement = ref<HTMLVideoElement | null>(null)
+const videoLoading = ref(false)
+const videoStatus = ref('正在检查视频流状态...')
+const videoBid = ref<string | null>(null)
+const refreshingVideo = ref(false)
+
+// 视频播放控制相关
+const isVideoPlaying = ref(false)
+const currentTime = ref('00:00')
+const totalTime = ref('00:00')
+
 const toggleRemote = () => {
   remoteEnabled.value = !remoteEnabled.value;
 };
@@ -355,6 +518,717 @@ const selectScreenMode = (mode: string) => {
   showScreenMenu.value = false
 }
 
+// 全屏功能
+const toggleFullscreen = () => {
+  const playerElement = document.getElementById('player_box1')
+  
+  if (!playerElement) {
+    return
+  }
+
+  try {
+    if (!document.fullscreenElement) {
+      // 进入全屏
+      if (playerElement.requestFullscreen) {
+        playerElement.requestFullscreen()
+      } else if ((playerElement as any).webkitRequestFullscreen) {
+        // Safari
+        (playerElement as any).webkitRequestFullscreen()
+      } else if ((playerElement as any).mozRequestFullScreen) {
+        // Firefox
+        (playerElement as any).mozRequestFullScreen()
+      } else if ((playerElement as any).msRequestFullscreen) {
+        // IE/Edge
+        (playerElement as any).msRequestFullscreen()
+      }
+    } else {
+      // 退出全屏
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      } else if ((document as any).webkitExitFullscreen) {
+        // Safari
+        (document as any).webkitExitFullscreen()
+      } else if ((document as any).mozCancelFullScreen) {
+        // Firefox
+        (document as any).mozCancelFullScreen()
+      } else if ((document as any).msExitFullscreen) {
+        // IE/Edge
+        (document as any).msExitFullscreen()
+      }
+    }
+  } catch (error: any) {
+    alert('全屏功能暂时不可用，请检查浏览器设置')
+  }
+}
+
+// 视频缓存管理
+const videoCache = ref({
+  dock: null as any,
+  droneVisible: null as any,
+  droneInfrared: null as any,
+  lastUpdated: null as string | null
+})
+
+// 分析设备视频类型
+const analyzeDeviceVideos = (device: any) => {
+  const result = {
+    dock: null as any,
+    droneVisible: null as any,
+    droneInfrared: null as any
+  }
+  
+  if (!device.camera_list || device.camera_list.length === 0) {
+    return result
+  }
+  
+  for (const camera of device.camera_list) {
+    if (!camera.video_list || camera.video_list.length === 0) continue
+    
+    for (const video of camera.video_list) {
+      const switchableTypes = video.switchable_video_types || []
+      const typesCount = switchableTypes.length
+      
+      // 根据switchable_video_types数量判断视频类型
+      if (typesCount >= 4) {
+        // 可见光（通常有normal, wide, zoom, ir等多种类型）
+        if (!result.droneVisible || switchableTypes.length > result.droneVisible.switchable_video_types.length) {
+          result.droneVisible = {
+            device_sn: device.sn,
+            camera_index: camera.camera_index,
+            video_index: video.video_index,
+            video_type: video.video_type,
+            switchable_video_types: switchableTypes,
+            video_id: `${device.sn}/${camera.camera_index}/${video.video_index}`
+          }
+        }
+      } else if (typesCount === 1) {
+        // 红外（通常只有normal类型）
+        if (!result.droneInfrared) {
+          result.droneInfrared = {
+            device_sn: device.sn,
+            camera_index: camera.camera_index,
+            video_index: video.video_index,
+            video_type: video.video_type,
+            switchable_video_types: switchableTypes,
+            video_id: `${device.sn}/${camera.camera_index}/${video.video_index}`
+          }
+        }
+      } else {
+        // 机场或其他设备
+        if (!result.dock) {
+          result.dock = {
+            device_sn: device.sn,
+            camera_index: camera.camera_index,
+            video_index: video.video_index,
+            video_type: video.video_type,
+            switchable_video_types: switchableTypes,
+            video_id: `${device.sn}/${camera.camera_index}/${video.video_index}`
+          }
+        }
+      }
+    }
+  }
+  
+  return result
+}
+
+// 更新视频缓存
+const updateVideoCache = async () => {
+  try {
+    
+    // 获取最新的capacity信息
+    const capacityResponse = await livestreamApi.getCapacity()
+    
+    // 获取缓存的设备SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
+    
+    const newCache = {
+      dock: null as any,
+      droneVisible: null as any,
+      droneInfrared: null as any,
+      lastUpdated: new Date().toISOString()
+    }
+    
+    // 分析所有可用设备
+    for (const device of capacityResponse.available_devices || []) {
+      const analysis = analyzeDeviceVideos(device)
+      
+      // 根据设备类型归类
+      if (cachedDockSns.includes(device.sn)) {
+        // 机场设备
+        if (analysis.dock && !newCache.dock) {
+          newCache.dock = analysis.dock
+        }
+      } else if (cachedDroneSns.includes(device.sn)) {
+        // 无人机设备
+        if (analysis.droneVisible && !newCache.droneVisible) {
+          newCache.droneVisible = analysis.droneVisible
+        }
+        if (analysis.droneInfrared && !newCache.droneInfrared) {
+          newCache.droneInfrared = analysis.droneInfrared
+        }
+      }
+    }
+    
+    // 检查是否有变化
+    const currentCache = JSON.stringify(videoCache.value)
+    const newCacheStr = JSON.stringify(newCache)
+    
+    if (currentCache !== newCacheStr) {
+      
+      videoCache.value = newCache
+      
+      // 保存到localStorage
+      localStorage.setItem('video_cache', JSON.stringify(newCache))
+      localStorage.setItem('livestream_capacity', JSON.stringify(capacityResponse))
+      
+      return true
+    } else {
+      return false
+    }
+  } catch (error: any) {
+    return false
+  }
+}
+
+// 从缓存加载视频信息
+const loadVideoCache = () => {
+  const cached = localStorage.getItem('video_cache')
+  if (cached) {
+    try {
+      videoCache.value = JSON.parse(cached)
+    } catch (error: any) {
+    }
+  }
+}
+
+// 获取当前使用的视频信息（优先无人机视频）
+const getCurrentVideoInfo = () => {
+  // 从缓存中获取视频流地址
+  const videoStreamsStr = localStorage.getItem('video_streams')
+  if (videoStreamsStr) {
+    try {
+      const videoStreams = JSON.parse(videoStreamsStr)
+      
+      // 优先返回无人机可见光视频
+      if (videoStreams.drone_visible_video_url && videoCache.value.droneVisible) {
+        return videoCache.value.droneVisible
+      } else if (videoStreams.drone_infrared_video_url && videoCache.value.droneInfrared) {
+        return videoCache.value.droneInfrared
+      } else if (videoStreams.dock_video_url && videoCache.value.dock) {
+        return videoCache.value.dock
+      }
+    } catch (error: any) {
+    }
+  }
+  
+  // 后备方案：从视频缓存中获取
+  if (videoCache.value.droneVisible) {
+    return videoCache.value.droneVisible
+  } else if (videoCache.value.droneInfrared) {
+    return videoCache.value.droneInfrared
+  } else if (videoCache.value.dock) {
+    return videoCache.value.dock
+  }
+  
+  return null
+}
+
+// 从缓存获取无人机视频地址
+const getDroneVideoFromCache = () => {
+  // 首先检查视频流缓存
+  const videoStreamsStr = localStorage.getItem('video_streams')
+  if (videoStreamsStr) {
+    try {
+      const videoStreams = JSON.parse(videoStreamsStr)
+      
+      // 优先返回无人机可见光视频
+      if (videoStreams.drone_visible_video_url) {
+        return videoStreams.drone_visible_video_url
+      } else if (videoStreams.drone_infrared_video_url) {
+        return videoStreams.drone_infrared_video_url
+      }
+    } catch (error: any) {
+    }
+  }
+  
+  // 检查专用的无人机视频地址
+  const droneVideoUrl = localStorage.getItem('drone_video_stream_url')
+  if (droneVideoUrl) {
+    return droneVideoUrl
+  }
+  
+  return null
+}
+
+// 初始化视频播放器（针对无人机控制页面）
+const initVideoPlayer = () => {
+  
+  // 先加载视频缓存
+  loadVideoCache()
+  
+  // 尝试从缓存获取无人机视频地址
+  const droneVideoUrl = getDroneVideoFromCache()
+  if (droneVideoUrl) {
+    videoStreamUrl.value = droneVideoUrl
+    // 延迟初始化播放器，确保DOM已经渲染
+    nextTick(() => {
+      startVideoPlayback()
+    })
+    return
+  }
+  
+  // 如果缓存中没有无人机视频，主动获取
+  setTimeout(() => {
+    reloadVideo()
+  }, 1000) // 延迟1秒，确保页面完全加载
+}
+
+// 开始视频播放
+const startVideoPlayback = () => {
+  if (!videoElement.value || !videoStreamUrl.value) {
+    return
+  }
+
+
+  try {
+    // 销毁之前的播放器实例
+    if (videoPlayer.value) {
+      videoPlayer.value.destroy()
+      videoPlayer.value = null
+    }
+
+    // 添加视频事件监听器
+    if (videoElement.value) {
+      // 强制设置视频样式
+      videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+      
+      videoElement.value.addEventListener('play', () => {
+        isVideoPlaying.value = true
+      })
+      
+      videoElement.value.addEventListener('pause', () => {
+        isVideoPlaying.value = false
+      })
+      
+      videoElement.value.addEventListener('timeupdate', updateVideoTime)
+      
+      videoElement.value.addEventListener('loadedmetadata', () => {
+        updateVideoTime()
+      })
+      
+      // 确保视频加载后也应用样式
+      videoElement.value.addEventListener('loadeddata', () => {
+        videoElement.value!.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+      })
+    }
+
+    // 检查是否是webrtc地址
+    if (videoStreamUrl.value.startsWith('webrtc://')) {
+      startWebRTCPlayback()
+    } else if (videoStreamUrl.value.startsWith('rtmp://')) {
+      
+      if (flvjs.isSupported()) {
+        
+        // 将rtmp地址转换为http-flv地址
+        const flvUrl = videoStreamUrl.value.replace(/^rtmp:\/\/[^\/]+/, 'http://10.10.1.3:8000')
+        
+        // 创建flv播放器
+        videoPlayer.value = flvjs.createPlayer({
+          type: 'flv',
+          url: flvUrl,
+          isLive: true,
+          hasAudio: false,
+          hasVideo: true
+        }, {
+          enableStashBuffer: false,
+          stashInitialSize: 128,
+          enableWorker: true,
+          lazyLoad: false,
+          autoCleanupSourceBuffer: true
+        })
+
+        // 绑定到video元素
+        videoPlayer.value.attachMediaElement(videoElement.value)
+        videoPlayer.value.load()
+        videoPlayer.value.play()
+
+        // 强制设置flv播放器的视频元素样式
+        if (videoElement.value) {
+          videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+        }
+
+      } else {
+      }
+    } else {
+      videoElement.value.src = videoStreamUrl.value
+      videoElement.value.load()
+      
+      // 强制设置原生视频播放器样式
+      videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+      
+      videoElement.value.play().catch(() => {
+        // 视频播放失败
+      })
+    }
+  } catch (error: any) {
+  }
+}
+
+// WebRTC播放器实例
+let pc: RTCPeerConnection | null = null
+let isPlaying = false
+
+// 构建SRS API地址
+const buildApiUrl = (webrtcUrl: string) => {
+  try {
+    // webrtc://server:8000/app/stream -> http://server:1985
+    const url = new URL(webrtcUrl)
+    return `http://${url.hostname}:1985`
+  } catch (error: any) {
+    // 后备方案
+    return webrtcUrl.replace('webrtc://', 'http://').replace(':8000', ':1985').split('/')[0]
+  }
+}
+
+// 开始WebRTC播放（增强版，解决SDP协商问题）
+const startWebRTCPlayback = async () => {
+  if (isPlaying) {
+    stopWebRTCPlayback()
+  }
+
+  const serverUrl = videoStreamUrl.value
+  if (!serverUrl) {
+    return
+  }
+
+  try {
+    
+    // 确保之前的连接已清理
+    if (pc) {
+      pc.close()
+      pc = null
+    }
+    
+    // 创建新的RTCPeerConnection，使用优化配置
+    pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ],
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require'
+    })
+
+    // 添加一个虚拟的媒体轨道来确保SDP格式正确
+    const dummyStream = new MediaStream()
+    
+    // 创建一个虚拟的video track
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    const canvasStream = canvas.captureStream(1)
+    const videoTrack = canvasStream.getVideoTracks()[0]
+    
+    if (videoTrack) {
+      dummyStream.addTrack(videoTrack)
+      pc.addTrack(videoTrack, dummyStream)
+    }
+
+    // 处理远程流
+    pc.ontrack = (e) => {
+      if (videoElement.value) {
+        videoElement.value.srcObject = e.streams[0]
+        
+        // 强制设置WebRTC视频播放器样式
+        videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+        
+      }
+    }
+
+    // ICE连接状态监听
+    pc.oniceconnectionstatechange = () => {
+      if (pc?.iceConnectionState === 'connected') {
+        isPlaying = true
+      } else if (pc?.iceConnectionState === 'failed') {
+        stopWebRTCPlayback()
+      }
+    }
+
+    // 创建offer，使用标准配置
+    const offer = await pc.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true
+    })
+    
+    
+    await pc.setLocalDescription(offer)
+
+    // 构建SRS API地址
+    const apiUrl = buildApiUrl(serverUrl)
+
+    const response = await fetch(`${apiUrl}/rtc/v1/play/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sdp: offer.sdp,
+        streamurl: serverUrl
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`服务器响应错误: ${response.status}`)
+    }
+
+    const data = await response.json()
+    
+    if (data.code !== 0) {
+      throw new Error(`SRS错误: ${data.msg}`)
+    }
+
+    // 检查返回的SDP格式
+    if (!data.sdp) {
+      throw new Error('服务器返回的SDP为空')
+    }
+
+
+    // 设置远程描述前，先检查SDP格式
+    try {
+      await pc.setRemoteDescription({
+        type: 'answer',
+        sdp: data.sdp
+      })
+    } catch (sdpError: any) {
+      throw new Error(`SDP协商失败: ${sdpError.message}`)
+    }
+
+  } catch (error: any) {
+    stopWebRTCPlayback()
+  }
+}
+
+// 停止WebRTC播放（与首页完全相同的逻辑）
+const stopWebRTCPlayback = () => {
+  if (pc) {
+    pc.close()
+    pc = null
+  }
+
+  if (videoElement.value) {
+    videoElement.value.srcObject = null
+  }
+  
+  isPlaying = false
+}
+
+// 停止视频播放（与首页完全相同的逻辑）
+const stopVideoPlayback = () => {
+  // 停止WebRTC播放
+  stopWebRTCPlayback()
+  
+  if (videoPlayer.value) {
+    videoPlayer.value.pause()
+    videoPlayer.value.unload()
+    videoPlayer.value.detachMediaElement()
+    videoPlayer.value.destroy()
+    videoPlayer.value = null
+  }
+  
+  if (videoElement.value) {
+    videoElement.value.pause()
+    videoElement.value.src = ''
+    videoElement.value.load()
+  }
+}
+
+// 重新获取capacity并更新所有视频流缓存
+const refreshVideoCapacityAndCache = async () => {
+  try {
+    
+    // 获取最新的capacity信息
+    const capacityResponse = await livestreamApi.getCapacity()
+    
+    // 获取缓存的设备SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
+    
+    
+    if (cachedDockSns.length === 0) {
+      throw new Error('没有找到缓存的机场SN')
+    }
+    const dockSn = cachedDockSns[0] // 使用第一个机场SN
+    
+    const newCache = {
+      dock: null as any,
+      droneVisible: null as any,
+      droneInfrared: null as any,
+      lastUpdated: new Date().toISOString()
+    }
+    
+    // 存储所有视频流地址
+    const videoStreams = {
+      dock_video_url: '',
+      drone_visible_video_url: '',
+      drone_infrared_video_url: ''
+    }
+    
+    // 分析所有可用设备并获取视频流
+    for (const device of capacityResponse.available_devices || []) {
+      
+      const analysis = analyzeDeviceVideos(device)
+      
+      // 根据设备类型归类并启动视频流
+      if (cachedDockSns.includes(device.sn)) {
+        // 机场设备
+        if (analysis.dock && !newCache.dock) {
+          newCache.dock = analysis.dock
+          
+          // 启动机场视频流
+          try {
+            const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
+              video_id: analysis.dock.video_id
+            })
+            const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            videoStreams.dock_video_url = webrtcUrl
+          } catch (error: any) {
+            // 获取机场视频流失败
+          }
+        }
+      } else if (cachedDroneSns.includes(device.sn)) {
+        // 无人机设备
+        if (analysis.droneVisible && !newCache.droneVisible) {
+          newCache.droneVisible = analysis.droneVisible
+          
+          // 启动无人机可见光视频流
+          try {
+            const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
+              video_id: analysis.droneVisible.video_id
+            })
+            const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            videoStreams.drone_visible_video_url = webrtcUrl
+          } catch (error: any) {
+            // 获取无人机可见光视频流失败
+          }
+        }
+        
+        if (analysis.droneInfrared && !newCache.droneInfrared) {
+          newCache.droneInfrared = analysis.droneInfrared
+          
+          // 启动无人机红外视频流
+          try {
+            const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
+              video_id: analysis.droneInfrared.video_id
+            })
+            const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            videoStreams.drone_infrared_video_url = webrtcUrl
+          } catch (error: any) {
+            // 获取无人机红外视频流失败
+          }
+        }
+      }
+    }
+    
+    // 更新缓存
+    videoCache.value = newCache
+    localStorage.setItem('video_cache', JSON.stringify(newCache))
+    localStorage.setItem('livestream_capacity', JSON.stringify(capacityResponse))
+    
+    // 更新视频流地址缓存
+    localStorage.setItem('video_streams', JSON.stringify(videoStreams))
+    
+    // 优先返回无人机可见光视频地址
+    if (videoStreams.drone_visible_video_url) {
+      return videoStreams.drone_visible_video_url
+    } else if (videoStreams.drone_infrared_video_url) {
+      return videoStreams.drone_infrared_video_url
+    } else if (videoStreams.dock_video_url) {
+      return videoStreams.dock_video_url
+    } else {
+      throw new Error('没有找到可用的视频流')
+    }
+    
+  } catch (error: any) {
+    throw error
+  }
+}
+
+// 重新加载视频（专门针对无人机控制页面）
+const reloadVideo = async () => {
+  refreshingVideo.value = true
+  
+  try {
+    // 停止当前视频播放
+    stopVideoPlayback()
+    
+    // 重新获取capacity并更新缓存，返回无人机视频地址
+    const droneVideoUrl = await refreshVideoCapacityAndCache()
+    
+    // 设置无人机视频地址
+    videoStreamUrl.value = droneVideoUrl
+    localStorage.setItem('drone_video_stream_url', droneVideoUrl)
+    localStorage.setItem('current_video_type', 'drone_visible')
+    
+    
+    // 延迟开始播放
+    setTimeout(() => {
+      startVideoPlayback()
+    }, 500)
+    
+  } catch (error: any) {
+    alert(`获取无人机视频失败: ${error.message || error}`)
+  } finally {
+    refreshingVideo.value = false
+  }
+}
+
+// 格式化时间
+const formatTime = (seconds: number) => {
+  // 处理NaN和Infinity的情况
+  if (isNaN(seconds) || !isFinite(seconds) || seconds < 0) {
+    return '00:00'
+  }
+  
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+// 切换播放/暂停
+const togglePlay = () => {
+  if (!videoElement.value) return
+  
+  if (isVideoPlaying.value) {
+    videoElement.value.pause()
+  } else {
+    videoElement.value.play()
+  }
+}
+
+// 更新视频时间
+const updateVideoTime = () => {
+  if (!videoElement.value) return
+  
+  const current = videoElement.value.currentTime
+  const duration = videoElement.value.duration
+  
+  // 处理无效的currentTime
+  if (isNaN(current) || !isFinite(current) || current < 0) {
+    currentTime.value = '00:00'
+  } else {
+    currentTime.value = formatTime(current)
+  }
+  
+  // 处理无效的duration
+  if (duration && !isNaN(duration) && isFinite(duration) && duration > 0) {
+    totalTime.value = formatTime(duration)
+  } else {
+    totalTime.value = '00:00'
+  }
+}
+
 onMounted(() => {
   AMapLoader.load({
     key: '6f9eaf51960441fa4f813ea2d7e7cfff', 
@@ -371,6 +1245,15 @@ onMounted(() => {
     amapInstance.value.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
     amapInstance.value.addControl(new AMap.MapType({ position: 'RB' }))
   })
+  
+  // 启动DRC状态轮询
+  startDrcStatusPolling()
+  
+  // 检查控制权限状态
+  checkAuthorityStatus()
+  
+  // 初始化无人机视频播放器（优先从缓存读取，没有则刷新获取）
+  initVideoPlayer()
 })
 
 // 测试方法：动态改变进度
@@ -387,14 +1270,57 @@ const handleTabClick = (key: string) => {
   }
 }
 
-// 获取缓存的capacity数据
+// 检查DRC状态
+const checkDrcStatus = async () => {
+  try {
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      return
+    }
+    
+    const dockSn = cachedDockSns[0]
+    
+    const response = await drcApi.checkDrcReady(dockSn)
+    
+    if (response.code === 0) {
+      drcStatus.value = response.data
+      
+      // 如果有失败的检查项，可以在控制台显示详细信息
+      if (response.data.failed_checks && response.data.failed_checks.length > 0) {
+      }
+    } else {
+    }
+  } catch (error: any) {
+    // 网络错误时保持当前状态不变，避免频繁切换
+  }
+}
+
+// 启动DRC状态轮询
+const startDrcStatusPolling = () => {
+  // 立即检查一次
+  checkDrcStatus()
+  
+  // 设置定时轮询
+  drcStatusInterval.value = setInterval(() => {
+    checkDrcStatus()
+  }, DRC_STATUS_CHECK_INTERVAL)
+  
+}
+
+// 停止DRC状态轮询
+const stopDrcStatusPolling = () => {
+  if (drcStatusInterval.value) {
+    clearInterval(drcStatusInterval.value)
+    drcStatusInterval.value = null
+  }
+}
 const getCachedCapacity = () => {
   const cachedData = localStorage.getItem('livestream_capacity')
   if (cachedData) {
     try {
       return JSON.parse(cachedData)
-    } catch (error) {
-      console.error('解析capacity缓存数据失败:', error)
+    } catch (error: any) {
       return null
     }
   }
@@ -405,13 +1331,11 @@ const getCachedCapacity = () => {
 const getCameraIndexByDeviceSn = (deviceSn: string) => {
   const capacity = getCachedCapacity()
   if (!capacity || !capacity.available_devices) {
-    console.warn('没有找到capacity缓存数据')
     return null
   }
   
   const device = capacity.available_devices.find((d: any) => d.sn === deviceSn)
   if (!device || !device.camera_list || device.camera_list.length === 0) {
-    console.warn(`设备 ${deviceSn} 没有找到摄像头信息`)
     return null
   }
   
@@ -423,7 +1347,6 @@ const getCameraIndexByDeviceSn = (deviceSn: string) => {
 const getBestPayloadIndex = () => {
   const capacity = getCachedCapacity()
   if (!capacity || !capacity.available_devices || capacity.available_devices.length === 0) {
-    console.warn('没有找到capacity缓存数据或可用设备')
     return null
   }
   
@@ -436,7 +1359,6 @@ const getBestPayloadIndex = () => {
   for (const device of capacity.available_devices) {
     // 检查是否是无人机设备
     if (cachedDroneSns.includes(device.sn)) {
-      console.log('找到无人机设备:', device.sn)
       
       // 遍历该设备的摄像头
       if (device.camera_list && device.camera_list.length > 0) {
@@ -473,8 +1395,8 @@ const getCurrentZoomFactor = (): number => {
     try {
       const factor = parseInt(cached, 10)
       return isNaN(factor) ? MIN_ZOOM : Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, factor))
-    } catch (error) {
-      console.warn('解析变焦倍率缓存失败:', error)
+    } catch (error: any) {
+      // 解析变焦倍率缓存失败
     }
   }
   return MIN_ZOOM
@@ -484,36 +1406,54 @@ const getCurrentZoomFactor = (): number => {
 const setZoomFactor = (factor: number): number => {
   const clampedFactor = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, factor))
   localStorage.setItem(ZOOM_FACTOR_KEY, clampedFactor.toString())
-  console.log('变焦倍率已缓存:', clampedFactor)
   return clampedFactor
 }
 
-// 获取控制权按钮点击处理
-const handleGetControlAuthority = async () => {
+// 计算属性：是否拥有控制权
+const hasControlAuthority = computed(() => {
+  return controlAuthorityStatus.value.hasFlightAuthority && controlAuthorityStatus.value.hasPayloadAuthority
+})
+
+// 切换控制权按钮点击处理
+const handleToggleControlAuthority = async () => {
+  if (controlAuthorityStatus.value.isLoading) {
+    return
+  }
+
   try {
-    console.log('开始获取控制权...')
+    if (hasControlAuthority.value) {
+      // 当前有控制权，执行释放操作
+      await releaseControlAuthority()
+    } else {
+      // 当前无控制权，执行获取操作
+      await acquireControlAuthority()
+    }
+  } catch (error: any) {
+    alert(`控制权操作失败: ${error.message || error}`)
+  }
+}
+
+// 获取控制权
+const acquireControlAuthority = async () => {
+  controlAuthorityStatus.value.isLoading = true
+  
+  try {
     
     // 获取缓存的设备列表
     const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
-    const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
     
-    console.log('缓存的机场SN列表:', cachedDockSns)
-    console.log('缓存的无人机SN列表:', cachedDroneSns)
     
     if (cachedDockSns.length === 0) {
-      console.error('没有找到缓存的机场SN')
       alert('没有找到可用的机场设备')
       return
     }
     
     // 使用第一个机场SN作为API调用的设备SN
     const dockSn = cachedDockSns[0]
-    console.log('使用机场SN:', dockSn)
     
     // 从capacity缓存数据中获取payload_index
     const capacity = getCachedCapacity()
     if (!capacity || !capacity.available_devices || capacity.available_devices.length === 0) {
-      console.error('没有找到capacity缓存数据或可用设备')
       alert('没有找到可用的设备，请重新登录')
       return
     }
@@ -521,82 +1461,150 @@ const handleGetControlAuthority = async () => {
     // 获取最佳的payload_index
     const payloadIndex = getBestPayloadIndex()
     if (!payloadIndex) {
-      console.error('没有找到合适的载荷摄像头')
       alert('没有找到可用的载荷信息')
       return
     }
     
-    console.log('选择的payload_index:', payloadIndex)
     
     // 同时调用两个API，都使用机场SN
-    console.log('开始调用飞行控制权限API，使用机场SN:', dockSn)
     const flightPromise = controlApi.getFlightAuthority(dockSn)
     
-    console.log('开始调用载荷控制权限API，使用机场SN:', dockSn, 'payload_index:', payloadIndex)
     const payloadPromise = controlApi.getPayloadAuthority(dockSn, payloadIndex)
     
     // 等待两个API都完成
     const [flightResult, payloadResult] = await Promise.all([flightPromise, payloadPromise])
     
-    console.log('飞行控制权限结果:', flightResult)
-    console.log('载荷控制权限结果:', payloadResult)
+    
+    // 更新状态
+    controlAuthorityStatus.value.hasFlightAuthority = flightResult.code === 0
+    controlAuthorityStatus.value.hasPayloadAuthority = payloadResult.code === 0
     
     // 检查结果并提示用户
     if (flightResult.code === 0 && payloadResult.code === 0) {
-      alert('控制权获取成功！')
+      // 控制权获取成功，启用云台控制
+      isGimbalControlEnabled.value = true
     } else {
       const errorMsg = `控制权获取失败:\n飞行控制: ${flightResult.message}\n载荷控制: ${payloadResult.message}`
       alert(errorMsg)
     }
     
   } catch (error: any) {
-    console.error('获取控制权失败:', error)
     alert(`获取控制权失败: ${error.message || error}`)
+  } finally {
+    controlAuthorityStatus.value.isLoading = false
+  }
+}
+
+// 释放控制权
+const releaseControlAuthority = async () => {
+  controlAuthorityStatus.value.isLoading = true
+  
+  try {
+    
+    // 获取缓存的设备列表
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    
+    if (cachedDockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    const dockSn = cachedDockSns[0]
+    
+    // 获取最佳的payload_index
+    const payloadIndex = getBestPayloadIndex()
+    if (!payloadIndex) {
+      alert('没有找到可用的载荷信息')
+      return
+    }
+    
+    
+    // 同时调用两个释放API
+    const flightPromise = controlApi.releaseFlightAuthority(dockSn)
+    
+    const payloadPromise = controlApi.releasePayloadAuthority(dockSn, payloadIndex)
+    
+    // 等待两个API都完成
+    const [flightResult, payloadResult] = await Promise.all([flightPromise, payloadPromise])
+    
+    
+    // 更新状态
+    controlAuthorityStatus.value.hasFlightAuthority = false
+    controlAuthorityStatus.value.hasPayloadAuthority = false
+    
+    // 检查结果并提示用户
+    if (flightResult.code === 0 && payloadResult.code === 0) {
+      // 控制权释放成功，禁用云台控制
+      isGimbalControlEnabled.value = false
+    } else {
+      const errorMsg = `控制权释放失败:\n飞行控制: ${flightResult.message}\n载荷控制: ${payloadResult.message}`
+      alert(errorMsg)
+    }
+    
+  } catch (error: any) {
+    alert(`释放控制权失败: ${error.message || error}`)
+  } finally {
+    controlAuthorityStatus.value.isLoading = false
+  }
+}
+
+// 检查权限状态
+const checkAuthorityStatus = async () => {
+  try {
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      return
+    }
+    
+    const dockSn = cachedDockSns[0]
+    const result = await controlApi.getAuthorityStatus(dockSn)
+    
+    if (result.code === 0) {
+      // 根据API返回的权限状态更新本地状态
+      const data = result.data
+      controlAuthorityStatus.value.hasFlightAuthority = !!data.flight_authority
+      controlAuthorityStatus.value.hasPayloadAuthority = data.payload_authorities && Object.keys(data.payload_authorities).length > 0
+      
+      // 更新云台控制状态
+      isGimbalControlEnabled.value = hasControlAuthority.value
+    }
+  } catch (error: any) {
   }
 }
 
 // 云台控制处理函数
 const handleGimbalControl = async (direction: 'up' | 'down' | 'left' | 'right') => {
   try {
-    console.log(`开始云台${direction}控制...`)
     
     // 获取缓存的机场SN
     const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
     if (cachedDockSns.length === 0) {
-      console.error('没有找到缓存的机场SN')
       alert('没有找到可用的机场设备')
       return
     }
     
     // 使用第一个机场SN
     const dockSn = cachedDockSns[0]
-    console.log('使用机场SN:', dockSn)
     
     // 获取最佳的payload_index
     const payloadIndex = getBestPayloadIndex()
     if (!payloadIndex) {
-      console.error('没有找到合适的载荷摄像头')
       alert('没有找到可用的载荷信息')
       return
     }
     
-    console.log('使用payload_index:', payloadIndex, '控制方向:', direction)
     
     // 调用云台控制API
     const result = await controlApi.gimbalDirectionControl(dockSn, payloadIndex, direction)
-    console.log('云台控制结果:', result)
     
     // 检查结果
     if (result.code === 0) {
-      console.log(`云台${direction}控制成功`)
       // 不需要弹窗提示，云台控制是实时操作
     } else {
-      console.error(`云台${direction}控制失败:`, result.message)
       alert(`云台${direction}控制失败: ${result.message}`)
     }
     
   } catch (error: any) {
-    console.error(`云台${direction}控制失败:`, error)
     alert(`云台${direction}控制失败: ${error.message || error}`)
   }
 }
@@ -604,43 +1612,34 @@ const handleGimbalControl = async (direction: 'up' | 'down' | 'left' | 'right') 
 // 一键返航处理函数
 const handleReturnHome = async () => {
   try {
-    console.log('开始一键返航...')
     
     // 获取缓存的机场SN
     const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
     if (cachedDockSns.length === 0) {
-      console.error('没有找到缓存的机场SN')
       alert('没有找到可用的机场设备')
       return
     }
     
     // 使用第一个机场SN
     const dockSn = cachedDockSns[0]
-    console.log('使用机场SN:', dockSn)
     
     // 弹出确认对话框
     const confirmed = confirm('确定要执行一键返航吗？')
     if (!confirmed) {
-      console.log('用户取消一键返航操作')
       return
     }
     
     // 调用一键返航API
-    console.log('调用一键返航API，使用机场SN:', dockSn)
     const result = await controlApi.returnHome(dockSn)
-    console.log('一键返航结果:', result)
     
     // 检查结果并提示用户
     if (result.code === 0) {
       alert('一键返航指令发送成功！')
-      console.log('一键返航指令发送成功')
     } else {
-      console.error('一键返航失败:', result.message)
       alert(`一键返航失败: ${result.message}`)
     }
     
   } catch (error: any) {
-    console.error('一键返航失败:', error)
     alert(`一键返航失败: ${error.message || error}`)
   }
 }
@@ -649,24 +1648,20 @@ const handleReturnHome = async () => {
 const handleZoom = async (direction: 'in' | 'out') => {
   try {
     const action = direction === 'in' ? '放大' : '缩小'
-    console.log(`开始${action}...`)
     
     // 获取缓存的机场SN
     const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
     if (cachedDockSns.length === 0) {
-      console.error('没有找到缓存的机场SN')
       alert('没有找到可用的机场设备')
       return
     }
     
     // 使用第一个机场SN
     const dockSn = cachedDockSns[0]
-    console.log('使用机场SN:', dockSn)
     
     // 获取最佳的payload_index
     const payloadIndex = getBestPayloadIndex()
     if (!payloadIndex) {
-      console.error('没有找到合适的载荷摄像头')
       alert('没有找到可用的载荷信息')
       return
     }
@@ -693,76 +1688,98 @@ const handleZoom = async (direction: 'in' | 'out') => {
       return
     }
     
-    console.log(`${action}: ${currentFactor}x -> ${newFactor}x`)
     
     // 调用变焦API
     const result = await controlApi.cameraZoom(dockSn, payloadIndex, newFactor)
-    console.log('变焦控制结果:', result)
     
     // 检查结果
     if (result.code === 0) {
       // 成功后更新缓存
       setZoomFactor(newFactor)
-      console.log(`${action}成功，当前倍率: ${newFactor}x`)
       // 可选：显示当前倍率提示
       // alert(`${action}成功，当前倍率: ${newFactor}x`)
     } else {
-      console.error(`${action}失败:`, result.message)
       alert(`${action}失败: ${result.message}`)
     }
     
   } catch (error: any) {
     const action = direction === 'in' ? '放大' : '缩小'
-    console.error(`${action}失败:`, error)
     alert(`${action}失败: ${error.message || error}`)
   }
 }
 
-// DRC模式处理函数
+// DRC模式切换处理函数
+const handleToggleDrcMode = async () => {
+  if (!drcStatus.value.ready) {
+    alert('DRC未就绪，无法进入DRC模式')
+    return
+  }
+  
+  if (isDrcModeActive.value) {
+    // 退出DRC模式
+    isDrcModeActive.value = false
+    alert('已退出DRC模式')
+  } else {
+    // 进入DRC模式
+    try {
+      
+      const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+      if (cachedDockSns.length === 0) {
+        alert('没有找到可用的机场设备')
+        return
+      }
+      
+      const dockSn = cachedDockSns[0]
+      
+      const result = await drcApi.enterDrcMode(dockSn)
+      
+      if (result.code === 0) {
+        isDrcModeActive.value = true
+        alert('已进入DRC模式，现在可以使用方向控制按钮')
+      } else {
+        alert(`进入DRC模式失败: ${result.message}`)
+      }
+    } catch (error: any) {
+      alert(`进入DRC模式失败: ${error.message || error}`)
+    }
+  }
+}
+
+// DRC模式处理函数 (保持向后兼容)
 const handleEnterDrcMode = async () => {
   try {
-    console.log('开始进入DRC模式...')
     
     // 获取缓存的机场SN
     const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
     if (cachedDockSns.length === 0) {
-      console.error('没有找到缓存的机场SN')
       alert('没有找到可用的机场设备')
       return
     }
     
     // 使用第一个机场SN
     const dockSn = cachedDockSns[0]
-    console.log('使用机场SN:', dockSn)
     
     // 调用DRC进入模式API
-    console.log('调用DRC进入模式API，使用机场SN:', dockSn)
     const result = await drcApi.enterDrcMode(dockSn)
-    console.log('DRC模式结果:', result)
     
     // 检查结果并提示用户
     if (result.code === 0) {
       alert('进入DRC模式！')
-      console.log('DRC模式进入成功')
     } else {
-      console.error('进入DRC模式失败:', result.message)
       alert(`进入DRC模式失败: ${result.message}`)
     }
     
   } catch (error: any) {
-    console.error('进入DRC模式失败:', error)
     alert(`进入DRC模式失败: ${error.message || error}`)
   }
 }
 
 // 开始控制
 const startControl = (type: string) => {
-  console.log(`开始控制: ${type}`)
   
   // 获取缓存的机场SN
   const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
   if (cachedDockSns.length === 0) {
-    console.error('没有找到缓存的机场SN')
     alert('没有找到可用的机场设备')
     return
   }
@@ -781,7 +1798,6 @@ const startControl = (type: string) => {
 
 // 停止控制
 const stopControl = () => {
-  console.log('停止控制')
   
   // 清除定时器
   if (controlInterval.value) {
@@ -833,10 +1849,8 @@ const sendControlCommand = async (dockSn: string, type: string) => {
   }
   
   try {
-    const result = await drcApi.simpleControl(dockSn, control)
-    console.log(`控制指令发送成功 (${type}):`, control)
-  } catch (error) {
-    console.error(`控制指令发送失败 (${type}):`, error)
+    await drcApi.simpleControl(dockSn, control)
+  } catch (error: any) {
     // 发生错误时停止控制
     stopControl()
   }
@@ -845,6 +1859,8 @@ const sendControlCommand = async (dockSn: string, type: string) => {
 // 组件卸载时清理定时器
 onBeforeUnmount(() => {
   stopControl()
+  stopDrcStatusPolling()
+  stopVideoPlayback() // 停止视频播放
   if (amapInstance.value) {
     amapInstance.value.destroy()
     amapInstance.value = null
@@ -1200,15 +2216,17 @@ onBeforeUnmount(() => {
   flex: 2;
   /* 去掉背景色和阴影 */
   background: none !important;
-  border: 1.5px solid #164159;
+  border: none !important; /* 修改：完全去掉边框 */
   border-radius: 8px;
   box-shadow: none;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
+  justify-content: stretch; /* 修改：让内容拉伸填满 */
+  align-items: stretch; /* 修改：让内容拉伸填满 */
+  gap: 0; /* 修改：去掉间距 */
   min-height: 320px;
+  padding: 0; /* 确保没有内边距 */
+  overflow: hidden; /* 确保内容不会溢出 */
 }
 .video-player-placeholder {
   width: 100%;
@@ -1255,11 +2273,10 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: #fff;
   font-weight: 600;
-  /* margin-bottom: 8px; */
   text-align: center;
   border-radius: 4px 4px 0 0;
   background: #004161;
-  padding: 0;
+  padding: 0 16px;
   height: 32px;
   line-height: 32px;
   width: calc(100% + 32px);
@@ -1267,12 +2284,155 @@ onBeforeUnmount(() => {
   margin-left: -16px;
   margin-right: -16px;
   margin-top: -12px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-title-text {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.drc-status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4d4f;
+  box-shadow: 0 0 4px rgba(255, 77, 79, 0.5);
+  transition: all 0.3s ease;
+  animation: pulse-red 2s infinite;
+  flex-shrink: 0;
+}
+
+.drc-status-indicator.ready {
+  background: #52c41a;
+  box-shadow: 0 0 4px rgba(82, 196, 26, 0.5);
+  animation: pulse-green 2s infinite;
+}
+
+.drc-status-indicator.not-ready {
+  background: #ff4d4f;
+  box-shadow: 0 0 4px rgba(255, 77, 79, 0.5);
+  animation: pulse-red 2s infinite;
+}
+
+.drc-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #0c3c56;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+  border-radius: 4px;
+  color: #67d5fd;
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  height: 24px;
+  line-height: 1;
+}
+
+.drc-mode-btn:hover:not(:disabled) {
+  background: #16bbf2;
+  color: #fff;
+  border-color: #16bbf2;
+}
+
+.drc-mode-btn.active {
+  background: #52c41a;
+  color: #fff;
+  border-color: #52c41a;
+  box-shadow: 0 0 4px rgba(82, 196, 26, 0.3);
+}
+
+.drc-mode-btn.disabled,
+.drc-mode-btn:disabled {
+  background: #2a2a2a;
+  color: #666;
+  border-color: #444;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.drc-btn-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+@keyframes pulse-red {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pulse-green {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.panel-title-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+}
+
+.drc-status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ff4d4f;
+  box-shadow: 0 0 4px rgba(255, 77, 79, 0.5);
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.drc-status-indicator.ready {
+  background-color: #52c41a;
+  box-shadow: 0 0 4px rgba(82, 196, 26, 0.5);
+}
+
+.drc-status-indicator.not-ready {
+  background-color: #ff4d4f;
+  box-shadow: 0 0 4px rgba(255, 77, 79, 0.5);
 }
 .drone-direction-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, auto);
   column-gap: 24px;
   row-gap: 0px;
+}
+
+.drone-btn-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 62px;
+  visibility: hidden;
 }
 .drone-bottom-row {
   display: flex;
@@ -2027,14 +3187,18 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 2;
   background: rgba(0, 12, 23, .5);
-  border-radius: 4px;
+  border-radius: 0; /* 修改：去掉圆角 */
   overflow: hidden;
-  padding: 12px 12px 0 12px; /* 增加内边距，顶部和左右有间距 */
+  padding: 0; /* 修改：去掉所有padding */
+  margin: 0; /* 确保没有外边距 */
+  border: none; /* 确保没有边框 */
 }
 .boxGrid-box-content {
   flex: 1;
   position: relative;
   padding: 0;
+  width: 100%;
+  height: calc(100% - 40px); /* 减去底部控制条的高度 */
 }
 .player_container {
   width: 100%;
@@ -2054,6 +3218,66 @@ onBeforeUnmount(() => {
   border-radius: 0;
   overflow: hidden;
 }
+
+/* 视频元素样式，确保填满容器 - 最强制性的设置 */
+#player_box1,
+.player_box {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative;
+  background: #000;
+  border-radius: 0;
+  overflow: hidden;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  box-sizing: border-box !important;
+}
+
+.player_box video,
+.player_box canvas,
+.player_box img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: fill !important;
+  display: block !important;
+  border: none !important;
+  outline: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* FlvJS播放器样式 - 最强制性设置 */
+.player_box .flv-player,
+.player_box .video-js,
+.player_box .flv-player *,
+.player_box .video-js * {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  box-sizing: border-box !important;
+}
+
+.player_box .video-js .vjs-tech {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: fill !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
 .boxGrid-box-bottom {
   height: 40px;
   display: flex;
@@ -2063,7 +3287,133 @@ onBeforeUnmount(() => {
   background: rgba(0, 12, 23, .8);
   position: relative;
   z-index: 3;
-  margin-top: 8px;
+  margin-top: 0; /* 修改：去掉margin-top */
+  flex-shrink: 0; /* 确保底部控制条不会被压缩 */
+}
+
+.left-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.video-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+}
+
+.time-display {
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+}
+
+.play-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.play-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-btn:hover {
+  background: rgba(89, 192, 252, 0.1);
+}
+
+.play-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: #59C0FC;
+  transition: fill 0.3s ease;
+}
+
+.play-btn.paused svg {
+  fill: #FF4D4F;
+}
+
+.play-btn.paused:hover {
+  background: rgba(255, 77, 79, 0.1);
+}
+
+.center-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.refresh-video-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.refresh-video-btn:hover:not(:disabled) {
+  background: rgba(89, 192, 252, 0.2);
+}
+
+.refresh-video-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.refresh-video-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.refresh-video-btn svg.rotating {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fullscreen-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fullscreen-btn:hover {
+  background: rgba(89, 192, 252, 0.2);
+}
+
+.fullscreen-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: #59C0FC;
 }
 .svg-icon {
   width: 20px;
@@ -2199,6 +3549,41 @@ onBeforeUnmount(() => {
 .drone-bottom-row button:hover .drone-btn-label {
   color: #fff !important;
 }
+
+/* 禁用状态样式 */
+.drone-direction-grid button.disabled,
+.drone-direction-grid button:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.drone-direction-grid button.disabled .drone-btn-iconbox,
+.drone-direction-grid button:disabled .drone-btn-iconbox {
+  background: none !important;
+  border: none !important;
+}
+
+.drone-direction-grid button.disabled .drone-btn-icon,
+.drone-direction-grid button:disabled .drone-btn-icon {
+  filter: grayscale(100%) brightness(0.6) !important;
+  opacity: 0.5;
+}
+
+.drone-direction-grid button.disabled .drone-btn-label,
+.drone-direction-grid button:disabled .drone-btn-label {
+  color: #666 !important;
+}
+
+.drone-direction-grid button.disabled:hover .drone-btn-iconbox,
+.drone-direction-grid button:disabled:hover .drone-btn-iconbox {
+  background: none !important;
+  border: none !important;
+}
+
+.drone-direction-grid button.disabled:hover .drone-btn-label,
+.drone-direction-grid button:disabled:hover .drone-btn-label {
+  color: #666 !important;
+}
 /* 取消按钮整体高亮，只高亮图标框 */
 .drone-direction-grid button:hover,
 .drone-bottom-row button:hover {
@@ -2319,6 +3704,21 @@ onBeforeUnmount(() => {
   background: #16bbf2;
   color: #fff;
 }
+
+.gimbal-dir-btn:disabled,
+.gimbal-func-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: rgba(255, 255, 255, 0.65) !important;
+  border: 1px solid rgba(0, 0, 0, 0.23) !important;
+  color: #5E5E5E !important;
+}
+
+.gimbal-dir-btn:disabled img {
+  filter: grayscale(100%) brightness(0.8) !important;
+  opacity: 0.6;
+}
+
 .gimbal-separator {
   width: 100%;
   height: 1px;
@@ -2393,6 +3793,17 @@ onBeforeUnmount(() => {
     font-size: 13px;
     padding: 0 10px;
   }
+}
+
+/* 控制权授权状态样式 - 仅修改图标颜色 */
+.drone-direction-grid button.authority-granted .drone-btn-icon {
+  filter: brightness(0) saturate(100%) invert(64%) sepia(88%) saturate(1574%) hue-rotate(87deg) brightness(103%) contrast(89%) !important;
+  /* 这个filter会将图标变成亮绿色 #52c41a */
+}
+
+.drone-direction-grid button.authority-granted:hover .drone-btn-icon {
+  filter: brightness(0) saturate(100%) invert(54%) sepia(98%) saturate(1385%) hue-rotate(87deg) brightness(94%) contrast(101%) !important;
+  /* hover时使用稍深的绿色 */
 }
 
 /* 新增：高分辨率屏幕优化 */
