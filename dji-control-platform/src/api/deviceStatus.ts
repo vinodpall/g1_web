@@ -1,103 +1,100 @@
-// 设备状态API服务
-import { http } from './config'
+import { apiClient } from './config'
 
-/**
- * 设备状态相关API
- */
-export const deviceStatusApi = {
-  /**
-   * 获取所有设备能力信息
-   */
-  getCapacity: () => {
-    return http.get('/api/v1/livestream/capacity')
-  },
-
-  /**
-   * 获取指定设备的详细状态
-   */
-  getDeviceStatus: (deviceSn: string) => {
-    return http.get(`/api/v1/control/devices/${deviceSn}/status`)
-  },
-
-  /**
-   * 获取指定设备的直播能力
-   */
-  getDeviceCapacity: (deviceSn: string) => {
-    return http.get(`/api/v1/livestream/devices/${deviceSn}/capacity`)
-  },
-
-  /**
-   * 获取云台状态
-   */
-  getGimbalStatus: (deviceSn: string) => {
-    return http.get(`/api/v1/control/devices/${deviceSn}/gimbal/status`)
-  },
-
-  /**
-   * 获取DRC状态
-   */
-  getDrcStatus: (deviceSn: string) => {
-    return http.get(`/api/v1/drc/devices/${deviceSn}/drc/status`)
-  },
-
-  /**
-   * 获取控制权限状态
-   */
-  getAuthorityStatus: (deviceSn: string) => {
-    return http.get(`/api/v1/control/devices/${deviceSn}/authority`)
-  }
-}
-
-/**
- * 设备状态数据类型定义
- */
+// 设备状态接口定义
 export interface DeviceStatus {
-  basic_info: {
-    longitude: number
-    latitude: number
-    height: number
-    connect_status: boolean
-  }
-  live_status: {
-    battery?: {
-      voltage: number
-      current: number
-      temperature: number
-      capacity_percent: number
-    }
-    position_state?: {
-      velocity: {
-        x: number
-        y: number
-        z: number
+  longitude?: number
+  latitude?: number
+  height?: number
+  connect_status?: boolean
+  osd?: {
+    data: {
+      environment_temperature?: number
+      temperature?: number
+      wind_speed?: number
+      humidity?: number
+      rainfall?: number
+      mode_code?: number
+      flighttask_step_code?: number
+      drone_in_dock?: number
+      cover_state?: number
+      job_number?: number
+      position_state?: {
+        is_fixed: number
+        quality: number
+        gps_number: number
+        rtk_number: number
+        velocity?: {
+          x: number
+          y: number
+          z: number
+        }
       }
-      gps_number: number
+      drone_charge_state?: {
+        state: number
+        capacity_percent: number
+      }
     }
-    environment_info?: {
-      temperature: number
-      humidity: number
-      wind_speed: number
-      wind_direction: number
-    }
-    cover_state?: boolean
   }
 }
 
-export interface CapacityResponse {
-  available_devices: Array<{
-    sn: string
-    domain: 'drone' | 'dock'
-    type: string
-    sub_type: string
-    device_name: string
-    camera_list: Array<{
-      camera_index: string
-      camera_type: string
-      video_list: Array<{
-        video_id: string
-        video_index: string
-        video_type: string
-      }>
-    }>
-  }>
+// 状态映射
+export const StatusMaps = {
+  // 机场模式状态
+  dockMode: {
+    0: '空闲',
+    1: '任务中',
+    2: '充电中',
+    3: '维护中',
+    4: '离线'
+  },
+  // 舱盖状态
+  coverState: {
+    0: '关闭',
+    1: '开启',
+    2: '开启中',
+    3: '关闭中'
+  },
+  // 充电状态
+  chargeState: {
+    0: '未充电',
+    1: '充电中',
+    2: '充电完成',
+    3: '充电异常'
+  },
+  // 任务状态
+  taskStatus: {
+    0: '待执行',
+    1: '执行中',
+    2: '已完成',
+    3: '已取消',
+    4: '执行失败'
+  },
+  // 无人机位置状态
+  dronePosition: {
+    0: '在舱外',
+    1: '在舱内'
+  },
+  // RTK固定状态
+  rtkFixed: {
+    0: '未固定',
+    1: '已固定'
+  },
+  // 降水量状态
+  rainfall: {
+    0: '无雨',
+    1: '小雨',
+    2: '中雨',
+    3: '大雨'
+  }
 }
+
+// 设备状态API
+export const deviceStatusApi = {
+  // 获取设备状态
+  getDeviceStatus: (deviceSn: string) =>
+    apiClient.get(`/api/v1/control/devices/${deviceSn}/status`),
+  
+  // 获取设备容量信息
+  getDeviceCapacity: (deviceSn: string) =>
+    apiClient.get(`/api/v1/control/devices/${deviceSn}/capacity`)
+} 

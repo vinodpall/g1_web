@@ -32,9 +32,9 @@
                     <div class="battery-info-block">
                       <img class="battery-img" :src="batteryImg" alt="电池" />
                       <div class="battery-detail-list">
-                        <div>电压：50V</div>
-                        <div>电流：-3A</div>
-                        <div>状态：暂无</div>
+                        <div>电量：{{ formatBattery(droneStatus?.batteryPercent) }}</div>
+                        <div>状态：{{ droneStatus?.chargeText || '暂无' }}</div>
+                        <div>在线：{{ dockStatus?.isOnline ? '是' : '否' }}</div>
                       </div>
                     </div>
                   </div>
@@ -52,10 +52,10 @@
               <!-- 可选：底部状态栏 -->
               <div class="robot-status-footer">
                 <span>风向：东南风</span>
-                <span>，风速：1.2m/s</span>
-                <span>，降水：0mm</span>
-                <span>，温度：35℃</span>
-                <span>，湿度：52%</span>
+                <span>，风速：{{ formatWindSpeed(environment?.windSpeed) }}</span>
+                <span>，降水：{{ formatRainfall(environment?.rainfall) }}</span>
+                <span>，温度：{{ formatTemperature(environment?.environmentTemperature) }}</span>
+                <span>，湿度：{{ formatHumidity(environment?.humidity) }}</span>
               </div>
             </div>
           </div>
@@ -195,6 +195,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import { useDeviceStatus } from '../composables/useDeviceStatus'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
@@ -212,6 +213,21 @@ import dockWifi from '@/assets/source_data/svg_data/dock_control_svg/dock_wifi.s
 import DockInfoRow from '@/components/DockInfoRow.vue'
 
 const router = useRouter()
+
+// 使用设备状态API
+const { 
+  fetchDeviceStatus, 
+  fetchMainDeviceStatus,
+  droneStatus, 
+  dockStatus,
+  environment,
+  formatBattery,
+  formatTemperature,
+  formatHumidity,
+  formatWindSpeed,
+  formatRainfall
+} = useDeviceStatus()
+
 const sidebarTabs = [
   {
     key: 'plane',
@@ -230,6 +246,9 @@ const currentRouteName = ref('测试航线B')
 const amapInstance = ref<any>(null)
 const amapApiRef = ref<any>(null)
 const remoteEnabled = ref(false)
+
+// 设备状态刷新定时器
+const statusRefreshTimer = ref<number | null>(null)
 const toggleRemote = () => {
   remoteEnabled.value = !remoteEnabled.value
 }
@@ -284,7 +303,10 @@ const dockInfoItems = [
   { value: '未连接', label: 'PoE接口' },
   { value: '暂无', label: 'PoE功率' },
 ]
-onMounted(() => {
+onMounted(async () => {
+  // 加载设备状态数据（使用缓存的设备SN）
+  await fetchMainDeviceStatus()
+  
   AMapLoader.load({
     key: '6f9eaf51960441fa4f813ea2d7e7cfff',
     version: '2.0',
@@ -300,8 +322,19 @@ onMounted(() => {
     amapInstance.value.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
     amapInstance.value.addControl(new AMap.MapType({ position: 'RB' }))
   })
+  
+  // 设置设备状态自动刷新（每5秒）
+  statusRefreshTimer.value = setInterval(async () => {
+    await fetchMainDeviceStatus()
+  }, 5000)
 })
 onBeforeUnmount(() => {
+  // 清理设备状态刷新定时器
+  if (statusRefreshTimer.value) {
+    clearInterval(statusRefreshTimer.value)
+    statusRefreshTimer.value = null
+  }
+  
   if (amapInstance.value) {
     amapInstance.value.destroy()
     amapInstance.value = null

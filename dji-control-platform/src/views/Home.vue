@@ -12,7 +12,7 @@
           <div class="b-top">
             <div class="b-top-left">
               <div class="zhuangtai4">
-                <div>离线</div>
+                <div>{{ droneStatus?.isOnline ? '在线' : '离线' }}</div>
               </div>
               <div class="img">
                 <img src="@/assets/source_data/plane_2.png" alt="" />
@@ -23,7 +23,7 @@
                 <div class="b-top-rightDiv">
                   <img src="@/assets/source_data/speed.png" alt="" />
                   <div>
-                    <p>0.00m/s</p>
+                    <p>{{ formatSpeed(gpsStatus?.totalSpeed) }}</p>
                     <p>当前飞行速度</p>
                   </div>
                 </div>
@@ -51,35 +51,35 @@
                   <img src="@/assets/source_data/svg_data/longitude.svg" alt="经度" />
                   <span class="label">经度</span>
                 </div>
-                <span class="value">116.38°E</span>
+                <span class="value">{{ formatCoordinate(position?.longitude, 'longitude') }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/latitude.svg" alt="纬度" />
                   <span class="label">纬度</span>
                 </div>
-                <span class="value">39.90°N</span>
+                <span class="value">{{ formatCoordinate(position?.latitude, 'latitude') }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/altitude.svg" alt="高度" />
                   <span class="label">高度</span>
                 </div>
-                <span class="value">43m</span>
+                <span class="value">{{ formatHeight(position?.height) }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/speed.svg" alt="速度" />
                   <span class="label">速度</span>
                 </div>
-                <span class="value">0.0m/s</span>
+                <span class="value">{{ formatSpeed(gpsStatus?.totalSpeed) }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/stars.svg" alt="搜星" />
                   <span class="label">搜星</span>
                 </div>
-                <span class="value">4</span>
+                <span class="value">{{ gpsStatus?.gpsNumber || 0 }}</span>
               </div>
             </div>
           </div>
@@ -96,7 +96,7 @@
           <div class="b-top">
             <div class="b-top-left">
               <div class="zhuangtai4">
-                <div>离线</div>
+                <div>{{ dockStatus?.isOnline ? '在线' : '离线' }}</div>
               </div>
               <div class="img">
                 <img src="@/assets/source_data/dock3.png" alt="" />
@@ -114,7 +114,7 @@
                 <div class="b-top-rightDiv">
                   <img src="@/assets/source_data/today_time.png" alt="" />
                   <div>
-                    <p>8次</p>
+                    <p>{{ dockStatus?.jobNumber || 0 }}次</p>
                     <p>累计任务次数</p>
                   </div>
                 </div>
@@ -135,35 +135,35 @@
                   <img src="@/assets/source_data/svg_data/longitude.svg" alt="经度" />
                   <span class="label">经度</span>
                 </div>
-                <span class="value">116.38°E</span>
+                <span class="value">{{ formatCoordinate(position?.longitude, 'longitude') }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/latitude.svg" alt="纬度" />
                   <span class="label">纬度</span>
                 </div>
-                <span class="value">39.90°N</span>
+                <span class="value">{{ formatCoordinate(position?.latitude, 'latitude') }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/stock.svg" alt="舱盖" />
                   <span class="label">舱盖</span>
                 </div>
-                <span class="value">关闭</span>
+                <span class="value">{{ dockStatus?.coverText || '--' }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/temperature.svg" alt="温度" />
                   <span class="label">温度</span>
                 </div>
-                <span class="value">25°C</span>
+                <span class="value">{{ formatTemperature(environment?.environmentTemperature) }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/humidity.svg" alt="湿度" />
                   <span class="label">湿度</span>
                 </div>
-                <span class="value">65%</span>
+                <span class="value">{{ formatHumidity(environment?.humidity) }}</span>
               </div>
             </div>
           </div>
@@ -226,21 +226,21 @@
               <img src="@/assets/source_data/svg_data/env_temperature.svg" alt="温度" />
               <div class="env-info">
                 <div class="env-label">环境温度</div>
-                <div class="env-value">35°C</div>
+                <div class="env-value">{{ formatTemperature(environment?.environmentTemperature) }}</div>
               </div>
             </div>
             <div class="env-item">
-              <img src="@/assets/source_data/svg_data/env_wind.svg" alt="湿度" />
+              <img src="@/assets/source_data/svg_data/env_wind.svg" alt="风速" />
               <div class="env-info">
                 <div class="env-label">风速</div>
-                <div class="env-value">1.2m/s</div>
+                <div class="env-value">{{ formatWindSpeed(environment?.windSpeed) }}</div>
               </div>
             </div>
             <div class="env-item">
               <img src="@/assets/source_data/svg_data/env_rain.svg" alt="降水量" />
               <div class="env-info">
                 <div class="env-label">降水量</div>
-                <div class="env-value">10mm</div>
+                <div class="env-value">{{ formatRainfall(environment?.rainfall) }}</div>
               </div>
             </div>
           </div>
@@ -465,9 +465,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHmsAlerts, useDevices } from '../composables/useApi'
+import { useDeviceStatus } from '../composables/useDeviceStatus'
 import * as echarts from 'echarts'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import flvjs from 'flv.js'
@@ -477,6 +478,25 @@ const router = useRouter()
 // 使用HMS报警API和设备管理API
 const { hmsAlerts, loading, error, fetchDeviceHms, setAllAlerts } = useHmsAlerts()
 const { getCachedDeviceSns } = useDevices()
+
+// 使用设备状态API
+const { 
+  fetchDeviceStatus, 
+  fetchMainDeviceStatus,
+  position, 
+  environment, 
+  dockStatus, 
+  droneStatus, 
+  gpsStatus,
+  formatCoordinate,
+  formatHeight,
+  formatSpeed,
+  formatTemperature,
+  formatHumidity,
+  formatWindSpeed,
+  formatRainfall,
+  formatBattery
+} = useDeviceStatus()
 
 // 当前标签页
 const currentTab = ref('device')
@@ -508,6 +528,19 @@ const inspectionAlarmData = ref([
     content: '呼吸灯缺失'
   }
 ])
+
+// 设备状态刷新定时器
+let statusRefreshTimer: number | null = null
+
+// 获取设备状态数据
+const loadDeviceStatus = async () => {
+  try {
+    // 使用主要设备状态获取（自动使用第一个机场）
+    await fetchMainDeviceStatus()
+  } catch (err) {
+    console.error('获取设备状态失败:', err)
+  }
+}
 
 // 获取最新的三条报警数据
 const loadLatestAlarmData = async () => {
@@ -1307,9 +1340,12 @@ watch(() => videoStreamUrl.value, (newUrl) => {
 })
 
 // 组件挂载时初始化
-onMounted(() => {
+onMounted(async () => {
   // 获取最新报警数据
-  loadLatestAlarmData()
+  await loadLatestAlarmData()
+  
+  // 加载设备状态数据
+  await loadDeviceStatus()
   
   // 初始化视频播放器
   initVideoPlayer()
@@ -1349,10 +1385,21 @@ onMounted(() => {
       console.warn('地图加载失败:', error)
     })
   }
+  
+  // 设置设备状态自动刷新（每5秒）
+  statusRefreshTimer = setInterval(async () => {
+    await loadDeviceStatus()
+  }, 5000)
 })
 
 // 组件卸载时清理
-onBeforeUnmount(() => {
+onUnmounted(() => {
+  // 清理设备状态刷新定时器
+  if (statusRefreshTimer) {
+    clearInterval(statusRefreshTimer)
+    statusRefreshTimer = null
+  }
+  
   // 停止视频播放
   stopVideoPlayback()
   

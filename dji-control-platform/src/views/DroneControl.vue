@@ -32,9 +32,9 @@
                     <div class="battery-info-block">
                       <img class="battery-img" :src="batteryImg" alt="电池" />
                       <div class="battery-detail-list">
-                        <div>电压：50V</div>
-                        <div>电流：-3A</div>
-                        <div>状态：暂无</div>
+                        <div>电量：{{ formatBattery(droneStatus?.batteryPercent) }}</div>
+                        <div>状态：{{ droneStatus?.chargeText || '暂无' }}</div>
+                        <div>在线：{{ droneStatus?.isOnline ? '是' : '否' }}</div>
                       </div>
                     </div>
                   </div>
@@ -83,11 +83,11 @@
                 <div class="on1-lt-border-horizontal"></div>
               </div>
               <div class="robot-status-footer">
-                <span>飞行速度：线速度：0.00m/s ，角速度：0.00m/s</span>
+                <span>飞行速度：{{ formatSpeed(gpsStatus?.totalSpeed) }}</span>
                 <span>，风向：东南风</span>
-                <span>，降水：0mm</span>
-                <span>，温度：35℃</span>
-                <span>，湿度：52%</span>
+                <span>，降水：{{ formatRainfall(environment?.rainfall) }}</span>
+                <span>，温度：{{ formatTemperature(environment?.environmentTemperature) }}</span>
+                <span>，湿度：{{ formatHumidity(environment?.humidity) }}</span>
               </div>
             </div>
             <div class="on1-r">
@@ -386,6 +386,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { controlApi, drcApi, livestreamApi } from '../api/services'
+import { useDeviceStatus } from '../composables/useDeviceStatus'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
@@ -410,6 +411,21 @@ import cameraLeftIcon from '@/assets/source_data/svg_data/camera_left.svg'
 import cameraRightIcon from '@/assets/source_data/svg_data/camera_right.svg'
 
 const router = useRouter()
+
+// 使用设备状态API
+const { 
+  fetchDeviceStatus, 
+  fetchMainDeviceStatus,
+  droneStatus, 
+  gpsStatus,
+  environment,
+  formatBattery,
+  formatSpeed,
+  formatTemperature,
+  formatHumidity,
+  formatWindSpeed,
+  formatRainfall
+} = useDeviceStatus()
 
 const sidebarTabs = [
   {
@@ -473,6 +489,9 @@ const CONTROL_SPEED = 0.5 // 默认控制速度
 
 // DRC状态相关
 const DRC_STATUS_CHECK_INTERVAL = 5000 // 每5秒检查一次DRC状态
+
+// 设备状态刷新定时器
+const statusRefreshTimer = ref<number | null>(null)
 
 // 视频流相关状态管理
 const videoStreamUrl = ref<string>('')
@@ -1229,7 +1248,7 @@ const updateVideoTime = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   AMapLoader.load({
     key: '6f9eaf51960441fa4f813ea2d7e7cfff', 
     version: '2.0',
@@ -1254,6 +1273,14 @@ onMounted(() => {
   
   // 初始化无人机视频播放器（优先从缓存读取，没有则刷新获取）
   initVideoPlayer()
+  
+  // 获取设备状态数据
+  await fetchMainDeviceStatus()
+  
+  // 设置设备状态自动刷新（每5秒）
+  statusRefreshTimer.value = setInterval(async () => {
+    await fetchMainDeviceStatus()
+  }, 5000)
 })
 
 // 测试方法：动态改变进度
@@ -1861,6 +1888,13 @@ onBeforeUnmount(() => {
   stopControl()
   stopDrcStatusPolling()
   stopVideoPlayback() // 停止视频播放
+  
+  // 清理设备状态刷新定时器
+  if (statusRefreshTimer.value) {
+    clearInterval(statusRefreshTimer.value)
+    statusRefreshTimer.value = null
+  }
+  
   if (amapInstance.value) {
     amapInstance.value.destroy()
     amapInstance.value = null
