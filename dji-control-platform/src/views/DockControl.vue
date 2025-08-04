@@ -6,7 +6,7 @@
         <div
           v-for="(item, idx) in sidebarTabs"
           :key="item.key"
-          :class="['sidebar-tab', { active: currentTab === item.key }]"
+          :class="['sidebar-tab', { active: item.path === $route.path }]"
           @click="handleTabClick(item.key)"
         >
           <img :src="item.icon" :alt="item.label" />
@@ -32,9 +32,9 @@
                     <div class="battery-info-block">
                       <img class="battery-img" :src="batteryImg" alt="电池" />
                       <div class="battery-detail-list">
-                        <div>电量：{{ formatBattery(droneStatus?.batteryPercent) }}</div>
-                        <div>状态：{{ droneStatus?.chargeText || '暂无' }}</div>
-                        <div>在线：{{ dockStatus?.isOnline ? '是' : '否' }}</div>
+                        <div>电压：{{ formatVoltage(dockStatus?.workingVoltage) }}</div>
+                        <div>电流：{{ formatCurrent(dockStatus?.workingCurrent) }}</div>
+                        <div>状态：{{ dockStatus?.isOnline ? '在线' : '离线' }}</div>
                       </div>
                     </div>
                   </div>
@@ -73,17 +73,52 @@
                   <div class="player_container">
                     <div class="player_item">
                       <div class="player_box" id="player_box1">
-                        <!-- 视频播放器将在这里初始化 -->
+                        <!-- 视频播放器 -->
+                        <video 
+                          ref="videoElement"
+                          style="width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;"
+                          autoplay
+                          muted
+                          playsinline
+                          webkit-playsinline
+                        >
+                          您的浏览器不支持视频播放
+                        </video>
                       </div>
                     </div>
                   </div>
                 </div>
                 <div class="boxGrid-box-bottom">
                   <div class="left-controls">
-                    <svg class="icon svg-icon" aria-hidden="true">
-                      <use xlink:href="#icon-jiugongge"></use>
-                    </svg>
+                    <div class="video-time">
+                      <span class="time-display">{{ currentTime }}</span>
+                    </div>
+                    <div class="play-controls">
+                      <button 
+                        class="play-btn" 
+                        @click="togglePlay"
+                        :class="{ 'paused': !isVideoPlaying }"
+                      >
+                        <svg v-if="isVideoPlaying" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                        </svg>
+                        <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M8 5v14l11-7z"/>
+                        </svg>
+                      </button>
+                      <button class="fullscreen-btn" @click="toggleFullscreen" title="全屏">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                        </svg>
+                      </button>
+                      <button class="refresh-btn" @click="reloadVideo" :disabled="refreshingVideo" title="刷新视频">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" :class="{ 'rotating': refreshingVideo }">
+                          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
+                  <div class="center-controls"></div>
                   <div class="right-controls" :class="{ active: showScreenMenu }" @click="toggleScreenMenu">
                     <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
                     <i class="el-icon dropdown-icon">
@@ -193,9 +228,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
+import { useDeviceStore } from '../stores/device'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
@@ -205,6 +241,7 @@ import cameraIcon from '@/assets/source_data/svg_data/camera.svg'
 import plane2Img from '@/assets/source_data/plane_2.png'
 import batteryImg from '@/assets/source_data/Battery.png'
 import AMapLoader from '@amap/amap-jsapi-loader'
+import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
 import droneCloseIcon from '@/assets/source_data/svg_data/drone_close.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
@@ -214,6 +251,9 @@ import DockInfoRow from '@/components/DockInfoRow.vue'
 
 const router = useRouter()
 
+// 使用设备存储
+const deviceStore = useDeviceStore()
+
 // 使用设备状态API
 const { 
   fetchDeviceStatus, 
@@ -221,23 +261,31 @@ const {
   droneStatus, 
   dockStatus,
   environment,
-  formatBattery,
+  gpsStatus,
+  osdData,
+  formatVoltage,
+  formatCurrent,
   formatTemperature,
   formatHumidity,
   formatWindSpeed,
-  formatRainfall
+  formatRainfall,
+  formatNetworkRate,
+  formatAccTime,
+  position // ← 这里加上 position
 } = useDeviceStatus()
 
 const sidebarTabs = [
   {
     key: 'plane',
     label: '无人机',
-    icon: planeIcon
+    icon: planeIcon,
+    path: '/dashboard/drone-control'
   },
   {
     key: 'stock',
     label: '机巢',
-    icon: stockIcon
+    icon: stockIcon,
+    path: '/dashboard/dock-control'
   }
 ]
 const currentTab = ref('stock')
@@ -246,13 +294,15 @@ const currentRouteName = ref('测试航线B')
 const amapInstance = ref<any>(null)
 const amapApiRef = ref<any>(null)
 const remoteEnabled = ref(false)
+const dockMarkers = ref<any[]>([])
+const isInitialLoad = ref(true)
 
 // 设备状态刷新定时器
 const statusRefreshTimer = ref<number | null>(null)
 const toggleRemote = () => {
   remoteEnabled.value = !remoteEnabled.value
 }
-const isSatellite = ref(false)
+const isSatellite = ref(true) // 默认为卫星图模式
 const toggleMapLayer = () => {
   if (!amapInstance.value || !amapApiRef.value) return
   isSatellite.value = !isSatellite.value
@@ -285,24 +335,465 @@ const handleTabClick = (key: string) => {
     router.push('/dashboard/dock-control')
   }
 }
-const dockInfoItems = [
-  { value: 'DJI Dock3', label: '机场名称' },
-  { value: '18 小时', label: '运行时长' },
-  { value: '12 架次', label: '作业架次' },
-  { value: 30, label: '机场搜星', icon: dockStars },
-  { value: '已标定', label: '标定状态' },
-  { value: '200KB/s', label: '网络状态', icon: dockWifi },
-  { value: '已配置', label: '备降点' },
-  { value: '空闲中', label: '空调状态' },
-  { value: '38.2℃', label: '舱内温度' },
-  { value: '44%', label: '舱内湿度' },
-  { value: '44.9℃', label: '舱外温度' },
-  { value: '无降水', label: '降水量' },
-  { value: '2.2m/s', label: '风速' },
-  { value: '2.12°', label: '倾斜角度' },
-  { value: '未连接', label: 'PoE接口' },
-  { value: '暂无', label: 'PoE功率' },
+const dockInfoItems = computed(() => {
+  // 获取当前机场信息
+  const currentDockSn = dockStatus.value ? Object.keys(localStorage).find(key => key.includes('dock')) : null
+  const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+  const mainDockSn = cachedDockSns[0] || ''
+  const currentDock = deviceStore.getDeviceBySn(mainDockSn)
+  const dockName = currentDock?.device_name || currentDock?.nickname || 'DJI Dock3'
+  
+  return [
+  { value: dockName, label: '机场名称' },
+  { value: formatAccTime(dockStatus.value?.accTime), label: '运行时长' },
+  { value: `${dockStatus.value?.jobNumber || 0} 架次`, label: '作业架次' },
+  { value: gpsStatus.value?.rtkNumber || 0, label: '机场搜星', icon: dockStars },
+  { value: gpsStatus.value?.fixedText || '未知', label: '标定状态' },
+  { value: formatNetworkRate(dockStatus.value?.networkRate), label: '网络状态', icon: dockWifi },
+  { 
+    value: osdData.value?.alternate_land_point?.is_configured ? '已配置' : '未配置', 
+    label: '备降点',
+    clickable: osdData.value?.alternate_land_point?.is_configured === 1,
+    coordinates: osdData.value?.alternate_land_point?.is_configured === 1 ? {
+      longitude: osdData.value.alternate_land_point.longitude,
+      latitude: osdData.value.alternate_land_point.latitude,
+      height: osdData.value.alternate_land_point.height,
+      safe_land_height: osdData.value.alternate_land_point.safe_land_height
+    } : null
+  },
+  { value: osdData.value?.air_conditioner?.air_conditioner_state === 1 ? '运行中' : '空闲中', label: '空调状态' },
+  { value: formatTemperature(environment.value?.temperature), label: '舱内温度' },
+  { value: formatHumidity(environment.value?.humidity), label: '舱内湿度' },
+  { value: formatTemperature(environment.value?.environmentTemperature), label: '舱外温度' },
+  { value: formatRainfall(environment.value?.rainfall), label: '降水量' },
+  { value: formatWindSpeed(environment.value?.windSpeed), label: '风速' },
+  { value: osdData.value?.tilt_angle?.valid ? `${osdData.value.tilt_angle.value.toFixed(2)}°` : '--°', label: '倾斜角度' },
+  { value: osdData.value?.poe_link_status === 1 ? '已连接' : '未连接', label: 'PoE接口' },
+  { value: osdData.value?.poe_power_output ? `${osdData.value.poe_power_output}W` : '暂无', label: 'PoE功率' },
 ]
+})
+
+// WGS84坐标转GCJ-02坐标的转换函数
+const transformWGS84ToGCJ02 = (wgsLng: number, wgsLat: number) => {
+  const PI = Math.PI
+  const ee = 0.00669342162296594323
+  const a = 6378245.0
+
+  if (isOutOfChina(wgsLng, wgsLat)) {
+    return { longitude: wgsLng, latitude: wgsLat }
+  }
+
+  let dlat = transformLat(wgsLng - 105.0, wgsLat - 35.0)
+  let dlng = transformLng(wgsLng - 105.0, wgsLat - 35.0)
+  const radlat = wgsLat / 180.0 * PI
+  let magic = Math.sin(radlat)
+  magic = 1 - ee * magic * magic
+  const sqrtmagic = Math.sqrt(magic)
+  dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * PI)
+  dlng = (dlng * 180.0) / (a / sqrtmagic * Math.cos(radlat) * PI)
+  const mglat = wgsLat + dlat
+  const mglng = wgsLng + dlng
+
+  return { longitude: mglng, latitude: mglat }
+}
+
+// 判断是否在中国范围外
+const isOutOfChina = (lng: number, lat: number) => {
+  return (lng < 72.004 || lng > 137.8347) || (lat < 0.8293 || lat > 55.8271)
+}
+
+// 辅助函数：纬度转换
+const transformLat = (lng: number, lat: number) => {
+  const PI = Math.PI
+  let ret = -100.0 + 2.0 * lng + 3.0 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng))
+  ret += (20.0 * Math.sin(6.0 * lng * PI) + 20.0 * Math.sin(2.0 * lng * PI)) * 2.0 / 3.0
+  ret += (20.0 * Math.sin(lat * PI) + 40.0 * Math.sin(lat / 3.0 * PI)) * 2.0 / 3.0
+  ret += (160.0 * Math.sin(lat / 12.0 * PI) + 320 * Math.sin(lat * PI / 30.0)) * 2.0 / 3.0
+  return ret
+}
+
+// 辅助函数：经度转换
+const transformLng = (lng: number, lat: number) => {
+  const PI = Math.PI
+  let ret = 300.0 + lng + 2.0 * lat + 0.1 * lng * lng + 0.1 * lng * lat + 0.1 * Math.sqrt(Math.abs(lng))
+  ret += (20.0 * Math.sin(6.0 * lng * PI) + 20.0 * Math.sin(2.0 * lng * PI)) * 2.0 / 3.0
+  ret += (20.0 * Math.sin(lng * PI) + 40.0 * Math.sin(lng / 3.0 * PI)) * 2.0 / 3.0
+  ret += (150.0 * Math.sin(lng / 12.0 * PI) + 300.0 * Math.sin(lng / 30.0 * PI)) * 2.0 / 3.0
+  return ret
+}
+
+// 添加机场标记到地图
+const addDockMarker = (longitude: number, latitude: number, dockInfo: any) => {
+  if (!amapInstance.value || !amapApiRef.value) {
+    return
+  }
+
+  const AMap = amapApiRef.value
+  
+  // 创建机场标记点
+  const marker = new AMap.Marker({
+    position: [longitude, latitude],
+    title: `机场: ${dockInfo?.deviceSn || '未知设备'}`,
+    content: `
+      <img 
+        src="${mapDockIcon}" 
+        style="
+          width: 32px;
+          height: 32px;
+          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+        "
+        alt="机场"
+      />
+    `,
+    anchor: 'center',
+    offset: new AMap.Pixel(0, 0)
+  })
+
+  // 添加到地图
+  amapInstance.value.add(marker)
+  dockMarkers.value.push(marker)
+}
+
+// 清除所有机场标记
+const clearDockMarkers = () => {
+  if (dockMarkers.value.length > 0) {
+    dockMarkers.value.forEach(marker => {
+      if (amapInstance.value) {
+        amapInstance.value.remove(marker)
+      }
+    })
+    dockMarkers.value = []
+  }
+}
+
+// 更新机场标记
+const updateDockMarkers = (shouldCenter = false) => {
+  // 清除现有标记
+  clearDockMarkers()
+  
+  // 检查是否有位置数据
+  if (position.value && position.value.longitude && position.value.latitude) {
+    const wgsLongitude = position.value.longitude
+    const wgsLatitude = position.value.latitude
+    
+    // 将WGS84坐标转换为GCJ-02坐标
+    const gcjCoords = transformWGS84ToGCJ02(wgsLongitude, wgsLatitude)
+    const longitude = gcjCoords.longitude
+    const latitude = gcjCoords.latitude
+    
+    // 获取机场设备信息
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    const deviceSn = cachedDockSns.length > 0 ? cachedDockSns[0] : '未知设备'
+    
+    const dockInfo = {
+      deviceSn: deviceSn,
+      isOnline: dockStatus.value?.isOnline || false,
+      longitude: longitude,
+      latitude: latitude,
+      height: position.value.height || 0
+    }
+    
+    // 添加机场标记
+    addDockMarker(longitude, latitude, dockInfo)
+    
+    // 只在初始加载或明确要求时才设置地图中心
+    if (shouldCenter && amapInstance.value) {
+      amapInstance.value.setCenter([longitude, latitude])
+    }
+  }
+}
+
+// 视频播放相关变量
+const videoStreamUrl = ref('')
+const videoPlayer = ref<any>(null)
+const videoElement = ref<HTMLVideoElement | null>(null)
+const videoLoading = ref(false)
+const videoStatus = ref('正在检查视频流状态...')
+const refreshingVideo = ref(false)
+const isVideoPlaying = ref(false)
+const currentTime = ref('00:00')
+let pc: RTCPeerConnection | null = null
+let isPlaying = false
+
+// 获取机场视频流地址
+const getDockVideoFromCache = () => {
+  const videoStreamsStr = localStorage.getItem('video_streams')
+  if (videoStreamsStr) {
+    try {
+      const videoStreams = JSON.parse(videoStreamsStr)
+      if (videoStreams.dock_video_url) {
+        return videoStreams.dock_video_url
+      }
+    } catch (error) {}
+  }
+  const dockVideoUrl = localStorage.getItem('dock_video_stream_url')
+  if (dockVideoUrl) {
+    return dockVideoUrl
+  }
+  return ''
+}
+
+const initVideoPlayer = async () => {
+  try {
+    videoLoading.value = true
+    videoStatus.value = '正在加载视频流...'
+    
+    const dockVideoUrl = getDockVideoFromCache()
+    if (dockVideoUrl) {
+      videoStreamUrl.value = dockVideoUrl
+      // 延迟初始化播放器，确保DOM已经渲染
+      await nextTick()
+      // 再延迟一点确保DOM完全准备好
+      setTimeout(() => {
+        startVideoPlayback()
+      }, 200)
+    } else {
+      videoStatus.value = '未获取到机场视频流地址'
+      videoLoading.value = false
+    }
+  } catch (error) {
+    videoStatus.value = '初始化失败'
+    videoLoading.value = false
+  }
+}
+
+const startVideoPlayback = () => {
+  if (!videoElement.value || !videoStreamUrl.value) {
+    videoStatus.value = '视频未就绪'
+    return
+  }
+  videoLoading.value = true
+  videoStatus.value = '正在连接视频流...'
+  try {
+    if (videoPlayer.value) {
+      videoPlayer.value.destroy()
+      videoPlayer.value = null
+    }
+    if (videoElement.value) {
+      videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+      videoElement.value.onplay = null
+      videoElement.value.onpause = null
+      videoElement.value.ontimeupdate = null
+      videoElement.value.onloadedmetadata = null
+      videoElement.value.onloadeddata = null
+      videoElement.value.onerror = null
+      videoElement.value.oncanplay = null
+      videoElement.value.oncanplaythrough = null
+      videoElement.value.oncanplay = () => {
+        videoLoading.value = false
+        videoStatus.value = '视频已就绪'
+        // 延迟播放，确保视频完全准备好
+        setTimeout(() => {
+          if (videoElement.value && videoElement.value.paused) {
+            videoElement.value.play().catch(() => {
+              videoStatus.value = '请点击播放按钮'
+            })
+          }
+        }, 100)
+      }
+      videoElement.value.oncanplaythrough = () => {
+        videoLoading.value = false
+        videoStatus.value = '视频已就绪'
+      }
+      videoElement.value.onplay = () => {
+        isVideoPlaying.value = true
+        videoStatus.value = '正在播放'
+      }
+      videoElement.value.onpause = () => {
+        isVideoPlaying.value = false
+        videoStatus.value = '已暂停'
+      }
+      videoElement.value.ontimeupdate = updateVideoTime
+      videoElement.value.onloadedmetadata = () => {
+        updateVideoTime()
+      }
+      videoElement.value.onloadeddata = () => {
+        videoElement.value!.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+        // 不在这里立即播放，等待canplay事件
+      }
+      videoElement.value.onerror = () => {
+        videoLoading.value = false
+        videoStatus.value = '视频加载失败'
+      }
+    }
+    if (videoStreamUrl.value.startsWith('webrtc://')) {
+      startWebRTCPlayback()
+    } else {
+      videoElement.value.src = videoStreamUrl.value
+      videoElement.value.load()
+      // 不立即播放，等待canplay事件
+    }
+  } catch (error) {
+    videoLoading.value = false
+    videoStatus.value = '视频初始化失败'
+  }
+}
+
+const updateVideoTime = () => {
+  if (videoElement.value) {
+    const seconds = videoElement.value.currentTime || 0
+    currentTime.value = formatTime(seconds)
+  }
+}
+
+const formatTime = (seconds: number) => {
+  if (isNaN(seconds) || !isFinite(seconds) || seconds < 0) {
+    return '00:00'
+  }
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+const togglePlay = () => {
+  if (!videoElement.value) return
+  
+  try {
+    if (videoElement.value.paused) {
+      // 确保视频已经准备好再播放
+      if (videoElement.value.readyState >= 2) { // HAVE_CURRENT_DATA
+        videoElement.value.play().catch(() => {
+          videoStatus.value = '播放失败，请重试'
+        })
+      } else {
+        videoStatus.value = '视频未准备好，请稍候'
+      }
+    } else {
+      videoElement.value.pause()
+    }
+  } catch (error) {
+    videoStatus.value = '播放控制失败'
+  }
+}
+
+const toggleFullscreen = () => {
+  if (!videoElement.value) return
+  if (videoElement.value.requestFullscreen) {
+    videoElement.value.requestFullscreen()
+  } else if ((videoElement.value as any).webkitRequestFullscreen) {
+    (videoElement.value as any).webkitRequestFullscreen()
+  }
+}
+
+const reloadVideo = async () => {
+  refreshingVideo.value = true
+  videoStatus.value = '正在刷新视频流...'
+  try {
+    stopVideoPlayback()
+    // 这里只能重新从缓存拉取，若需强制刷新请参考DroneControl.vue的refreshVideoCapacityAndCache
+    await nextTick()
+    await initVideoPlayer()
+    videoStatus.value = '视频流已刷新'
+  } catch (error) {
+    videoStatus.value = '视频刷新失败'
+  } finally {
+    refreshingVideo.value = false
+  }
+}
+
+const startWebRTCPlayback = async () => {
+  if (isPlaying) {
+    stopWebRTCPlayback()
+  }
+  const serverUrl = videoStreamUrl.value
+  if (!serverUrl) return
+  try {
+    if (pc) {
+      pc.close()
+      pc = null
+    }
+    pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ],
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require'
+    })
+    const dummyStream = new MediaStream()
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    const canvasStream = canvas.captureStream(1)
+    const videoTrack = canvasStream.getVideoTracks()[0]
+    if (videoTrack) {
+      dummyStream.addTrack(videoTrack)
+      pc.addTrack(videoTrack, dummyStream)
+    }
+    pc.ontrack = (e) => {
+      if (videoElement.value) {
+        videoElement.value.srcObject = e.streams[0]
+        videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+      }
+    }
+    pc.oniceconnectionstatechange = () => {
+      if (pc?.iceConnectionState === 'connected') {
+        isPlaying = true
+      } else if (pc?.iceConnectionState === 'failed') {
+        stopWebRTCPlayback()
+      }
+    }
+    const offer = await pc.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true
+    })
+    await pc.setLocalDescription(offer)
+    const apiUrl = buildApiUrl(serverUrl)
+    const response = await fetch(`${apiUrl}/rtc/v1/play/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sdp: offer.sdp, streamurl: serverUrl })
+    })
+    if (!response.ok) return
+    const data = await response.json()
+    if (data.code !== 0) return
+    if (!data.sdp) return
+    try {
+      await pc.setRemoteDescription({ type: 'answer', sdp: data.sdp })
+    } catch (sdpError: any) {
+      return
+    }
+  } catch (error) {
+    stopWebRTCPlayback()
+  }
+}
+
+const buildApiUrl = (webrtcUrl: string) => {
+  try {
+    const url = new URL(webrtcUrl)
+    return `http://${url.hostname}:1985`
+  } catch (error) {
+    return webrtcUrl.replace('webrtc://', 'http://').replace(':8000', ':1985').split('/')[0]
+  }
+}
+
+const stopWebRTCPlayback = () => {
+  if (pc) {
+    pc.close()
+    pc = null
+  }
+  if (videoElement.value) {
+    videoElement.value.srcObject = null
+  }
+  isPlaying = false
+}
+
+const stopVideoPlayback = () => {
+  stopWebRTCPlayback()
+  if (videoPlayer.value) {
+    videoPlayer.value.pause()
+    videoPlayer.value.unload && videoPlayer.value.unload()
+    videoPlayer.value.detachMediaElement && videoPlayer.value.detachMediaElement()
+    videoPlayer.value.destroy && videoPlayer.value.destroy()
+    videoPlayer.value = null
+  }
+  if (videoElement.value) {
+    videoElement.value.pause()
+    videoElement.value.src = ''
+    videoElement.value.load()
+  }
+}
+
 onMounted(async () => {
   // 加载设备状态数据（使用缓存的设备SN）
   await fetchMainDeviceStatus()
@@ -314,18 +805,38 @@ onMounted(async () => {
   }).then((AMap) => {
     amapApiRef.value = AMap
     amapInstance.value = new AMap.Map('amap-container', {
-      zoom: 12,
+      zoom: 18,
       center: [116.397428, 39.90923],
       logoEnable: false,
-      copyrightEnable: false
+      copyrightEnable: false,
+      mapStyle: 'amap://styles/satellite', // 强制设置卫星图样式
+      layers: [
+        new AMap.TileLayer.Satellite(),
+        new AMap.TileLayer.RoadNet()
+      ]
     })
     amapInstance.value.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
     amapInstance.value.addControl(new AMap.MapType({ position: 'RB' }))
+    
+    // 地图加载完成后更新机场标记
+    amapInstance.value.on('complete', () => {
+      // 延迟一下确保设备状态数据已加载
+      setTimeout(() => {
+        // 初始加载时需要定位到机场位置
+        updateDockMarkers(isInitialLoad.value)
+        // 标记初始加载完成
+        isInitialLoad.value = false
+      }, 1000)
+    })
   })
   
   // 设置设备状态自动刷新（每5秒）
   statusRefreshTimer.value = setInterval(async () => {
     await fetchMainDeviceStatus()
+    // 设备状态更新后，更新地图标记（不定位）
+    if (amapInstance.value) {
+      updateDockMarkers()
+    }
   }, 5000)
 })
 onBeforeUnmount(() => {
@@ -335,9 +846,14 @@ onBeforeUnmount(() => {
     statusRefreshTimer.value = null
   }
   
+  // 清理地图标记
+  clearDockMarkers()
+  
+  // 清理地图实例
   if (amapInstance.value) {
     amapInstance.value.destroy()
     amapInstance.value = null
+    amapApiRef.value = null
   }
 })
 const updateProgress = (percent: number) => {
@@ -749,7 +1265,8 @@ const updateProgress = (percent: number) => {
   background: rgba(0, 12, 23, .8);
   position: relative;
   z-index: 3;
-  margin-top: 8px;
+  margin-top: 0; /* 修改：去掉margin-top，与无人机控制页面保持一致 */
+  flex-shrink: 0; /* 确保底部控制条不会被压缩 */
 }
 .svg-icon {
   width: 20px;
@@ -977,9 +1494,9 @@ const updateProgress = (percent: number) => {
   gap: 24px;
   width: 40px;
   align-items: center;
-  flex: 1; /* 新增：让标签区域占据剩余空间 */
-  justify-content: flex-start; /* 新增：从顶部开始排列 */
-  padding-top: 20px; /* 新增：顶部留出一些空间 */
+  flex: 1;
+  justify-content: flex-start;
+  padding-top: 20px;
 }
 .sidebar-menu-bottom {
   display: none !important;
@@ -1011,6 +1528,7 @@ const updateProgress = (percent: number) => {
   margin-top: 10px;
   box-sizing: border-box;
 }
+
 .sidebar-tab:first-child {
   margin-top: 0;
 }
@@ -1136,9 +1654,9 @@ const updateProgress = (percent: number) => {
 }
 .battery-info-block {
   display: flex;
-  width: 90px;
+  width: 95px;
   height: 140px;
-  padding: 10px 12px;
+  padding: 10px 8px;
   flex-direction: column;
   justify-content: center;
   align-items: center;
@@ -1326,6 +1844,223 @@ const updateProgress = (percent: number) => {
 .dock-card-btn.active:not(:disabled) {
   color: #222;
 }
+/* 视频控制按钮样式 - 与无人机控制页面保持一致 */
+.left-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.video-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+}
+
+.time-display {
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+}
+
+.play-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.play-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.play-btn:hover {
+  background: rgba(89, 192, 252, 0.1);
+}
+
+.play-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: #59C0FC;
+  transition: fill 0.3s ease;
+}
+
+.play-btn.paused svg {
+  fill: #FF4D4F;
+}
+
+.play-btn.paused:hover {
+  background: rgba(255, 77, 79, 0.1);
+}
+
+.center-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.refresh-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: rgba(89, 192, 252, 0.2);
+}
+
+.refresh-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.refresh-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: #59C0FC;
+  transition: fill 0.3s ease;
+}
+
+.refresh-btn svg.rotating {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.fullscreen-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fullscreen-btn:hover {
+  background: rgba(89, 192, 252, 0.2);
+}
+
+.fullscreen-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: #59C0FC;
+}
+
+.svg-icon {
+  width: 20px;
+  height: 20px;
+  fill: #59C0FC;
+}
+
+.el-icon {
+  color: #59C0FC;
+  font-size: 20px;
+}
+
+/* 右侧控制按钮样式 - 与无人机控制页面保持一致 */
+.right-controls {
+  display: flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+
+.screen-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+}
+
+.el-icon.dropdown-icon {
+  color: #59C0FC;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.el-icon.dropdown-icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  fill: #59C0FC !important;
+}
+
+.screen-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  background: rgba(0, 12, 23, .9);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 4px;
+  padding: clamp(6px, 0.5vw, 8px) 0;
+  min-width: clamp(100px, 8vw, 120px);
+  margin-bottom: 8px;
+  z-index: 10;
+}
+
+.menu-item {
+  padding: clamp(6px, 0.5vw, 8px) clamp(12px, 1vw, 16px);
+  color: #fff;
+  font-size: clamp(12px, 0.9vw, 14px);
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.menu-item:hover {
+  background: rgba(89, 192, 252, 0.1);
+  color: #59C0FC;
+}
+
+.screen-menu::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  background: rgba(0, 12, 23, .9);
+  border-right: 1px solid rgba(89, 192, 252, 0.3);
+  border-bottom: 1px solid rgba(89, 192, 252, 0.3);
+  transform: rotate(45deg);
+}
+
+.right-controls .el-icon.dropdown-icon svg {
+  transition: transform 0.2s, fill 0.2s;
+}
+
+.right-controls.active .el-icon.dropdown-icon svg {
+  transform: rotate(180deg);
+  fill: #16bbf2 !important;
+}
+
 /* 地图类型控件样式 */
 :deep(.amap-maptype) {
   color: #000 !important;

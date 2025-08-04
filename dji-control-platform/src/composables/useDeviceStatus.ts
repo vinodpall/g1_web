@@ -8,6 +8,7 @@ import { useDevices } from './useApi'
 export function useDeviceStatus() {
   // 设备状态数据
   const deviceStatus = ref<DeviceStatus | null>(null)
+  const droneDeviceStatus = ref<DeviceStatus | null>(null) // 新增：无人机设备状态
   const loading = ref(false)
   const error = ref<string | null>(null)
   
@@ -48,40 +49,62 @@ export function useDeviceStatus() {
     
     // 使用第一个机场作为主要设备
     const mainDeviceSn = dockSns[0]
-    console.log('获取主要设备状态:', mainDeviceSn)
+    // console.log('获取主要设备状态:', mainDeviceSn)
     
     return await fetchDeviceStatus(mainDeviceSn)
+  }
+
+  // 获取无人机状态
+  const fetchDroneStatus = async () => {
+    const { droneSns } = getCachedDeviceSns()
+    
+    if (droneSns.length === 0) {
+      console.log('没有缓存的无人机设备，跳过状态获取')
+      return null
+    }
+    
+    // 使用第一个无人机作为主要设备
+    const mainDroneSn = droneSns[0]
+    console.log('获取无人机状态:', mainDroneSn)
+    
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await deviceStatusApi.getDeviceStatus(mainDroneSn)
+      droneDeviceStatus.value = response.data || response
+      return droneDeviceStatus.value
+    } catch (err: any) {
+      error.value = err.message || '获取无人机状态失败'
+      console.error('获取无人机状态失败:', err)
+      return null
+    } finally {
+      loading.value = false
+    }
   }
   
   // 获取OSD数据（优先从osd.data获取，备用从根级别获取）
   const osdData = computed(() => {
     if (!deviceStatus.value) return null
+    // API返回的数据结构: response.data.osd.data
+    const responseData = deviceStatus.value as any
+    if (responseData.osd?.data) {
+      return responseData.osd.data
+    }
+    // 兼容旧的数据结构
     return deviceStatus.value.osd?.data || deviceStatus.value
   })
   
   // 基础位置信息
   const position = computed(() => {
-    if (!deviceStatus.value) return null
+    if (!osdData.value) return null
     
-    // 优先从根级别获取
-    if (deviceStatus.value.longitude !== undefined && deviceStatus.value.latitude !== undefined) {
-      return {
-        longitude: deviceStatus.value.longitude,
-        latitude: deviceStatus.value.latitude,
-        height: deviceStatus.value.height || 0
-      }
+    // 从OSD数据获取位置信息
+    return {
+      longitude: osdData.value.longitude,
+      latitude: osdData.value.latitude,
+      height: osdData.value.height || 0
     }
-    
-    // 备用从OSD数据获取
-    if (osdData.value) {
-      return {
-        longitude: osdData.value.longitude,
-        latitude: osdData.value.latitude,
-        height: osdData.value.height || 0
-      }
-    }
-    
-    return null
   })
   
   // 环境数据
@@ -99,26 +122,66 @@ export function useDeviceStatus() {
   
   // 机场状态
   const dockStatus = computed(() => {
-    if (!osdData.value) return null
+    if (!deviceStatus.value) return null
+    
+    const responseData = deviceStatus.value as any
+    const osd = osdData.value
     
     return {
-      modeCode: osdData.value.mode_code,
-      modeText: osdData.value.mode_code !== undefined ? StatusMaps.dockMode[osdData.value.mode_code as keyof typeof StatusMaps.dockMode] : undefined,
-      coverState: osdData.value.cover_state,
-      coverText: osdData.value.cover_state !== undefined ? StatusMaps.coverState[osdData.value.cover_state as keyof typeof StatusMaps.coverState] : undefined,
-      jobNumber: osdData.value.job_number,
-      isOnline: deviceStatus.value?.connect_status !== false // 默认在线，除非明确为false
+      modeCode: osd?.mode_code,
+      modeText: osd?.mode_code !== undefined ? StatusMaps.dockMode[osd.mode_code as keyof typeof StatusMaps.dockMode] : undefined,
+      coverState: osd?.cover_state,
+      coverText: osd?.cover_state !== undefined ? StatusMaps.coverState[osd.cover_state as keyof typeof StatusMaps.coverState] : undefined,
+      jobNumber: osd?.job_number,
+      isOnline: responseData.online === true, // 使用API返回的online字段
+      networkRate: osd?.network_state?.rate, // 网络速率
+      accTime: osd?.acc_time, // 累计运行时间（秒）
+      workingVoltage: osd?.working_voltage, // 工作电压
+      workingCurrent: osd?.working_current // 工作电流
     }
   })
   
   // 无人机状态
   const droneStatus = computed(() => {
+    // 优先使用无人机设备状态
+    const droneOsdData = droneDeviceStatus.value?.osd?.data || droneDeviceStatus.value
+    
+    if (droneOsdData && droneOsdData.battery !== undefined) {
+      // 无人机数据解析
+      const battery = droneOsdData.battery
+      return {
+        isOnline: droneDeviceStatus.value?.online === true,
+        batteryPercent: battery?.capacity_percent,
+        chargeState: battery?.capacity_percent < 100 ? 1 : 0, // 简化充电状态判断
+        chargeText: battery?.capacity_percent < 100 ? '充电中' : '未充电',
+        inDock: droneOsdData.drone_in_dock,
+        inDockText: droneOsdData.drone_in_dock !== undefined ? StatusMaps.dronePosition[droneOsdData.drone_in_dock as keyof typeof StatusMaps.dronePosition] : undefined,
+        modeCode: droneOsdData.mode_code,
+        totalFlightDistance: droneOsdData.total_flight_distance,
+        totalFlightSorties: droneOsdData.total_flight_sorties,
+        totalFlightTime: droneOsdData.total_flight_time,
+        height: droneOsdData.height,
+        horizontalSpeed: droneOsdData.horizontal_speed,
+        verticalSpeed: droneOsdData.vertical_speed,
+        latitude: droneOsdData.latitude,
+        longitude: droneOsdData.longitude,
+        attitude: {
+          head: droneOsdData.attitude_head,
+          pitch: droneOsdData.attitude_pitch,
+          roll: droneOsdData.attitude_roll
+        }
+      }
+    }
+    
+    // 如果没有无人机数据，回退到机场数据中的无人机信息
     if (!osdData.value) return null
+    
+    const isDroneOnline = osdData.value.sub_device?.device_online_status === 1
     
     return {
       inDock: osdData.value.drone_in_dock,
       inDockText: osdData.value.drone_in_dock !== undefined ? StatusMaps.dronePosition[osdData.value.drone_in_dock as keyof typeof StatusMaps.dronePosition] : undefined,
-      isOnline: osdData.value.drone_in_dock !== undefined, // 通过是否在舱判断在线状态
+      isOnline: isDroneOnline || osdData.value.drone_in_dock === 1, // 子设备在线或在舱内都认为在线
       chargeState: osdData.value.drone_charge_state?.state,
       chargeText: osdData.value.drone_charge_state?.state !== undefined ? StatusMaps.chargeState[osdData.value.drone_charge_state.state as keyof typeof StatusMaps.chargeState] : undefined,
       batteryPercent: osdData.value.drone_charge_state?.capacity_percent
@@ -127,18 +190,41 @@ export function useDeviceStatus() {
   
   // GPS/RTK状态
   const gpsStatus = computed(() => {
-    if (!osdData.value?.position_state) return null
+    if (!osdData.value) return null
     
-    const pos = osdData.value.position_state
-    return {
-      isFixed: pos.is_fixed,
-      fixedText: StatusMaps.rtkFixed[pos.is_fixed as keyof typeof StatusMaps.rtkFixed],
-      quality: pos.quality,
-      gpsNumber: pos.gps_number,
-      rtkNumber: pos.rtk_number,
-      velocity: pos.velocity,
-      // 计算总速度
-      totalSpeed: pos.velocity ? Math.sqrt(pos.velocity.x ** 2 + pos.velocity.y ** 2 + pos.velocity.z ** 2) : 0
+    // 检查是否为无人机数据
+    const isDroneData = osdData.value.battery !== undefined
+    
+    if (isDroneData) {
+      // 无人机GPS数据解析
+      const pos = osdData.value.position_state
+      if (!pos) return null
+      
+      return {
+        isFixed: pos.is_fixed,
+        fixedText: StatusMaps.rtkFixed[pos.is_fixed as keyof typeof StatusMaps.rtkFixed],
+        quality: pos.quality,
+        gpsNumber: pos.gps_number,
+        rtkNumber: pos.rtk_number,
+        velocity: pos.velocity,
+        // 计算总速度
+        totalSpeed: pos.velocity ? Math.sqrt(pos.velocity.x ** 2 + pos.velocity.y ** 2 + pos.velocity.z ** 2) : 0
+      }
+    } else {
+      // 机场GPS数据解析（兼容旧逻辑）
+      if (!osdData.value.position_state) return null
+      
+      const pos = osdData.value.position_state
+      return {
+        isFixed: pos.is_fixed,
+        fixedText: StatusMaps.rtkFixed[pos.is_fixed as keyof typeof StatusMaps.rtkFixed],
+        quality: pos.quality,
+        gpsNumber: pos.gps_number,
+        rtkNumber: pos.rtk_number,
+        velocity: pos.velocity,
+        // 计算总速度
+        totalSpeed: pos.velocity ? Math.sqrt(pos.velocity.x ** 2 + pos.velocity.y ** 2 + pos.velocity.z ** 2) : 0
+      }
     }
   })
   
@@ -209,15 +295,51 @@ export function useDeviceStatus() {
     return `${value.toFixed(0)}%`
   }
   
+  // 格式化网络速率显示
+  const formatNetworkRate = (value: number | undefined) => {
+    if (value === undefined || value === null) return '--KB/s'
+    return `${value}KB/s`
+  }
+  
+  // 格式化累计运行时间显示（秒转换为小时）
+  const formatAccTime = (value: number | undefined) => {
+    if (value === undefined || value === null) return '--小时'
+    const hours = Math.floor(value / 3600)
+    return `${hours}小时`
+  }
+  
+  // 格式化电压显示（毫伏转换为伏特）
+  const formatVoltage = (value: number | undefined) => {
+    if (value === undefined || value === null) return '--V'
+    const volts = value / 1000
+    return `${volts.toFixed(1)}V`
+  }
+  
+  // 格式化电流显示（毫安转换为安培）
+  const formatCurrent = (value: number | undefined) => {
+    if (value === undefined || value === null) return '--A'
+    const amps = value / 1000
+    return `${amps.toFixed(2)}A`
+  }
+
+  // 格式化飞行距离显示（米转换为公里）
+  const formatFlightDistance = (value: number | undefined) => {
+    if (value === undefined || value === null) return '--km'
+    const km = value / 1000
+    return `${km.toFixed(1)}km`
+  }
+  
   return {
     // 状态
     deviceStatus,
+    droneDeviceStatus,
     loading,
     error,
     
     // 方法
     fetchDeviceStatus,
     fetchMainDeviceStatus,
+    fetchDroneStatus,
     
     // 计算属性
     osdData,
@@ -236,6 +358,11 @@ export function useDeviceStatus() {
     formatHumidity,
     formatWindSpeed,
     formatRainfall,
-    formatBattery
+    formatBattery,
+    formatNetworkRate,
+    formatAccTime,
+    formatVoltage,
+    formatCurrent,
+    formatFlightDistance
   }
 } 

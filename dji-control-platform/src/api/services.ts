@@ -1,4 +1,4 @@
-import { apiClient, type ApiResponse, type PaginatedResponse } from './config'
+import { apiClient, API_BASE_URL, type ApiResponse, type PaginatedResponse } from './config'
 import type { User, Dock, Drone, Mission, MissionRecord, Alert, Role, Device, HmsAlert } from '../types'
 
 // 认证相关接口
@@ -13,7 +13,7 @@ export const authApi = {
     console.log('登录请求参数:', { username, password })
     console.log('登录请求体:', formData.toString())
     
-    return fetch('/api/v1/login/access-token', {
+    return fetch(`${API_BASE_URL}/login/access-token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
@@ -472,6 +472,32 @@ export const controlApi = {
       camera_type: "zoom",
       zoom_factor: zoomFactor
     })
+  },
+
+  // 一键起飞到指定点
+  takeoffToPoint: (deviceSn: string, params: {
+    target_latitude: number
+    target_longitude: number
+    target_height: number
+    security_takeoff_height: number
+    rth_mode: number
+    rth_altitude: number
+    rc_lost_action: number
+    commander_mode_lost_action: number
+    commander_flight_mode: number
+    commander_flight_height: number
+    max_speed: number
+    simulate_mission: {
+      is_enable: number
+      latitude?: number
+      longitude?: number
+    }
+  }) => {
+    return apiClient.post<{
+      code: number
+      message: string
+      data?: any
+    }>(`/control/devices/${deviceSn}/takeoff-to-point`, params)
   }
 }
 
@@ -484,24 +510,21 @@ export const drcApi = {
       message: string
       data: {
         ready: boolean
-        checks: {
-          online: boolean
-          mode_valid: boolean
-          drone_flying: boolean
-          battery_ok: boolean
-          no_emergency: boolean
-          position_valid: boolean
-        }
-        failed_checks: string[]
-        current_status: {
-          mode_code: number
-          drone_in_dock: number
-          height: number
-          battery_percent: number
-          emergency_state: number
-        }
+        reason?: string
       }
     }>(`/drc/devices/${deviceSn}/drc/ready`)
+  },
+
+  // 获取DRC状态
+  getDrcStatus: (deviceSn: string) => {
+    return apiClient.get<{
+      code: number
+      message: string
+      data: {
+        drc_mode: 'active' | 'inactive'
+        session: string | null
+      }
+    }>(`/drc/devices/${deviceSn}/drc/status`)
   },
 
   // 进入DRC模式
@@ -513,6 +536,14 @@ export const drcApi = {
       osd_frequency: 10,
       hsi_frequency: 4
     })
+  },
+
+  // 退出DRC模式
+  exitDrcMode: (deviceSn: string) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/drc/devices/${deviceSn}/drc/exit`)
   },
 
   // 简单控制

@@ -6,7 +6,7 @@
         <div
           v-for="(item, idx) in sidebarTabs"
           :key="item.key"
-          :class="['sidebar-tab', { active: currentTab === item.key }]"
+          :class="['sidebar-tab', { active: item.path === $route.path }]"
           @click="handleTabClick(item.key)"
         >
           <img :src="item.icon" :alt="item.label" />
@@ -33,8 +33,8 @@
                       <img class="battery-img" :src="batteryImg" alt="电池" />
                       <div class="battery-detail-list">
                         <div>电量：{{ formatBattery(droneStatus?.batteryPercent) }}</div>
-                        <div>状态：{{ droneStatus?.chargeText || '暂无' }}</div>
-                        <div>在线：{{ droneStatus?.isOnline ? '是' : '否' }}</div>
+                        <div>充电中：{{ droneStatus?.chargeState === 1 ? '是' : '否' }}</div>
+                        <div>状态：{{ droneStatus?.isOnline ? '在线' : '离线' }}</div>
                       </div>
                     </div>
                   </div>
@@ -84,6 +84,9 @@
               </div>
               <div class="robot-status-footer">
                 <span>飞行速度：{{ formatSpeed(gpsStatus?.totalSpeed) }}</span>
+                <span>，经度：{{ formatCoordinate(getDroneCoordinate().longitude, 'longitude') }}</span>
+                <span>，纬度：{{ formatCoordinate(getDroneCoordinate().latitude, 'latitude') }}</span>
+                <span>，高度：{{ formatHeight(getDroneCoordinate().height) }}</span>
                 <span>，风向：东南风</span>
                 <span>，降水：{{ formatRainfall(environment?.rainfall) }}</span>
                 <span>，温度：{{ formatTemperature(environment?.environmentTemperature) }}</span>
@@ -153,6 +156,7 @@
                         <video 
                           ref="videoElement"
                           style="width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;"
+                          autoplay
                           muted
                           playsinline
                           webkit-playsinline
@@ -189,15 +193,15 @@
                           <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
                         </svg>
                       </button>
+                      <!-- 刷新按钮放在全屏按钮右侧 -->
+                      <button class="refresh-btn" @click="reloadVideo" :disabled="refreshingVideo" title="刷新视频">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" :class="{ 'rotating': refreshingVideo }">
+                          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                        </svg>
+                      </button>
                     </div>
                   </div>
                   <div class="center-controls">
-                    <button class="refresh-video-btn" @click="reloadVideo" :disabled="refreshingVideo" title="刷新无人机视频">
-                      <svg width="20" height="20" viewBox="0 0 1024 1024" :class="{ 'rotating': refreshingVideo }">
-                        <path fill="#59C0FC" d="M764 196H332c-126.016 0-228 101.984-228 228v176c0 126.016 101.984 228 228 228h432c126.016 0 228-101.984 228-228V424c0-126.016-101.984-228-228-228zM332 260h432c89.472 0 164 74.528 164 164v176c0 89.472-74.528 164-164 164H332c-89.472 0-164-74.528-164-164V424c0-89.472 74.528-164 164-164z"/>
-                        <path fill="#59C0FC" d="M512 352c-88.224 0-160 71.776-160 160s71.776 160 160 160 160-71.776 160-160-71.776-160-160-160z m0 256c-52.928 0-96-43.072-96-96s43.072-96 96-96 96 43.072 96 96-43.072 96-96 96z"/>
-                      </svg>
-                    </button>
                   </div>
                   <div class="right-controls" :class="{ active: showScreenMenu }" @click="toggleScreenMenu">
                     <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
@@ -314,25 +318,43 @@
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_down.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">下降</span>
                   </button>
-                  <button 
-                    @click="handleToggleControlAuthority"
-                    :disabled="controlAuthorityStatus.isLoading"
-                    :class="{ 'authority-granted': hasControlAuthority }"
-                  >
-                    <span class="drone-btn-iconbox" :class="{ 'authority-granted': hasControlAuthority }">
-                      <img 
-                        src="@/assets/source_data/svg_data/drone_control_svg/drone_control.svg" 
-                        class="drone-btn-icon" 
-                        :class="{ 'authority-granted': hasControlAuthority }"
-                      />
-                    </span>
-                    <span class="drone-btn-label" :class="{ 'authority-granted': hasControlAuthority }">
-                      {{ controlAuthorityStatus.isLoading ? '处理中...' : (hasControlAuthority ? '释放控制权' : '获取控制权') }}
-                    </span>
-                  </button>
-                  <button>
+                  <div class="authority-btn-wrapper">
+                    <button 
+                      @click="handleToggleControlAuthority"
+                      :disabled="controlAuthorityStatus.isLoading"
+                      :class="{ 'authority-granted': hasControlAuthority }"
+                    >
+                      <span class="drone-btn-iconbox" :class="{ 'authority-granted': hasControlAuthority }">
+                        <img 
+                          src="@/assets/source_data/svg_data/drone_control_svg/drone_control.svg" 
+                          class="drone-btn-icon" 
+                          :class="{ 'authority-granted': hasControlAuthority }"
+                        />
+                      </span>
+                      <span class="drone-btn-label" :class="{ 'authority-granted': hasControlAuthority }">
+                        {{ controlAuthorityStatus.isLoading ? '处理中...' : (hasControlAuthority ? '释放控制权' : '获取控制权') }}
+                      </span>
+                    </button>
+                    
+                    <!-- 抢夺控制权气泡弹窗 -->
+                    <div v-if="authorityTooltip.visible" class="authority-tooltip">
+                      <div class="authority-tooltip-content">
+                        <div class="authority-tooltip-message">{{ authorityTooltip.message }}</div>
+                        <div class="authority-tooltip-actions">
+                          <button class="authority-tooltip-btn authority-confirm-btn" @click="confirmSeizeAuthority">
+                            抢夺控制权
+                          </button>
+                          <button class="authority-tooltip-btn authority-cancel-btn" @click="cancelSeizeAuthority">
+                            取消
+                          </button>
+                        </div>
+                      </div>
+                      <div class="authority-tooltip-arrow"></div>
+                    </div>
+                  </div>
+                  <button @click="handleTakeoff" :disabled="takeoffLoading">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_fly.svg" class="drone-btn-icon" /></span>
-                    <span class="drone-btn-label">一键起飞</span>
+                    <span class="drone-btn-label">{{ takeoffLoading ? '起飞中...' : '一键起飞' }}</span>
                   </button>
                   <button @click="handleReturnHome">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_land.svg" class="drone-btn-icon" /></span>
@@ -393,6 +415,8 @@ import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
 import batteryIcon from '@/assets/source_data/svg_data/battery.svg'
 import systemIcon from '@/assets/source_data/svg_data/system.svg'
 import cameraIcon from '@/assets/source_data/svg_data/camera.svg'
+import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
+import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
 import plane2Img from '@/assets/source_data/plane_2.png'
 import batteryImg from '@/assets/source_data/Battery.png'
 import AMapLoader from '@amap/amap-jsapi-loader'
@@ -416,6 +440,10 @@ const router = useRouter()
 const { 
   fetchDeviceStatus, 
   fetchMainDeviceStatus,
+  fetchDroneStatus,
+  deviceStatus,
+  position,
+  dockStatus,
   droneStatus, 
   gpsStatus,
   environment,
@@ -424,19 +452,23 @@ const {
   formatTemperature,
   formatHumidity,
   formatWindSpeed,
-  formatRainfall
+  formatRainfall,
+  formatCoordinate,
+  formatHeight
 } = useDeviceStatus()
 
 const sidebarTabs = [
   {
     key: 'plane',
     label: '无人机',
-    icon: planeIcon
+    icon: planeIcon,
+    path: '/dashboard/drone-control'
   },
   {
     key: 'stock',
     label: '机巢',
-    icon: stockIcon
+    icon: stockIcon,
+    path: '/dashboard/dock-control'
   }
 ]
 const currentTab = ref('plane')
@@ -446,25 +478,16 @@ const amapInstance = ref<any>(null)
 const amapApiRef = ref<any>(null); // 新增
 const remoteEnabled = ref(false);
 
+// 地图标记点
+const dockMarkers = ref<any[]>([])
+const droneMarkers = ref<any[]>([])
+
 // DRC状态管理
 const drcStatus = ref({
   ready: false,
-  checks: {
-    online: false,
-    mode_valid: false,
-    drone_flying: false,
-    battery_ok: false,
-    no_emergency: false,
-    position_valid: false
-  },
-  failed_checks: [] as string[],
-  current_status: {
-    mode_code: 0,
-    drone_in_dock: 0,
-    height: 0,
-    battery_percent: 0,
-    emergency_state: 0
-  }
+  reason: '',
+  drc_mode: 'inactive' as 'active' | 'inactive',
+  session: null as string | null
 })
 const drcStatusInterval = ref<number | null>(null)
 
@@ -474,11 +497,19 @@ const isDrcModeActive = ref(false)
 // 云台控制权限状态
 const isGimbalControlEnabled = ref(false)
 
+// 控制权抢夺提示弹窗状态
+const authorityTooltip = ref({
+  visible: false,
+  message: ''
+})
+
 // 控制权状态管理
 const controlAuthorityStatus = ref({
   hasFlightAuthority: false,
   hasPayloadAuthority: false,
-  isLoading: false
+  isLoading: false,
+  flightAuthorityOwner: null as { username: string; user_id: number } | null,
+  payloadAuthorityOwner: null as { username: string; user_id: number } | null
 })
 
 // 控制相关的状态
@@ -492,6 +523,8 @@ const DRC_STATUS_CHECK_INTERVAL = 5000 // 每5秒检查一次DRC状态
 
 // 设备状态刷新定时器
 const statusRefreshTimer = ref<number | null>(null)
+// 无人机状态刷新定时器
+const droneStatusRefreshTimer = ref<number | null>(null)
 
 // 视频流相关状态管理
 const videoStreamUrl = ref<string>('')
@@ -502,6 +535,9 @@ const videoStatus = ref('正在检查视频流状态...')
 const videoBid = ref<string | null>(null)
 const refreshingVideo = ref(false)
 
+// 起飞相关状态
+const takeoffLoading = ref(false)
+
 // 视频播放控制相关
 const isVideoPlaying = ref(false)
 const currentTime = ref('00:00')
@@ -510,7 +546,8 @@ const totalTime = ref('00:00')
 const toggleRemote = () => {
   remoteEnabled.value = !remoteEnabled.value;
 };
-const isSatellite = ref(false);
+const isSatellite = ref(true); // 默认为卫星图模式
+const isInitialLoad = ref(true); // 标记是否为初始加载
 const toggleMapLayer = () => {
   if (!amapInstance.value || !amapApiRef.value) return;
   isSatellite.value = !isSatellite.value;
@@ -535,6 +572,274 @@ const toggleScreenMenu = () => {
 const selectScreenMode = (mode: string) => {
   currentScreenMode.value = mode
   showScreenMenu.value = false
+}
+
+// 获取无人机坐标的函数
+const getDroneCoordinate = () => {
+  // 检查无人机是否在仓
+  const isDroneInDock = droneStatus.value?.inDock === 1
+  
+  if (isDroneInDock) {
+    // 无人机在仓，使用机场坐标和高度
+    return {
+      longitude: position.value?.longitude,
+      latitude: position.value?.latitude,
+      height: position.value?.height
+    }
+  } else if (droneStatus.value?.longitude && droneStatus.value?.latitude) {
+    // 无人机不在仓且有独立的坐标数据
+    return {
+      longitude: droneStatus.value.longitude,
+      latitude: droneStatus.value.latitude,
+      height: droneStatus.value.height
+    }
+  } else {
+    // 无人机没有独立坐标数据，使用机场坐标
+    return {
+      longitude: position.value?.longitude,
+      latitude: position.value?.latitude,
+      height: position.value?.height
+    }
+  }
+}
+
+// WGS84坐标转GCJ-02坐标系
+const transformWGS84ToGCJ02 = (wgsLng: number, wgsLat: number) => {
+  const PI = Math.PI
+  const ee = 0.00669342162296594323
+  const a = 6378245.0
+  
+  if (outOfChina(wgsLng, wgsLat)) {
+    return { longitude: wgsLng, latitude: wgsLat }
+  }
+  
+  let dLat = transformLat(wgsLng - 105.0, wgsLat - 35.0)
+  let dLng = transformLng(wgsLng - 105.0, wgsLat - 35.0)
+  
+  const radLat = wgsLat / 180.0 * PI
+  let magic = Math.sin(radLat)
+  magic = 1 - ee * magic * magic
+  const sqrtMagic = Math.sqrt(magic)
+  
+  dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * PI)
+  dLng = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * PI)
+  
+  const mgLat = wgsLat + dLat
+  const mgLng = wgsLng + dLng
+  
+  return { longitude: mgLng, latitude: mgLat }
+}
+
+// 辅助函数：判断是否在中国境内
+const outOfChina = (lng: number, lat: number) => {
+  return (lng < 72.004 || lng > 137.8347) || (lat < 0.8293 || lat > 55.8271)
+}
+
+// 辅助函数：纬度转换
+const transformLat = (lng: number, lat: number) => {
+  let ret = -100.0 + 2.0 * lng + 3.0 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng))
+  ret += (20.0 * Math.sin(6.0 * lng * Math.PI) + 20.0 * Math.sin(2.0 * lng * Math.PI)) * 2.0 / 3.0
+  ret += (20.0 * Math.sin(lat * Math.PI) + 40.0 * Math.sin(lat / 3.0 * Math.PI)) * 2.0 / 3.0
+  ret += (160.0 * Math.sin(lat / 12.0 * Math.PI) + 320 * Math.sin(lat * Math.PI / 30.0)) * 2.0 / 3.0
+  return ret
+}
+
+// 辅助函数：经度转换
+const transformLng = (lng: number, lat: number) => {
+  let ret = 300.0 + lng + 2.0 * lat + 0.1 * lng * lng + 0.1 * lng * lat + 0.1 * Math.sqrt(Math.abs(lng))
+  ret += (20.0 * Math.sin(6.0 * lng * Math.PI) + 20.0 * Math.sin(2.0 * lng * Math.PI)) * 2.0 / 3.0
+  ret += (20.0 * Math.sin(lng * Math.PI) + 40.0 * Math.sin(lng / 3.0 * Math.PI)) * 2.0 / 3.0
+  ret += (150.0 * Math.sin(lng / 12.0 * Math.PI) + 300.0 * Math.sin(lng / 30.0 * Math.PI)) * 2.0 / 3.0
+  return ret
+}
+
+// 添加机场标记到地图
+const addDockMarker = (longitude: number, latitude: number, dockInfo: any) => {
+  if (!amapInstance.value || !amapApiRef.value) {
+    return
+  }
+
+  const AMap = amapApiRef.value
+  
+  // 创建机场标记点
+  const marker = new AMap.Marker({
+    position: [longitude, latitude],
+    title: `机场: ${dockInfo?.deviceSn || '未知设备'}`,
+    content: `
+      <img 
+        src="${mapDockIcon}" 
+        style="
+          width: 32px;
+          height: 32px;
+          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+        "
+        alt="机场"
+      />
+    `,
+    anchor: 'center',
+    offset: new AMap.Pixel(0, 0)
+  })
+
+  // 添加点击事件
+  marker.on('click', () => {
+    // 可以在这里添加更多交互功能，比如显示详细信息
+  })
+
+  // 添加到地图
+  amapInstance.value.add(marker)
+  dockMarkers.value.push(marker)
+}
+
+// 添加无人机标记到地图
+const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => {
+  if (!amapInstance.value || !amapApiRef.value) {
+    return
+  }
+
+  const AMap = amapApiRef.value
+  
+  // 创建无人机标记点
+  const marker = new AMap.Marker({
+    position: [longitude, latitude],
+    title: `无人机: ${droneInfo?.deviceSn || '未知设备'}`,
+    content: `
+      <img 
+        src="${mapDroneIcon}" 
+        style="
+          width: 32px;
+          height: 32px;
+          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+        "
+        alt="无人机"
+      />
+    `,
+    anchor: 'center',
+    offset: new AMap.Pixel(0, 0)
+  })
+
+  // 添加点击事件
+  marker.on('click', () => {
+    // 可以在这里添加更多交互功能，比如显示详细信息
+  })
+
+  // 添加到地图
+  amapInstance.value.add(marker)
+  droneMarkers.value.push(marker)
+}
+
+// 清除所有机场标记
+const clearDockMarkers = () => {
+  if (dockMarkers.value.length > 0) {
+    dockMarkers.value.forEach(marker => {
+      if (amapInstance.value) {
+        amapInstance.value.remove(marker)
+      }
+    })
+    dockMarkers.value = []
+  }
+}
+
+// 清除所有无人机标记
+const clearDroneMarkers = () => {
+  if (droneMarkers.value.length > 0) {
+    droneMarkers.value.forEach(marker => {
+      if (amapInstance.value) {
+        amapInstance.value.remove(marker)
+      }
+    })
+    droneMarkers.value = []
+  }
+}
+
+// 更新地图标记（机场和无人机）
+const updateMapMarkers = (shouldCenter = false) => {
+  // 清除现有标记
+  clearDockMarkers()
+  clearDroneMarkers()
+  
+  // 检查是否有位置数据
+  if (position.value && position.value.longitude && position.value.latitude) {
+    const wgsLongitude = position.value.longitude
+    const wgsLatitude = position.value.latitude
+    
+    // 将WGS84坐标转换为GCJ-02坐标
+    const gcjCoords = transformWGS84ToGCJ02(wgsLongitude, wgsLatitude)
+    const longitude = gcjCoords.longitude
+    const latitude = gcjCoords.latitude
+    
+    // 获取机场设备信息
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    const deviceSn = cachedDockSns.length > 0 ? cachedDockSns[0] : '未知设备'
+    
+    const dockInfo = {
+      deviceSn: deviceSn,
+      isOnline: dockStatus.value?.isOnline || false,
+      longitude: longitude,
+      latitude: latitude,
+      height: position.value.height || 0
+    }
+    
+    // 添加机场标记
+    addDockMarker(longitude, latitude, dockInfo)
+    
+    // 获取无人机设备信息
+    const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
+    const droneDeviceSn = cachedDroneSns.length > 0 ? cachedDroneSns[0] : '未知设备'
+    
+    // 检查无人机是否有独立的坐标数据
+    let droneLongitude = longitude
+    let droneLatitude = latitude
+    let droneHeight = position.value.height || 0
+    
+    // 检查无人机是否在仓
+    const isDroneInDock = droneStatus.value?.inDock === 1
+    
+    if (isDroneInDock) {
+      // 无人机在仓，使用机场坐标和高度
+      droneLongitude = longitude
+      droneLatitude = latitude
+      droneHeight = position.value.height || 0
+      console.log('无人机在仓，使用机场坐标和高度:', { longitude: droneLongitude, latitude: droneLatitude, height: droneHeight })
+    } else if (droneStatus.value && droneStatus.value.longitude && droneStatus.value.latitude) {
+      // 无人机不在仓且有独立的坐标数据
+      const droneWgsLongitude = droneStatus.value.longitude
+      const droneWgsLatitude = droneStatus.value.latitude
+      
+      console.log('无人机不在仓，使用独立坐标:', { longitude: droneWgsLongitude, latitude: droneWgsLatitude })
+      
+      // 将WGS84坐标转换为GCJ-02坐标
+      const droneGcjCoords = transformWGS84ToGCJ02(droneWgsLongitude, droneWgsLatitude)
+      droneLongitude = droneGcjCoords.longitude
+      droneLatitude = droneGcjCoords.latitude
+      droneHeight = droneStatus.value.height || 0
+      
+      console.log('无人机转换后坐标:', { longitude: droneLongitude, latitude: droneLatitude, height: droneHeight })
+    } else {
+      // 无人机没有独立坐标数据，使用机场坐标
+      console.log('无人机使用机场坐标:', { longitude: droneLongitude, latitude: droneLatitude, height: droneHeight })
+    }
+    
+    const droneInfo = {
+      deviceSn: droneDeviceSn,
+      isOnline: droneStatus.value?.isOnline || false,
+      longitude: droneLongitude,
+      latitude: droneLatitude,
+      height: droneHeight
+    }
+    
+    console.log('添加无人机标记:', droneInfo)
+    
+    // 添加无人机标记
+    addDroneMarker(droneLongitude, droneLatitude, droneInfo)
+    
+    // 只在初始加载或明确要求时才设置地图中心
+    if (shouldCenter && amapInstance.value) {
+      amapInstance.value.setCenter([longitude, latitude])
+    }
+  } else {
+    // 无设备坐标数据，无法添加标记
+    console.log('无设备坐标数据，无法添加标记')
+  }
 }
 
 // 全屏功能
@@ -782,34 +1087,37 @@ const getDroneVideoFromCache = () => {
 }
 
 // 初始化视频播放器（针对无人机控制页面）
-const initVideoPlayer = () => {
-  
+const initVideoPlayer = async () => {
   // 先加载视频缓存
   loadVideoCache()
   
   // 尝试从缓存获取无人机视频地址
   const droneVideoUrl = getDroneVideoFromCache()
   if (droneVideoUrl) {
+    // 使用缓存的视频地址
     videoStreamUrl.value = droneVideoUrl
     // 延迟初始化播放器，确保DOM已经渲染
-    nextTick(() => {
-      startVideoPlayback()
-    })
-    return
+    await nextTick()
+    startVideoPlayback()
+  } else {
+    // 如果缓存中没有无人机视频，立即获取
+    // 使用nextTick确保DOM已渲染
+    await nextTick()
+    await reloadVideo()
   }
-  
-  // 如果缓存中没有无人机视频，主动获取
-  setTimeout(() => {
-    reloadVideo()
-  }, 1000) // 延迟1秒，确保页面完全加载
 }
 
 // 开始视频播放
 const startVideoPlayback = () => {
   if (!videoElement.value || !videoStreamUrl.value) {
+    // 视频元素或URL不存在，无法播放
+    videoStatus.value = '视频未就绪'
     return
   }
 
+  // 开始播放视频
+  videoLoading.value = true
+  videoStatus.value = '正在连接视频流...'
 
   try {
     // 销毁之前的播放器实例
@@ -823,24 +1131,66 @@ const startVideoPlayback = () => {
       // 强制设置视频样式
       videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
       
-      videoElement.value.addEventListener('play', () => {
+      // 清除之前的事件监听器
+      videoElement.value.onplay = null
+      videoElement.value.onpause = null
+      videoElement.value.ontimeupdate = null
+      videoElement.value.onloadedmetadata = null
+      videoElement.value.onloadeddata = null
+      videoElement.value.onerror = null
+      videoElement.value.oncanplay = null
+      
+      // 视频可以播放时
+      videoElement.value.oncanplay = () => {
+        // 自动播放视频
+        if (videoElement.value && videoElement.value.paused) {
+          videoElement.value.play().catch((error) => {
+            console.error('自动播放失败:', error)
+            videoStatus.value = '请点击播放按钮'
+          })
+        }
+        videoLoading.value = false
+        videoStatus.value = '视频已就绪'
+      }
+      
+      // 视频开始播放
+      videoElement.value.onplay = () => {
         isVideoPlaying.value = true
-      })
+        videoStatus.value = '正在播放'
+      }
       
-      videoElement.value.addEventListener('pause', () => {
+      // 视频暂停
+      videoElement.value.onpause = () => {
         isVideoPlaying.value = false
-      })
+        videoStatus.value = '已暂停'
+      }
       
-      videoElement.value.addEventListener('timeupdate', updateVideoTime)
+      // 时间更新
+      videoElement.value.ontimeupdate = updateVideoTime
       
-      videoElement.value.addEventListener('loadedmetadata', () => {
+      // 元数据加载完成
+      videoElement.value.onloadedmetadata = () => {
         updateVideoTime()
-      })
+      }
       
-      // 确保视频加载后也应用样式
-      videoElement.value.addEventListener('loadeddata', () => {
+      // 视频数据加载完成
+      videoElement.value.onloadeddata = () => {
         videoElement.value!.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
-      })
+        // 数据加载完成后尝试自动播放
+        if (videoElement.value && videoElement.value.paused) {
+          videoElement.value.play().catch((error) => {
+            console.warn('loadeddata自动播放失败:', error)
+          })
+        }
+      }
+      
+      // 视频加载错误
+      videoElement.value.onerror = (error) => {
+        videoLoading.value = false
+        videoStatus.value = '视频加载失败'
+        // 不使用alert，避免打扰用户
+        console.error('视频播放失败，请点击刷新按钮重试')
+      }
     }
 
     // 检查是否是webrtc地址
@@ -887,8 +1237,10 @@ const startVideoPlayback = () => {
       // 强制设置原生视频播放器样式
       videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
       
-      videoElement.value.play().catch(() => {
-        // 视频播放失败
+      // 尝试立即播放，失败则等待canplay事件
+      videoElement.value.play().catch((error) => {
+        console.log('立即播放失败，等待canplay事件:', error)
+        videoStatus.value = '等待视频就绪...'
       })
     }
   } catch (error: any) {
@@ -1176,31 +1528,24 @@ const refreshVideoCapacityAndCache = async () => {
 
 // 重新加载视频（专门针对无人机控制页面）
 const reloadVideo = async () => {
-  refreshingVideo.value = true
+  // 停止当前视频播放
+  stopVideoPlayback()
   
-  try {
-    // 停止当前视频播放
-    stopVideoPlayback()
-    
-    // 重新获取capacity并更新缓存，返回无人机视频地址
-    const droneVideoUrl = await refreshVideoCapacityAndCache()
-    
-    // 设置无人机视频地址
-    videoStreamUrl.value = droneVideoUrl
-    localStorage.setItem('drone_video_stream_url', droneVideoUrl)
-    localStorage.setItem('current_video_type', 'drone_visible')
-    
-    
-    // 延迟开始播放
-    setTimeout(() => {
-      startVideoPlayback()
-    }, 500)
-    
-  } catch (error: any) {
-    alert(`获取无人机视频失败: ${error.message || error}`)
-  } finally {
-    refreshingVideo.value = false
+  // 重新获取capacity并更新缓存，返回无人机视频地址
+  const droneVideoUrl = await refreshVideoCapacityAndCache()
+  
+  if (!droneVideoUrl) {
+    throw new Error('无法获取视频流地址')
   }
+  
+  // 设置无人机视频地址
+  videoStreamUrl.value = droneVideoUrl
+  localStorage.setItem('drone_video_stream_url', droneVideoUrl)
+  localStorage.setItem('current_video_type', 'drone_visible')
+  
+  // 确保DOM更新后再开始播放
+  await nextTick()
+  startVideoPlayback()
 }
 
 // 格式化时间
@@ -1256,13 +1601,29 @@ onMounted(async () => {
   }).then((AMap) => {
     amapApiRef.value = AMap; // 缓存 AMap
     amapInstance.value = new AMap.Map('amap-container', {
-      zoom: 12,
+      zoom: 18,
       center: [116.397428, 39.90923],
       logoEnable: false,
-      copyrightEnable: false
+      copyrightEnable: false,
+      mapStyle: 'amap://styles/satellite', // 强制设置卫星图样式
+      layers: [
+        new AMap.TileLayer.Satellite(),
+        new AMap.TileLayer.RoadNet()
+      ]
     })
     amapInstance.value.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
     amapInstance.value.addControl(new AMap.MapType({ position: 'RB' }))
+    
+    // 地图加载完成后更新机场标记
+    amapInstance.value.on('complete', () => {
+              // 延迟一下确保设备状态数据已加载
+        setTimeout(() => {
+          // 初始加载时需要定位到无人机位置
+          updateMapMarkers(isInitialLoad.value)
+          // 标记初始加载完成
+          isInitialLoad.value = false
+        }, 1000)
+    })
   })
   
   // 启动DRC状态轮询
@@ -1271,16 +1632,47 @@ onMounted(async () => {
   // 检查控制权限状态
   checkAuthorityStatus()
   
-  // 初始化无人机视频播放器（优先从缓存读取，没有则刷新获取）
-  initVideoPlayer()
+  // 启动权限状态轮询，每10秒检查一次
+  const authorityInterval = setInterval(checkAuthorityStatus, 10000)
   
-  // 获取设备状态数据
+  // 在组件销毁时清理定时器
+  onBeforeUnmount(() => {
+    if (authorityInterval) {
+      clearInterval(authorityInterval)
+    }
+  })
+  
+  // 初始化无人机视频播放器（优先从缓存读取，没有则刷新获取）
+  await initVideoPlayer()
+  
+  // 获取机场状态数据
   await fetchMainDeviceStatus()
   
-  // 设置设备状态自动刷新（每5秒）
+  // 获取无人机状态数据
+  await fetchDroneStatus()
+  
+  // 首次获取设备状态后，更新地图标记
+  if (amapInstance.value) {
+    updateMapMarkers()
+  }
+  
+  // 设置机场状态自动刷新（每5秒）
   statusRefreshTimer.value = setInterval(async () => {
     await fetchMainDeviceStatus()
+    // 设备状态更新后，更新地图标记
+    if (amapInstance.value) {
+      updateMapMarkers()
+    }
   }, 5000)
+  
+  // 设置无人机状态自动刷新（每2秒）
+  droneStatusRefreshTimer.value = setInterval(async () => {
+    await fetchDroneStatus()
+    // 无人机状态更新后，更新地图标记
+    if (amapInstance.value) {
+      updateMapMarkers()
+    }
+  }, 2000)
 })
 
 // 测试方法：动态改变进度
@@ -1308,17 +1700,29 @@ const checkDrcStatus = async () => {
     
     const dockSn = cachedDockSns[0]
     
-    const response = await drcApi.checkDrcReady(dockSn)
+    // 检查DRC是否就绪
+    const readyResponse = await drcApi.checkDrcReady(dockSn)
+    // console.log('DRC就绪检查结果:', readyResponse)
     
-    if (response.code === 0) {
-      drcStatus.value = response.data
-      
-      // 如果有失败的检查项，可以在控制台显示详细信息
-      if (response.data.failed_checks && response.data.failed_checks.length > 0) {
-      }
-    } else {
+    if (readyResponse.code === 0 && readyResponse.data) {
+      drcStatus.value.ready = readyResponse.data.ready
+      drcStatus.value.reason = readyResponse.data.reason || ''
     }
+
+    // 获取DRC当前状态
+    const statusResponse = await drcApi.getDrcStatus(dockSn)
+    // console.log('DRC状态获取结果:', statusResponse)
+    
+    if (statusResponse.code === 0 && statusResponse.data) {
+      drcStatus.value.drc_mode = statusResponse.data.drc_mode
+      drcStatus.value.session = statusResponse.data.session
+      // 更新前端DRC模式状态
+      isDrcModeActive.value = statusResponse.data.drc_mode === 'active'
+    }
+    
+    // console.log('DRC状态更新:', drcStatus.value)
   } catch (error: any) {
+    // console.error('检查DRC状态失败:', error)
     // 网络错误时保持当前状态不变，避免频繁切换
   }
 }
@@ -1370,44 +1774,78 @@ const getCameraIndexByDeviceSn = (deviceSn: string) => {
   return device.camera_list[0].camera_index
 }
 
-// 获取最佳的payload_index（switchable_video_types最多的摄像头）
+// 获取可用的payload索引列表（从最近的权限检查中获取）
+const getAvailablePayloadIndexes = async () => {
+  try {
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      return ["99-0-0"] // 默认值
+    }
+    
+    const dockSn = cachedDockSns[0]
+    const result = await controlApi.getAuthorityStatus(dockSn)
+    
+    if (result.code === 0 && result.data.payload_authorities) {
+      const availableIndexes = Object.keys(result.data.payload_authorities)
+      if (availableIndexes.length > 0) {
+        return availableIndexes
+      }
+    }
+  } catch (error) {
+    // console.error('获取可用payload索引失败:', error)
+  }
+  
+  return ["99-0-0"] // 默认值
+}
+
+// 获取最佳的payload_index（对于控制权操作）
 const getBestPayloadIndex = () => {
+  // 直接返回标准格式，这个格式在你提供的API响应中存在
+  const payloadIndex = "99-0-0"
+  // console.log('getBestPayloadIndex 返回:', payloadIndex)
+  return payloadIndex
+}
+
+// 获取设备的payload_index（用于视频相关操作）
+const getDevicePayloadIndex = () => {
   const capacity = getCachedCapacity()
   if (!capacity || !capacity.available_devices || capacity.available_devices.length === 0) {
     return null
   }
   
+  const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
   const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
   
-  // 找到无人机设备，并获取switchable_video_types最多的摄像头
-  let bestCamera = null
-  let maxSwitchableTypes = 0
+  // 优先查找无人机设备，然后查找机场设备
+  const deviceSns = [...cachedDroneSns, ...cachedDockSns]
   
-  for (const device of capacity.available_devices) {
-    // 检查是否是无人机设备
-    if (cachedDroneSns.includes(device.sn)) {
+  for (const deviceSn of deviceSns) {
+    const device = capacity.available_devices.find((d: any) => d.sn === deviceSn)
+    if (device && device.camera_list && device.camera_list.length > 0) {
+      // 找到switchable_video_types最多的摄像头
+      let bestCamera = null
+      let maxSwitchableTypes = 0
       
-      // 遍历该设备的摄像头
-      if (device.camera_list && device.camera_list.length > 0) {
-        for (const camera of device.camera_list) {
-          // 找到switchable_video_types最多的摄像头
-          if (camera.video_list && camera.video_list.length > 0) {
-            const firstVideo = camera.video_list[0]
-            if (firstVideo.switchable_video_types) {
-              const typesCount = firstVideo.switchable_video_types.length
-              
-              if (typesCount > maxSwitchableTypes) {
-                maxSwitchableTypes = typesCount
-                bestCamera = camera
-              }
+      for (const camera of device.camera_list) {
+        if (camera.video_list && camera.video_list.length > 0) {
+          const firstVideo = camera.video_list[0]
+          if (firstVideo.switchable_video_types) {
+            const typesCount = firstVideo.switchable_video_types.length
+            if (typesCount > maxSwitchableTypes) {
+              maxSwitchableTypes = typesCount
+              bestCamera = camera
             }
           }
         }
       }
+      
+      if (bestCamera) {
+        return bestCamera.camera_index
+      }
     }
   }
   
-  return bestCamera ? bestCamera.camera_index : null
+  return null
 }
 
 // 变焦倍率缓存管理
@@ -1441,6 +1879,26 @@ const hasControlAuthority = computed(() => {
   return controlAuthorityStatus.value.hasFlightAuthority && controlAuthorityStatus.value.hasPayloadAuthority
 })
 
+// 计算属性：是否被其他用户控制
+const isControlledByOthers = computed(() => {
+  const hasFlightOwner = controlAuthorityStatus.value.flightAuthorityOwner !== null
+  const hasPayloadOwner = controlAuthorityStatus.value.payloadAuthorityOwner !== null
+  const isCurrentUserOwner = hasControlAuthority.value
+  
+  return (hasFlightOwner || hasPayloadOwner) && !isCurrentUserOwner
+})
+
+// 计算属性：获取控制权拥有者名称
+const controllerName = computed(() => {
+  if (controlAuthorityStatus.value.flightAuthorityOwner) {
+    return controlAuthorityStatus.value.flightAuthorityOwner.username
+  }
+  if (controlAuthorityStatus.value.payloadAuthorityOwner) {
+    return controlAuthorityStatus.value.payloadAuthorityOwner.username
+  }
+  return ''
+})
+
 // 切换控制权按钮点击处理
 const handleToggleControlAuthority = async () => {
   if (controlAuthorityStatus.value.isLoading) {
@@ -1452,12 +1910,44 @@ const handleToggleControlAuthority = async () => {
       // 当前有控制权，执行释放操作
       await releaseControlAuthority()
     } else {
-      // 当前无控制权，执行获取操作
-      await acquireControlAuthority()
+      // 当前无控制权，检查是否被其他用户控制
+      if (isControlledByOthers.value) {
+        // 显示抢夺控制权确认提示
+        showAuthorityTooltip()
+      } else {
+        // 没有被其他用户控制，直接获取控制权
+        await acquireControlAuthority()
+      }
     }
   } catch (error: any) {
     alert(`控制权操作失败: ${error.message || error}`)
   }
+}
+
+// 显示抢夺控制权提示弹窗
+const showAuthorityTooltip = () => {
+  authorityTooltip.value.message = `设备正在被 ${controllerName.value} 控制，是否抢夺控制权？`
+  authorityTooltip.value.visible = true
+  
+  // 3秒后自动隐藏
+  setTimeout(() => {
+    authorityTooltip.value.visible = false
+  }, 5000)
+}
+
+// 确认抢夺控制权
+const confirmSeizeAuthority = async () => {
+  authorityTooltip.value.visible = false
+  try {
+    await acquireControlAuthority()
+  } catch (error: any) {
+    alert(`抢夺控制权失败: ${error.message || error}`)
+  }
+}
+
+// 取消抢夺控制权
+const cancelSeizeAuthority = () => {
+  authorityTooltip.value.visible = false
 }
 
 // 获取控制权
@@ -1487,6 +1977,8 @@ const acquireControlAuthority = async () => {
     
     // 获取最佳的payload_index
     const payloadIndex = getBestPayloadIndex()
+    // console.log('获取控制权 - payload索引:', payloadIndex)
+    
     if (!payloadIndex) {
       alert('没有找到可用的载荷信息')
       return
@@ -1540,6 +2032,8 @@ const releaseControlAuthority = async () => {
     
     // 获取最佳的payload_index
     const payloadIndex = getBestPayloadIndex()
+    // console.log('释放控制权 - payload索引:', payloadIndex)
+    
     if (!payloadIndex) {
       alert('没有找到可用的载荷信息')
       return
@@ -1583,19 +2077,62 @@ const checkAuthorityStatus = async () => {
       return
     }
     
+    // 获取当前用户信息
+    const userStr = localStorage.getItem('user')
+    if (!userStr) {
+      console.error('未找到用户信息')
+      return
+    }
+    
+    const currentUser = JSON.parse(userStr)
+    const currentUserId = currentUser.id
+    
     const dockSn = cachedDockSns[0]
     const result = await controlApi.getAuthorityStatus(dockSn)
     
     if (result.code === 0) {
-      // 根据API返回的权限状态更新本地状态
       const data = result.data
-      controlAuthorityStatus.value.hasFlightAuthority = !!data.flight_authority
-      controlAuthorityStatus.value.hasPayloadAuthority = data.payload_authorities && Object.keys(data.payload_authorities).length > 0
+      
+      // 检查飞行控制权：是否存在且属于当前用户
+      const hasFlightAuthority = !!(data.flight_authority && data.flight_authority.user_id === currentUserId)
+      
+      // 检查载荷控制权：是否有载荷权限且至少一个属于当前用户
+      let hasPayloadAuthority = false
+      let payloadAuthorityOwner = null
+      if (data.payload_authorities) {
+        const authorities = Object.values(data.payload_authorities) as any[]
+        hasPayloadAuthority = authorities.some((auth: any) => auth.user_id === currentUserId)
+        // 获取第一个载荷权限的拥有者信息
+        if (authorities.length > 0) {
+          payloadAuthorityOwner = {
+            username: authorities[0].username,
+            user_id: authorities[0].user_id
+          }
+        }
+      }
+      
+      // 更新状态
+      controlAuthorityStatus.value.hasFlightAuthority = hasFlightAuthority
+      controlAuthorityStatus.value.hasPayloadAuthority = hasPayloadAuthority
+      controlAuthorityStatus.value.flightAuthorityOwner = data.flight_authority ? {
+        username: data.flight_authority.username,
+        user_id: data.flight_authority.user_id
+      } : null
+      controlAuthorityStatus.value.payloadAuthorityOwner = payloadAuthorityOwner
       
       // 更新云台控制状态
       isGimbalControlEnabled.value = hasControlAuthority.value
+      
+      // console.log('权限状态检查结果:', {
+      //   currentUserId,
+      //   hasFlightAuthority,
+      //   hasPayloadAuthority,
+      //   flightAuthorityUser: data.flight_authority?.user_id,
+      //   payloadAuthorityUsers: data.payload_authorities ? Object.values(data.payload_authorities).map((auth: any) => auth.user_id) : []
+      // })
     }
   } catch (error: any) {
+    // console.error('检查权限状态失败:', error)
   }
 }
 
@@ -1671,6 +2208,94 @@ const handleReturnHome = async () => {
   }
 }
 
+// 一键起飞处理函数
+const handleTakeoff = async () => {
+  console.log('开始一键起飞...')
+  takeoffLoading.value = true
+  
+  try {
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    const dockSn = cachedDockSns[0]
+    
+    // 获取当前设备坐标信息 (使用原始WGS84坐标用于起飞API)
+    if (!position.value || !position.value.latitude || !position.value.longitude) {
+      alert('无法获取设备坐标信息，请稍后重试')
+      return
+    }
+    
+    const dockLat = position.value.latitude  // 使用原始WGS84坐标
+    const dockLng = position.value.longitude // 使用原始WGS84坐标
+    const dockAlt = position.value.height || 0
+    
+    // 验证坐标有效性
+    if (isNaN(dockLat) || isNaN(dockLng) || isNaN(dockAlt)) {
+      alert('坐标数据无效，请稍后重试')
+      return
+    }
+    
+    if (dockLat < -90 || dockLat > 90) {
+      alert('纬度超出有效范围 (-90 到 90)')
+      return
+    }
+    
+    if (dockLng < -180 || dockLng > 180) {
+      alert('经度超出有效范围 (-180 到 180)')
+      return
+    }
+    
+    console.log(`起飞参数: 纬度=${dockLat}, 经度=${dockLng}, 高度=${dockAlt}m`)
+    
+    // 弹出确认对话框
+    const confirmed = confirm('确定要执行一键起飞吗？无人机将起飞到30米高度。')
+    if (!confirmed) {
+      return
+    }
+    
+    // 目标点设置为机场上方30米
+    const targetLat = dockLat
+    const targetLng = dockLng
+    const targetHeight = 30  // 默认起飞到30米
+    
+    // 构建起飞参数
+    const takeoffParams = {
+      target_latitude: targetLat,
+      target_longitude: targetLng,
+      target_height: targetHeight,
+      security_takeoff_height: Math.max(20, dockAlt + 10),  // 安全起飞高度：机场高度+10m，最小20m
+      rth_mode: 0,  // 智能高度返航
+      rth_altitude: Math.max(50, dockAlt + 30),  // 返航高度：机场高度+30m，最小50m
+      rc_lost_action: 2,  // 遥控器失控动作: 0-悬停, 1-着陆, 2-返航
+      commander_mode_lost_action: 1,  // 指点飞行失控动作: 0-继续, 1-退出
+      commander_flight_mode: 0,  // 指点飞行模式: 0-智能高度, 1-设定高度
+      commander_flight_height: Math.max(100, dockAlt + 50),  // 指点飞行高度
+      max_speed: 12,  // 最大飞行速度
+      simulate_mission: { is_enable: 0 }  // 默认不启用模拟模式
+    }
+    
+    const result = await controlApi.takeoffToPoint(dockSn, takeoffParams)
+    
+    console.log('一键起飞结果:', result)
+    
+    if (result.code === 0) {
+      alert('一键起飞指令已发送成功！')
+    } else {
+      alert(`起飞失败: ${result.message}`)
+    }
+    
+  } catch (error: any) {
+    console.error('起飞失败:', error)
+    alert(`起飞失败: ${error.message || '请稍后重试'}`)
+  } finally {
+    takeoffLoading.value = false
+  }
+}
+
 // 变焦控制处理函数
 const handleZoom = async (direction: 'in' | 'out') => {
   try {
@@ -1737,32 +2362,48 @@ const handleZoom = async (direction: 'in' | 'out') => {
 
 // DRC模式切换处理函数
 const handleToggleDrcMode = async () => {
-  if (!drcStatus.value.ready) {
-    alert('DRC未就绪，无法进入DRC模式')
+  const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+  if (cachedDockSns.length === 0) {
+    alert('没有找到可用的机场设备')
     return
   }
   
+  const dockSn = cachedDockSns[0]
+
   if (isDrcModeActive.value) {
     // 退出DRC模式
-    isDrcModeActive.value = false
-    alert('已退出DRC模式')
+    try {
+      const result = await drcApi.exitDrcMode(dockSn)
+      // console.log('退出DRC模式结果:', result)
+      
+      if (result.code === 0) {
+        isDrcModeActive.value = false
+        alert('已退出DRC模式')
+        // 立即检查状态更新
+        checkDrcStatus()
+      } else {
+        alert(`退出DRC模式失败: ${result.message}`)
+      }
+    } catch (error: any) {
+      alert(`退出DRC模式失败: ${error.message || error}`)
+    }
   } else {
+    // 检查DRC是否就绪
+    if (!drcStatus.value.ready) {
+      alert(`DRC未就绪，无法进入DRC模式${drcStatus.value.reason ? ': ' + drcStatus.value.reason : ''}`)
+      return
+    }
+    
     // 进入DRC模式
     try {
-      
-      const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
-      if (cachedDockSns.length === 0) {
-        alert('没有找到可用的机场设备')
-        return
-      }
-      
-      const dockSn = cachedDockSns[0]
-      
       const result = await drcApi.enterDrcMode(dockSn)
+      // console.log('进入DRC模式结果:', result)
       
       if (result.code === 0) {
         isDrcModeActive.value = true
         alert('已进入DRC模式，现在可以使用方向控制按钮')
+        // 立即检查状态更新
+        checkDrcStatus()
       } else {
         alert(`进入DRC模式失败: ${result.message}`)
       }
@@ -1889,11 +2530,21 @@ onBeforeUnmount(() => {
   stopDrcStatusPolling()
   stopVideoPlayback() // 停止视频播放
   
-  // 清理设备状态刷新定时器
+  // 清理机场状态刷新定时器
   if (statusRefreshTimer.value) {
     clearInterval(statusRefreshTimer.value)
     statusRefreshTimer.value = null
   }
+  
+  // 清理无人机状态刷新定时器
+  if (droneStatusRefreshTimer.value) {
+    clearInterval(droneStatusRefreshTimer.value)
+    droneStatusRefreshTimer.value = null
+  }
+  
+  // 清理地图标记
+  clearDockMarkers()
+  clearDroneMarkers()
   
   if (amapInstance.value) {
     amapInstance.value.destroy()
@@ -2531,9 +3182,9 @@ onBeforeUnmount(() => {
   gap: 24px;
   width: 40px;
   align-items: center;
-  flex: 1; /* 新增：让标签区域占据剩余空间 */
-  justify-content: flex-start; /* 新增：从顶部开始排列 */
-  padding-top: 20px; /* 新增：顶部留出一些空间 */
+  flex: 1;
+  justify-content: flex-start;
+  padding-top: 20px;
 }
 .sidebar-menu-bottom {
   display: none !important;
@@ -2555,6 +3206,7 @@ onBeforeUnmount(() => {
   margin-top: 10px;
   box-sizing: border-box;
 }
+
 .sidebar-tab:first-child {
   margin-top: 0;
 }
@@ -2800,9 +3452,9 @@ onBeforeUnmount(() => {
 }
 .battery-info-block {
   display: flex;
-  width: 90px;
+  width: 95px;
   height: 140px;
-  padding: 10px 12px;
+  padding: 10px 8px;
   flex-direction: column;
   justify-content: center;
   align-items: center;
@@ -3388,34 +4040,36 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.refresh-video-btn {
+.refresh-btn {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
+  margin-left: 8px;
 }
 
-.refresh-video-btn:hover:not(:disabled) {
+.refresh-btn:hover:not(:disabled) {
   background: rgba(89, 192, 252, 0.2);
 }
 
-.refresh-video-btn:disabled {
+.refresh-btn:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.refresh-video-btn svg {
+.refresh-btn svg {
   width: 20px;
   height: 20px;
-  display: block;
+  fill: #59C0FC;
+  transition: fill 0.3s ease;
 }
 
-.refresh-video-btn svg.rotating {
+.refresh-btn svg.rotating {
   animation: rotate 1s linear infinite;
 }
 
@@ -3838,6 +4492,107 @@ onBeforeUnmount(() => {
 .drone-direction-grid button.authority-granted:hover .drone-btn-icon {
   filter: brightness(0) saturate(100%) invert(54%) sepia(98%) saturate(1385%) hue-rotate(87deg) brightness(94%) contrast(101%) !important;
   /* hover时使用稍深的绿色 */
+}
+
+/* 控制权按钮包装器 */
+.authority-btn-wrapper {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.authority-btn-wrapper > button {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+/* 抢夺控制权气泡弹窗 */
+.authority-tooltip {
+  position: fixed;
+  z-index: 1000;
+  animation: fadeInUp 0.3s ease-out;
+  pointer-events: none;
+}
+
+.authority-tooltip-content {
+  background: rgba(0, 20, 40, 0.95);
+  border: 1px solid #67D5FD;
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 200px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.authority-tooltip-message {
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.authority-tooltip-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.authority-tooltip-btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 70px;
+}
+
+.authority-confirm-btn {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.authority-confirm-btn:hover {
+  background: #ff7875;
+  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
+}
+
+.authority-cancel-btn {
+  background: rgba(103, 213, 253, 0.1);
+  color: #67d5fd;
+  border: 1px solid rgba(103, 213, 253, 0.3);
+}
+
+.authority-cancel-btn:hover {
+  background: rgba(103, 213, 253, 0.2);
+  border-color: #67d5fd;
+}
+
+.authority-tooltip-arrow {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #67D5FD;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 /* 新增：高分辨率屏幕优化 */

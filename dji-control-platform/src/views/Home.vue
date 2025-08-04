@@ -23,21 +23,21 @@
                 <div class="b-top-rightDiv">
                   <img src="@/assets/source_data/speed.png" alt="" />
                   <div>
-                    <p>{{ formatSpeed(gpsStatus?.totalSpeed) }}</p>
+                    <p>{{ formatSpeed(droneStatus?.horizontalSpeed) }}</p>
                     <p>当前飞行速度</p>
                   </div>
                 </div>
                 <div class="b-top-rightDiv">
                   <img src="@/assets/source_data/today_time.png" alt="" />
                   <div>
-                    <p>16天</p>
+                    <p>{{ formatAccTime(droneStatus?.totalFlightTime) }}</p>
                     <p>累计运行时间</p>
                   </div>
                 </div>
                 <div class="b-top-rightDiv">
                   <img src="@/assets/source_data/total_miles.png" alt="" />
                   <div>
-                    <p>18.3公里</p>
+                    <p>{{ formatFlightDistance(droneStatus?.totalFlightDistance) }}</p>
                     <p>累计飞行里程</p>
                   </div>
                 </div>
@@ -51,28 +51,28 @@
                   <img src="@/assets/source_data/svg_data/longitude.svg" alt="经度" />
                   <span class="label">经度</span>
                 </div>
-                <span class="value">{{ formatCoordinate(position?.longitude, 'longitude') }}</span>
+                <span class="value">{{ formatCoordinate(droneStatus?.longitude, 'longitude') }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/latitude.svg" alt="纬度" />
                   <span class="label">纬度</span>
                 </div>
-                <span class="value">{{ formatCoordinate(position?.latitude, 'latitude') }}</span>
+                <span class="value">{{ formatCoordinate(droneStatus?.latitude, 'latitude') }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/altitude.svg" alt="高度" />
                   <span class="label">高度</span>
                 </div>
-                <span class="value">{{ formatHeight(position?.height) }}</span>
+                <span class="value">{{ formatHeight(droneStatus?.height) }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/speed.svg" alt="速度" />
                   <span class="label">速度</span>
                 </div>
-                <span class="value">{{ formatSpeed(gpsStatus?.totalSpeed) }}</span>
+                <span class="value">{{ formatSpeed(droneStatus?.horizontalSpeed) }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
@@ -107,7 +107,7 @@
                 <div class="b-top-rightDiv">
                   <img src="@/assets/source_data/speed.png" alt="" />
                   <div>
-                    <p>95KB/s</p>
+                    <p>{{ formatNetworkRate(dockStatus?.networkRate) }}</p>
                     <p>机场网络速率</p>
                   </div>
                 </div>
@@ -121,7 +121,7 @@
                 <div class="b-top-rightDiv">
                   <img src="@/assets/source_data/total_miles.png" alt="" />
                   <div>
-                    <p>15小时</p>
+                    <p>{{ formatAccTime(dockStatus?.accTime) }}</p>
                     <p>累计运行时长</p>
                   </div>
                 </div>
@@ -180,21 +180,25 @@
           <div class="on3-bottom-center">
             <div class="control-row">
               <div class="div">航线名称：</div>
-              <div class="el-select">
-                <div class="el-select__wrapper">
-                  <div class="el-select__selection">
-                    <div class="el-select__selected-item el-select__placeholder">
-                      <span>请选择</span>
-                    </div>
-                  </div>
-                  <div class="el-select__suffix">
-                    <i class="el-select__caret">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-                        <path fill="currentColor" d="M831.872 340.864 512 652.672 192.128 340.864a30.592 30.592 0 0 0-42.752 0 29.12 29.12 0 0 0 0 41.6L489.664 714.24a32 32 0 0 0 44.672 0l340.288-331.712a29.12 29.12 0 0 0 0-41.728 30.592 30.592 0 0 0-42.752 0z"></path>
-                      </svg>
-                    </i>
-                  </div>
-                </div>
+              <div class="wayline-select-wrapper">
+                <select 
+                  v-model="selectedWayline" 
+                  class="wayline-select"
+                >
+                  <option value="">请选择</option>
+                  <option 
+                    v-for="wayline in waylineFiles"
+                    :key="wayline.wayline_id"
+                    :value="wayline.wayline_id"
+                  >
+                    {{ wayline.name }}
+                  </option>
+                </select>
+                <span class="wayline-custom-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                  </svg>
+                </span>
               </div>
               <div class="button-group">
                 <span class="span" @click="handleDispatchTask">下发任务</span>
@@ -203,12 +207,10 @@
             </div>
             <!-- 修改第二行的结构 -->
             <div class="control-row second-row">
-              <div class="button-group-second">
-                <span class="span">航线暂停</span>
-                <span class="span">航线恢复</span>
-                <span class="span">一键返航</span>
-                <span class="span1">取消返航</span>
-              </div>
+              <span class="span">航线暂停</span>
+              <span class="span">航线恢复</span>
+              <span class="span">一键返航</span>
+              <span class="span1">取消返航</span>
             </div>
           </div>
         </div>
@@ -462,27 +464,161 @@
       </div>
     </div>
   </div>
+  
+  <!-- 下发任务弹窗 -->
+  <div v-if="dispatchTaskDialog.visible" class="custom-dialog-mask">
+    <div class="dispatch-task-modal">
+      <div class="dispatch-task-modal-content">
+        <div class="dispatch-task-title">下发任务</div>
+        <div class="dispatch-task-form">
+          <div class="dispatch-task-row">
+            <label>任务名称：</label>
+            <input 
+              v-model="dispatchTaskDialog.form.name" 
+              class="dispatch-task-input" 
+              placeholder="请输入任务名称"
+            />
+          </div>
+          <div class="dispatch-task-row">
+            <label>设备序列号：</label>
+            <input 
+              v-model="dispatchTaskDialog.form.dock_sn" 
+              class="dispatch-task-input" 
+              disabled
+            />
+          </div>
+          <div class="dispatch-task-row">
+            <label>航线文件ID：</label>
+            <input 
+              v-model="dispatchTaskDialog.form.file_id" 
+              class="dispatch-task-input" 
+              disabled
+            />
+          </div>
+          <div class="dispatch-task-row">
+            <label>任务类型：</label>
+            <div class="custom-select-wrapper">
+              <select v-model="dispatchTaskDialog.form.task_type" class="mission-select">
+                <option :value="0">立即任务</option>
+                <option :value="1">定时任务</option>
+                <option :value="2">条件任务</option>
+              </select>
+              <span class="custom-select-arrow">
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+          <div v-if="dispatchTaskDialog.form.task_type === 1 || dispatchTaskDialog.form.task_type === 2" class="dispatch-task-row">
+            <label>开始时间：</label>
+            <input 
+              v-model="dispatchTaskDialog.form.begin_time" 
+              type="datetime-local" 
+              class="dispatch-task-input"
+            />
+          </div>
+          <div class="dispatch-task-row">
+            <label>返航高度：</label>
+            <input 
+              v-model="dispatchTaskDialog.form.rth_altitude" 
+              type="number" 
+              class="dispatch-task-input" 
+              placeholder="100"
+            />
+            <span class="unit-label">米</span>
+          </div>
+          <div class="dispatch-task-row">
+            <label>返航模式：</label>
+            <div class="custom-select-wrapper">
+              <select v-model="dispatchTaskDialog.form.rth_mode" class="mission-select">
+                <option :value="0">自动模式</option>
+                <option :value="1">设定高度模式</option>
+              </select>
+              <span class="custom-select-arrow">
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+          <div class="dispatch-task-row">
+            <label>失控动作：</label>
+            <div class="custom-select-wrapper">
+              <select v-model="dispatchTaskDialog.form.out_of_control_action" class="mission-select">
+                <option :value="0">返航</option>
+                <option :value="1">悬停</option>
+                <option :value="2">降落</option>
+              </select>
+              <span class="custom-select-arrow">
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+          <div class="dispatch-task-row">
+            <label>失控处理：</label>
+            <div class="custom-select-wrapper">
+              <select v-model="dispatchTaskDialog.form.exit_wayline_when_rc_lost" class="mission-select">
+                <option :value="0">继续执行航线</option>
+                <option :value="1">退出航线</option>
+              </select>
+              <span class="custom-select-arrow">
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+          <div class="dispatch-task-row">
+            <label>精度类型：</label>
+            <div class="custom-select-wrapper">
+              <select v-model="dispatchTaskDialog.form.wayline_precision_type" class="mission-select">
+                <option :value="0">标准精度</option>
+                <option :value="1">高精度RTK任务</option>
+              </select>
+              <span class="custom-select-arrow">
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="dispatch-task-actions">
+          <button class="mission-btn mission-btn-cancel" @click="onDispatchTaskCancel">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="onDispatchTaskConfirm">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useHmsAlerts, useDevices } from '../composables/useApi'
+import { useHmsAlerts, useDevices, useWaylineJobs } from '../composables/useApi'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
 import * as echarts from 'echarts'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import flvjs from 'flv.js'
+import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
 
 const router = useRouter()
 
 // 使用HMS报警API和设备管理API
 const { hmsAlerts, loading, error, fetchDeviceHms, setAllAlerts } = useHmsAlerts()
-const { getCachedDeviceSns } = useDevices()
+const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
+
+// 使用航线任务API
+const { waylineFiles, fetchWaylineFiles, createJob } = useWaylineJobs()
 
 // 使用设备状态API
 const { 
   fetchDeviceStatus, 
   fetchMainDeviceStatus,
+  fetchDroneStatus,
   position, 
   environment, 
   dockStatus, 
@@ -495,7 +631,10 @@ const {
   formatHumidity,
   formatWindSpeed,
   formatRainfall,
-  formatBattery
+  formatBattery,
+  formatNetworkRate,
+  formatAccTime,
+  formatFlightDistance
 } = useDeviceStatus()
 
 // 当前标签页
@@ -531,26 +670,41 @@ const inspectionAlarmData = ref([
 
 // 设备状态刷新定时器
 let statusRefreshTimer: number | null = null
+// 无人机状态刷新定时器（2秒一次）
+let droneStatusRefreshTimer: number | null = null
 
-// 获取设备状态数据
-const loadDeviceStatus = async () => {
+// 获取机场状态数据
+const loadDockStatus = async () => {
   try {
     // 使用主要设备状态获取（自动使用第一个机场）
     await fetchMainDeviceStatus()
+    
+    // 设备状态更新后，更新地图标记（不定位）
+    if (amapInstance) {
+      updateDockMarkers()
+    }
   } catch (err) {
-    console.error('获取设备状态失败:', err)
+    console.error('获取机场状态失败:', err)
+  }
+}
+
+// 获取无人机状态数据
+const loadDroneStatus = async () => {
+  try {
+    // 获取无人机状态数据
+    await fetchDroneStatus()
+  } catch (err) {
+    console.error('获取无人机状态失败:', err)
   }
 }
 
 // 获取最新的三条报警数据
 const loadLatestAlarmData = async () => {
   try {
-    console.log('首页开始获取最新报警数据')
     const { dockSns, droneSns } = getCachedDeviceSns()
     const allSns = [...dockSns, ...droneSns]
     
     if (allSns.length === 0) {
-      console.log('没有缓存设备，跳过获取报警数据')
       return
     }
     
@@ -666,11 +820,152 @@ const lineChartRef = ref<HTMLElement | null>(null)
 // 地图容器ref和地图实例
 const mapContainer = ref<HTMLElement | null>(null)
 let amapInstance: any = null
+let amapApiRef: any = null
+const dockMarkers = ref<any[]>([])
+const isInitialLoad = ref(true)
 
 // 视频播放器相关
 const videoStreamUrl = ref<string>('')
 const videoPlayer = ref<any>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
+
+// WGS84坐标转GCJ-02坐标的转换函数
+const transformWGS84ToGCJ02 = (wgsLng: number, wgsLat: number) => {
+  const PI = Math.PI
+  const ee = 0.00669342162296594323
+  const a = 6378245.0
+
+  if (isOutOfChina(wgsLng, wgsLat)) {
+    return { longitude: wgsLng, latitude: wgsLat }
+  }
+
+  let dlat = transformLat(wgsLng - 105.0, wgsLat - 35.0)
+  let dlng = transformLng(wgsLng - 105.0, wgsLat - 35.0)
+  const radlat = wgsLat / 180.0 * PI
+  let magic = Math.sin(radlat)
+  magic = 1 - ee * magic * magic
+  const sqrtmagic = Math.sqrt(magic)
+  dlat = (dlat * 180.0) / ((a * (1 - ee)) / (magic * sqrtmagic) * PI)
+  dlng = (dlng * 180.0) / (a / sqrtmagic * Math.cos(radlat) * PI)
+  const mglat = wgsLat + dlat
+  const mglng = wgsLng + dlng
+
+  return { longitude: mglng, latitude: mglat }
+}
+
+// 判断是否在中国范围外
+const isOutOfChina = (lng: number, lat: number) => {
+  return (lng < 72.004 || lng > 137.8347) || (lat < 0.8293 || lat > 55.8271)
+}
+
+// 辅助函数：纬度转换
+const transformLat = (lng: number, lat: number) => {
+  const PI = Math.PI
+  let ret = -100.0 + 2.0 * lng + 3.0 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng))
+  ret += (20.0 * Math.sin(6.0 * lng * PI) + 20.0 * Math.sin(2.0 * lng * PI)) * 2.0 / 3.0
+  ret += (20.0 * Math.sin(lat * PI) + 40.0 * Math.sin(lat / 3.0 * PI)) * 2.0 / 3.0
+  ret += (160.0 * Math.sin(lat / 12.0 * PI) + 320 * Math.sin(lat * PI / 30.0)) * 2.0 / 3.0
+  return ret
+}
+
+// 辅助函数：经度转换
+const transformLng = (lng: number, lat: number) => {
+  const PI = Math.PI
+  let ret = 300.0 + lng + 2.0 * lat + 0.1 * lng * lng + 0.1 * lng * lat + 0.1 * Math.sqrt(Math.abs(lng))
+  ret += (20.0 * Math.sin(6.0 * lng * PI) + 20.0 * Math.sin(2.0 * lng * PI)) * 2.0 / 3.0
+  ret += (20.0 * Math.sin(lng * PI) + 40.0 * Math.sin(lng / 3.0 * PI)) * 2.0 / 3.0
+  ret += (150.0 * Math.sin(lng / 12.0 * PI) + 300.0 * Math.sin(lng / 30.0 * PI)) * 2.0 / 3.0
+  return ret
+}
+
+// 添加机场标记到地图
+const addDockMarker = (longitude: number, latitude: number, dockInfo: any) => {
+  if (!amapInstance || !amapApiRef) {
+    console.warn('地图未初始化，无法添加标记')
+    return
+  }
+
+  const AMap = amapApiRef
+  
+  // 创建机场标记点
+  const marker = new AMap.Marker({
+    position: [longitude, latitude],
+    title: `机场: ${dockInfo?.deviceSn || '未知设备'}`,
+    content: `
+      <img 
+        src="${mapDockIcon}" 
+        style="
+          width: 32px;
+          height: 32px;
+          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+        "
+        alt="机场"
+      />
+    `,
+    anchor: 'center',
+    offset: new AMap.Pixel(0, 0)
+  })
+
+  // 添加到地图
+  amapInstance.add(marker)
+  dockMarkers.value.push(marker)
+  
+}
+
+// 清除所有机场标记
+const clearDockMarkers = () => {
+  if (dockMarkers.value.length > 0) {
+    dockMarkers.value.forEach(marker => {
+      if (amapInstance) {
+        amapInstance.remove(marker)
+      }
+    })
+    dockMarkers.value = []
+  }
+}
+
+// 更新机场标记
+const updateDockMarkers = (shouldCenter = false) => {
+  
+  // 清除现有标记
+  clearDockMarkers()
+  
+  // 检查是否有位置数据
+  if (position.value && position.value.longitude && position.value.latitude) {
+    const wgsLongitude = position.value.longitude
+    const wgsLatitude = position.value.latitude
+    
+    
+    // 将WGS84坐标转换为GCJ-02坐标
+    const gcjCoords = transformWGS84ToGCJ02(wgsLongitude, wgsLatitude)
+    const longitude = gcjCoords.longitude
+    const latitude = gcjCoords.latitude
+    
+    
+    // 获取机场设备信息
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    const deviceSn = cachedDockSns.length > 0 ? cachedDockSns[0] : '未知设备'
+    
+    const dockInfo = {
+      deviceSn: deviceSn,
+      isOnline: droneStatus?.isOnline || false,
+      longitude: longitude,
+      latitude: latitude,
+      height: position.value.height || 0
+    }
+    
+    // 添加机场标记
+    addDockMarker(longitude, latitude, dockInfo)
+    
+    // 只在初始加载或明确要求时才设置地图中心
+    if (shouldCenter && amapInstance) {
+      amapInstance.setCenter([longitude, latitude])
+    }
+    
+  } else {
+    console.warn('无设备坐标数据，无法添加机场标记')
+  }
+}
 
 // 视频播放控制相关
 const isVideoPlaying = ref(false)
@@ -964,9 +1259,122 @@ const reloadVideo = () => {
   }, 500)
 }
 
-// 基本功能函数
+// 航线选择相关
+const selectedWayline = ref('')
+const showWaylineDropdown = ref(false)
+
+// 下发任务弹窗
+const dispatchTaskDialog = ref({
+  visible: false,
+  form: {
+    name: '',
+    dock_sn: '',
+    file_id: '',
+    task_type: 0,
+    out_of_control_action: 0,
+    rth_altitude: 100,
+    rth_mode: 1,
+    exit_wayline_when_rc_lost: 0,
+    wayline_precision_type: 1,
+    begin_time: null as string | null,
+    end_time: null as string | null
+  }
+})
+
+// 获取航线文件列表
+const loadWaylineFiles = async () => {
+  const workspaceId = getCachedWorkspaceId()
+  if (!workspaceId) return
+  
+  try {
+    await fetchWaylineFiles(workspaceId, {
+      page: 1,
+      page_size: 100
+    })
+    // 默认选择第一条数据
+    if (waylineFiles.value && waylineFiles.value.length > 0) {
+      selectedWayline.value = waylineFiles.value[0].wayline_id
+    }
+  } catch (err) {
+    console.error('加载航线文件失败:', err)
+  }
+}
+
+// 获取当前选中的航线名称
+const getCurrentWaylineName = computed(() => {
+  const currentWayline = waylineFiles.value.find(f => f.wayline_id === selectedWayline.value)
+  return currentWayline ? currentWayline.name : '请选择'
+})
+
+// 下发任务处理
 const handleDispatchTask = () => {
-  console.log('下发任务')
+  // 获取当前选中的航线信息
+  const currentWayline = waylineFiles.value.find(f => f.wayline_id === selectedWayline.value)
+  if (!currentWayline) {
+    alert('请先选择一个航线')
+    return
+  }
+  
+  // 获取缓存的设备序列号
+  const deviceSns = getCachedDeviceSns()
+  if (!deviceSns.dockSns || deviceSns.dockSns.length === 0) {
+    alert('未找到可用的设备')
+    return
+  }
+  
+  // 初始化弹窗数据
+  dispatchTaskDialog.value.form = {
+    name: `航线任务_${Date.now()}`,
+    dock_sn: deviceSns.dockSns[0], // 使用第一个机场设备
+    file_id: currentWayline.wayline_id,
+    task_type: 0,
+    out_of_control_action: 0,
+    rth_altitude: 100,
+    rth_mode: 1,
+    exit_wayline_when_rc_lost: 0,
+    wayline_precision_type: 1,
+    begin_time: null,
+    end_time: null
+  }
+  
+  dispatchTaskDialog.value.visible = true
+}
+
+// 下发任务确认
+const onDispatchTaskConfirm = async () => {
+  const form = dispatchTaskDialog.value.form
+  
+  // 验证必填字段
+  if (!form.name.trim()) {
+    alert('请输入任务名称')
+    return
+  }
+  
+  if ((form.task_type === 1 || form.task_type === 2) && !form.begin_time) {
+    alert('定时任务和条件任务需要设置开始时间')
+    return
+  }
+  
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      alert('未找到workspace_id')
+      return
+    }
+    
+    const response = await createJob(workspaceId, form)
+    console.log('任务下发成功:', response)
+    dispatchTaskDialog.value.visible = false
+    alert('任务下发成功')
+  } catch (err) {
+    console.error('任务下发失败:', err)
+    alert('任务下发失败')
+  }
+}
+
+// 下发任务取消
+const onDispatchTaskCancel = () => {
+  dispatchTaskDialog.value.visible = false
 }
 
 // 初始化告警趋势图表
@@ -1344,8 +1752,14 @@ onMounted(async () => {
   // 获取最新报警数据
   await loadLatestAlarmData()
   
-  // 加载设备状态数据
-  await loadDeviceStatus()
+  // 加载机场状态数据
+  await loadDockStatus()
+  
+  // 加载无人机状态数据
+  await loadDroneStatus()
+  
+  // 加载航线文件列表
+  await loadWaylineFiles()
   
   // 初始化视频播放器
   initVideoPlayer()
@@ -1373,31 +1787,71 @@ onMounted(async () => {
       version: '2.0',
       plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch']
     }).then((AMap) => {
+      amapApiRef = AMap // 缓存 AMap
       amapInstance = new AMap.Map(mapContainer.value, {
-        zoom: 12,
+        zoom: 18,
         center: [116.397428, 39.90923],
         logoEnable: false,
-        copyrightEnable: false
+        copyrightEnable: false,
+        mapStyle: 'amap://styles/satellite', // 强制设置卫星图样式
+        layers: [
+          new AMap.TileLayer.Satellite(),
+          new AMap.TileLayer.RoadNet()
+        ]
       })
       // 放大缩小工具放左上角
       amapInstance.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
+      amapInstance.addControl(new AMap.MapType({ position: 'RB' }))
+      
+      
+      // 地图加载完成后更新机场标记
+      amapInstance.on('complete', () => {
+        // 延迟一下确保设备状态数据已加载
+        setTimeout(() => {
+          // 初始加载时需要定位到机场位置
+          updateDockMarkers(isInitialLoad.value)
+          // 标记初始加载完成
+          isInitialLoad.value = false
+        }, 1000)
+      })
     }).catch((error) => {
       console.warn('地图加载失败:', error)
     })
   }
   
-  // 设置设备状态自动刷新（每5秒）
+  // 设置机场状态自动刷新（每5秒）
   statusRefreshTimer = setInterval(async () => {
-    await loadDeviceStatus()
+    await loadDockStatus()
   }, 5000)
+  
+  // 设置无人机状态自动刷新（每2秒）
+  droneStatusRefreshTimer = setInterval(async () => {
+    await loadDroneStatus()
+  }, 2000)
 })
 
 // 组件卸载时清理
 onUnmounted(() => {
-  // 清理设备状态刷新定时器
+  // 清理机场状态刷新定时器
   if (statusRefreshTimer) {
     clearInterval(statusRefreshTimer)
     statusRefreshTimer = null
+  }
+  
+  // 清理无人机状态刷新定时器
+  if (droneStatusRefreshTimer) {
+    clearInterval(droneStatusRefreshTimer)
+    droneStatusRefreshTimer = null
+  }
+  
+  // 清理地图标记
+  clearDockMarkers()
+  
+  // 清理地图实例
+  if (amapInstance) {
+    amapInstance.destroy()
+    amapInstance = null
+    amapApiRef = null
   }
   
   // 停止视频播放
@@ -1507,6 +1961,241 @@ const toggleFullscreen = () => {
 </script>
 
 <style scoped>
+/* 航线选择器样式 */
+.wayline-select-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.wayline-select {
+  width: 100%;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid #164159;
+  background: transparent;
+  color: #fff;
+  padding: 0 8px;
+  font-size: 12px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 24px;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px #164159 inset;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.wayline-select:focus {
+  outline: none;
+  border: 1.5px solid #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.wayline-select option {
+  background: #172233;
+  color: #fff;
+  border: none;
+}
+
+.wayline-custom-arrow {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wayline-custom-arrow svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* 下发任务弹窗样式 */
+.dispatch-task-modal {
+  display: flex;
+  background: #172233;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px #0008;
+  overflow: hidden;
+  width: 90%;
+  max-width: 500px;
+  margin: 10px auto;
+  position: relative;
+  border: 1px solid #18344a;
+}
+
+.dispatch-task-modal-content {
+  flex: 1;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  background: #172233;
+}
+
+.dispatch-task-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #67d5fd;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.dispatch-task-form {
+  margin-bottom: 20px;
+}
+
+.dispatch-task-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.dispatch-task-row label {
+  font-size: 14px;
+  color: #b8c7d9;
+  min-width: 100px;
+  text-align: right;
+}
+
+.dispatch-task-input {
+  flex: 1;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid #164159;
+  background: transparent;
+  color: #fff;
+  padding: 0 12px;
+  font-size: 14px;
+  box-shadow: 0 0 0 1px #164159 inset;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.dispatch-task-input:focus {
+  outline: none;
+  border: 1.5px solid #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.dispatch-task-input:disabled {
+  background: rgba(103, 213, 253, 0.1);
+  color: #67d5fd;
+  border-color: rgba(103, 213, 253, 0.3);
+}
+
+.custom-select-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.mission-select {
+  width: 100%;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid #164159;
+  background: transparent;
+  color: #fff;
+  padding: 0 12px;
+  font-size: 14px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 30px;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px #164159 inset;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.mission-select:focus {
+  outline: none;
+  border: 1.5px solid #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.custom-select-arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.custom-select-arrow svg {
+  width: 100%;
+  height: 100%;
+}
+
+.unit-label {
+  margin-left: 8px;
+  color: #b8c7d9;
+  font-size: 14px;
+}
+
+.dispatch-task-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.dispatch-task-actions .mission-btn {
+  min-width: 100px;
+  height: 36px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dispatch-task-actions .mission-btn-cancel {
+  background: rgba(103, 213, 253, 0.1);
+  color: #b8c7d9;
+  border: 1px solid rgba(103, 213, 253, 0.2);
+}
+
+.dispatch-task-actions .mission-btn-cancel:hover {
+  background: rgba(103, 213, 253, 0.2);
+  color: #67d5fd;
+}
+
+.dispatch-task-actions .mission-btn-pause {
+  background: #67d5fd;
+  color: #fff;
+}
+
+.dispatch-task-actions .mission-btn-pause:hover {
+  background: #50c7f7;
+  box-shadow: 0 2px 8px rgba(103, 213, 253, 0.3);
+}
+
+.custom-dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
 .home-container {
   display: grid;
   grid-template-columns: clamp(280px, 28vw, 480px) 1fr clamp(280px, 28vw, 480px);
@@ -1610,10 +2299,11 @@ const toggleFullscreen = () => {
 }
 
 .on1-bottom, .on2-bottom, .on3-bottom, .on4-bottom {
-  width: calc(100% - 40px);
+  width: 100%;
   padding: 0 20px;
   height: calc(100% - 41px);
   position: relative;
+  box-sizing: border-box;
 }
 
 /* 顶部区域 */
@@ -1743,10 +2433,10 @@ const toggleFullscreen = () => {
 .status-row {
   width: 440px;
   display: flex;
-  justify-content: center;
+  justify-content: space-evenly;
   align-items: center;
   border-radius: 20px;
-  gap: 45px;
+  gap: 10px;
   height: 55px;
   padding: 0 10px;
 }
@@ -1755,15 +2445,17 @@ const toggleFullscreen = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   justify-content: center;
-  width: clamp(50px, 12%, 60px);
+  min-width: 70px;
+  flex: 1;
 }
 
 .status-item .top-row {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .status-item img {
@@ -1940,8 +2632,29 @@ const toggleFullscreen = () => {
   align-items: center;
   gap: 20px;
   width: 100%;
-  padding-right: 20px;
   justify-content: flex-start;
+}
+
+.control-row:first-child {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.control-row:first-child .wayline-select-wrapper {
+  flex: 3;
+  margin: 0 10px;
+  min-width: 150px;
+}
+
+.control-row.second-row {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.control-row.second-row .span,
+.control-row.second-row .span1 {
+  flex: 1;
+  min-width: 70px;
 }
 
 .control-row .div {
@@ -2402,16 +3115,16 @@ const toggleFullscreen = () => {
 }
 
 .button-group {
-  margin-left: auto;
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .button-group-second {
   display: flex;
   gap: clamp(20px, 2vw, 26px);
-  margin-left: auto;  /* 靠右对齐 */
-  padding-right: 20px;
+  width: 100%;
+  justify-content: space-between;
 }
 
 .button-group-second .span,

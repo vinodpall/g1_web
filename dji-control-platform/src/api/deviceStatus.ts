@@ -92,9 +92,9 @@ export const StatusMaps = {
 export const deviceStatusApi = {
   // 获取设备状态
   getDeviceStatus: (deviceSn: string) =>
-    apiClient.get(`/api/v1/control/devices/${deviceSn}/status`),
+    apiClient.get(`/control/devices/${deviceSn}/status`),
   
   // 获取设备容量信息
   getDeviceCapacity: (deviceSn: string) =>
-    apiClient.get(`/api/v1/control/devices/${deviceSn}/capacity`)
+    apiClient.get(`/control/devices/${deviceSn}/capacity`)
 } 

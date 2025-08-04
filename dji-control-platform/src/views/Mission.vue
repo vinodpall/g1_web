@@ -12,6 +12,9 @@
           <img :src="tab.icon" :alt="tab.label" />
         </div>
       </div>
+      <div class="sidebar-menu-bottom">
+        <img src="@/assets/source_data/svg_data/sheet.svg" alt="菜单" />
+      </div>
     </aside>
     <!-- 主体内容区 -->
     <main class="main-content">
@@ -750,5 +753,23 @@ onMounted(async () => {
 .dispatch-task-actions .mission-btn-pause:hover {
   background: #50c7f7;
   box-shadow: 0 2px 8px rgba(103, 213, 253, 0.3);
+}
+
+/* 侧边栏底部 */
+.sidebar-menu-bottom {
+  margin-top: auto;
+  padding-bottom: 20px;
+}
+
+.sidebar-menu-bottom img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  cursor: pointer;
+}
+
+.sidebar-menu-bottom img:hover {
+  filter: brightness(0) invert(1) drop-shadow(0 0 8px #67d5fd);
 }
 </style>
