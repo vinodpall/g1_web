@@ -51,21 +51,21 @@
                   <img src="@/assets/source_data/svg_data/longitude.svg" alt="经度" />
                   <span class="label">经度</span>
                 </div>
-                <span class="value">{{ formatCoordinate(droneStatus?.longitude, 'longitude') }}</span>
+                <span class="value">{{ formatCoordinate(droneDisplayPosition?.longitude, 'longitude') }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/latitude.svg" alt="纬度" />
                   <span class="label">纬度</span>
                 </div>
-                <span class="value">{{ formatCoordinate(droneStatus?.latitude, 'latitude') }}</span>
+                <span class="value">{{ formatCoordinate(droneDisplayPosition?.latitude, 'latitude') }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
                   <img src="@/assets/source_data/svg_data/altitude.svg" alt="高度" />
                   <span class="label">高度</span>
                 </div>
-                <span class="value">{{ formatHeight(droneStatus?.height) }}</span>
+                <span class="value">{{ formatHeight(droneDisplayPosition?.height) }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
@@ -202,15 +202,40 @@
               </div>
               <div class="button-group">
                 <span class="span" @click="handleDispatchTask">下发任务</span>
-                <span class="span1">取消任务</span>
+                <span 
+                  :class="['span1', { 'disabled': !canCancelTask }]" 
+                  @click="canCancelTask ? handleCancelTask() : null"
+                >
+                  取消任务
+                </span>
               </div>
             </div>
             <!-- 修改第二行的结构 -->
             <div class="control-row second-row">
-              <span class="span">航线暂停</span>
-              <span class="span">航线恢复</span>
-              <span class="span">一键返航</span>
-              <span class="span1">取消返航</span>
+              <span 
+                :class="['span', { 'disabled': !canPauseRoute }]" 
+                @click="canPauseRoute ? handlePauseRoute() : null"
+              >
+                航线暂停
+              </span>
+              <span 
+                :class="['span', { 'disabled': !canResumeRoute }]" 
+                @click="canResumeRoute ? handleResumeRoute() : null"
+              >
+                航线恢复
+              </span>
+              <span 
+                :class="['span', { 'disabled': !canReturnHome }]" 
+                @click="canReturnHome ? handleReturnHome() : null"
+              >
+                一键返航
+              </span>
+              <span 
+                :class="['span1', { 'disabled': !canCancelReturnHome }]" 
+                @click="canCancelReturnHome ? handleCancelReturnHome() : null"
+              >
+                取消返航
+              </span>
             </div>
           </div>
         </div>
@@ -253,7 +278,7 @@
     <!-- 中间区域 -->
     <div class="center-column">
       <!-- 视频播放区域 -->
-      <div class="content-on1">
+      <div class="content-on1" @click="closeMenus">
         <div class="boxGrid-box">
           <div class="boxGrid-box-content">
             <div class="player_container">
@@ -302,7 +327,47 @@
               </div>
             </div>
             <div class="center-controls">
-              <!-- 中央控制区域现在为空 -->
+              <!-- 云台切换按钮 -->
+              <div class="gimbal-control">
+                <button 
+                  class="gimbal-btn" 
+                  @click.stop="toggleGimbalMenu"
+                  :disabled="videoLoading"
+                  :class="{ 'loading': videoLoading }"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                  <span>{{ getVideoTypeName(currentVideoType) }}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="m192 384 320 384 320-384z"/>
+                  </svg>
+                </button>
+                <!-- 云台切换菜单 -->
+                <div class="gimbal-menu" v-if="gimbalMenuVisible" @click.stop>
+                  <div 
+                    class="menu-item" 
+                    @click.stop="switchGimbal('dock')"
+                    :class="{ 'active': currentVideoType === 'dock' }"
+                  >
+                    机场视频
+                  </div>
+                  <div 
+                    class="menu-item" 
+                    @click.stop="switchGimbal('drone_visible')"
+                    :class="{ 'active': currentVideoType === 'drone_visible' }"
+                  >
+                    无人机可见光
+                  </div>
+                  <div 
+                    class="menu-item" 
+                    @click.stop="switchGimbal('drone_infrared')"
+                    :class="{ 'active': currentVideoType === 'drone_infrared' }"
+                  >
+                    无人机红外
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="right-controls" @click="toggleScreenMenu">
               <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
@@ -368,7 +433,13 @@
           航线报表
         </div>
         <div class="chart-container">
-          <div :ref="el => lineChartRef = el as HTMLElement" class="trend-chart"></div>
+          <div v-if="loadingFlightStats" class="loading-container">
+            <div class="loading-text">加载中...</div>
+          </div>
+          <div v-else-if="flightStatsError" class="error-container">
+            <div class="error-text">{{ flightStatsError }}</div>
+          </div>
+          <div v-else :ref="el => lineChartRef = el as HTMLElement" class="trend-chart"></div>
         </div>
       </div>
 
@@ -382,14 +453,14 @@
           <div class="task-content">
             <div class="task-header">
               <div class="task-time">
-                <div class="task-name">任务名称：高架路灯巡检</div>
+                <div class="task-name">任务名称：{{ waylineTaskName }}</div>
                 <div class="time-item">
-                  <span class="label">任务开始时间：2025-07-16 17:00:00</span>
-                  <span class="label">当前航点：第8个</span>
+                  <span class="label">任务开始时间：{{ waylineTaskStartTime }}</span>
+                  <span class="label">当前航点：第{{ waylineCurrentWaypoint }}个</span>
                 </div>
               </div>
               <div class="task-status">
-                <div class="status-btn waiting">未开始</div>
+                <div :class="['status-btn', waylineTaskStatus]">{{ waylineTaskStatusText }}</div>
               </div>
             </div>
             <div class="task-progress">
@@ -398,15 +469,15 @@
                   <div class="progress-circle">
                     <div class="progress-circle-outer-ring"></div>
                     <div class="progress-circle-left">
-                      <div class="progress-circle-bar blue"></div>
+                      <div class="progress-circle-bar blue" :style="{ transform: `rotate(${waylineProgressPercent * 1.8}deg)` }"></div>
                     </div>
                     <div class="progress-circle-right">
-                      <div class="progress-circle-bar orange"></div>
+                      <div class="progress-circle-bar orange" :style="{ transform: `rotate(${Math.max(0, (waylineProgressPercent - 50) * 3.6)}deg)` }"></div>
                     </div>
                     <div class="progress-circle-center">
                       <div class="progress-text">
                         <span>进度</span>
-                        <span class="percentage">50%</span>
+                        <span class="percentage">{{ waylineProgressPercent }}%</span>
                       </div>
                     </div>
                   </div>
@@ -427,7 +498,12 @@
                 <div class="progress-circle-container">
                   <div class="progress-circle">
                     <div class="circle-status">
-                      <div :class="['status-circle', {'error': taskStatus === 'error'}]"></div>
+                      <div :class="['status-circle', {
+                        'error': waylineTaskStatus === 'failed',
+                        'completed': waylineTaskStatus === 'completed',
+                        'running': waylineTaskStatus === 'running',
+                        'waiting': waylineTaskStatus === 'waiting'
+                      }]"></div>
                     </div>
                     <div class="progress-circle-center">
                       <div class="progress-text">
@@ -599,11 +675,13 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHmsAlerts, useDevices, useWaylineJobs } from '../composables/useApi'
+import { controlApi, waylineApi } from '../api/services'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
 import * as echarts from 'echarts'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import flvjs from 'flv.js'
 import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
+import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
 
 const router = useRouter()
 
@@ -611,8 +689,10 @@ const router = useRouter()
 const { hmsAlerts, loading, error, fetchDeviceHms, setAllAlerts } = useHmsAlerts()
 const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
 
+
+
 // 使用航线任务API
-const { waylineFiles, fetchWaylineFiles, createJob } = useWaylineJobs()
+const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineProgress, fetchWaylineJobDetail, cancelReturnHome, stopJob, pauseJob, resumeJob, executeJob } = useWaylineJobs()
 
 // 使用设备状态API
 const { 
@@ -668,6 +748,16 @@ const inspectionAlarmData = ref([
   }
 ])
 
+// 航线任务相关数据
+const waylineProgress = ref<any>(null)
+const waylineJobDetail = ref<any>(null)
+const waylineProgressTimer = ref<number | null>(null)
+
+// 飞行统计数据
+const flightStatistics = ref<any>(null)
+const loadingFlightStats = ref(false)
+const flightStatsError = ref('')
+
 // 设备状态刷新定时器
 let statusRefreshTimer: number | null = null
 // 无人机状态刷新定时器（2秒一次）
@@ -681,10 +771,10 @@ const loadDockStatus = async () => {
     
     // 设备状态更新后，更新地图标记（不定位）
     if (amapInstance) {
-      updateDockMarkers()
+      updateMapMarkers()
     }
   } catch (err) {
-    console.error('获取机场状态失败:', err)
+    // 静默处理错误
   }
 }
 
@@ -694,11 +784,58 @@ const loadDroneStatus = async () => {
     // 获取无人机状态数据
     await fetchDroneStatus()
   } catch (err) {
-    console.error('获取无人机状态失败:', err)
+    // 静默处理错误
   }
 }
 
-// 获取最新的三条报警数据
+// 获取飞行统计数据
+const loadFlightStatistics = async (days = 7) => {
+  loadingFlightStats.value = true
+  flightStatsError.value = ''
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      flightStatsError.value = '未找到 workspace_id'
+      return
+    }
+    const res = await waylineApi.getFlightStatistics(workspaceId, days)
+    if (res.code === 0) {
+      flightStatistics.value = res.data
+      // 更新航线报表图表
+      updateFlightStatisticsChart()
+    } else {
+      flightStatsError.value = res.message || '获取飞行统计失败'
+    }
+  } catch (e: any) {
+    flightStatsError.value = e.message || '获取飞行统计异常'
+  } finally {
+    loadingFlightStats.value = false
+  }
+}
+
+// 无人机显示位置计算属性
+const droneDisplayPosition = computed(() => {
+  // 检查无人机是否在仓
+  const isInDock = droneStatus.value?.inDock === 1
+  
+  if (isInDock) {
+    // 无人机在仓，显示机场坐标
+    return position.value
+  } else {
+    // 无人机不在仓，显示无人机自己的坐标
+    if (droneStatus.value && droneStatus.value.longitude && droneStatus.value.latitude) {
+      return {
+        longitude: droneStatus.value.longitude,
+        latitude: droneStatus.value.latitude,
+        height: droneStatus.value.height || 0
+      }
+    }
+    // 如果无人机没有坐标数据，返回null
+    return null
+  }
+})
+
+    // 获取最新的三条报警数据
 const loadLatestAlarmData = async () => {
   try {
     const { dockSns, droneSns } = getCachedDeviceSns()
@@ -713,13 +850,12 @@ const loadLatestAlarmData = async () => {
     
     for (const sn of allSns) {
       try {
-        console.log('加载设备报警数据:', sn)
         const response = await fetchDeviceHms(sn)
         if (response && response.length > 0) {
           allAlerts.push(...response)
         }
       } catch (err) {
-        console.error(`获取设备 ${sn} 报警数据失败:`, err)
+        // 静默处理错误
       }
     }
     
@@ -739,10 +875,85 @@ const loadLatestAlarmData = async () => {
         content: alert.message_zh
       }
     })
-    
-    console.log('首页报警数据加载完成:', deviceAlarmData.value)
   } catch (err) {
-    console.error('获取最新报警数据失败:', err)
+    // 静默处理错误
+  }
+}
+
+// 云台切换函数
+const switchGimbal = async (videoType: 'dock' | 'drone_visible' | 'drone_infrared') => {
+  try {
+    videoLoading.value = true
+    gimbalMenuVisible.value = false
+    
+    // 从缓存获取视频流地址
+    const videoStreamsCache = localStorage.getItem('video_streams')
+    if (!videoStreamsCache) {
+      alert('没有找到缓存的视频流数据')
+      return
+    }
+    
+    const videoStreams = JSON.parse(videoStreamsCache)
+    const targetStream = videoStreams.find((stream: any) => stream.type === videoType)
+    
+    if (!targetStream || !targetStream.url) {
+      alert(`没有找到${getVideoTypeName(videoType)}视频流`)
+      return
+    }
+    
+    console.log('切换到视频流:', targetStream)
+    
+    // 直接使用缓存的视频流地址
+    videoStreamUrl.value = targetStream.url
+    currentVideoType.value = videoType
+    localStorage.setItem('video_stream_url', targetStream.url)
+    localStorage.setItem('current_video_type', videoType)
+    
+    // 重新启动视频播放
+    setTimeout(() => {
+      startVideoPlayback()
+    }, 500)
+    
+  } catch (err) {
+    console.error('切换云台失败:', err)
+    alert('切换云台失败，请重试')
+  } finally {
+    videoLoading.value = false
+  }
+}
+
+// 获取视频类型名称
+const getVideoTypeName = (type: 'dock' | 'drone_visible' | 'drone_infrared') => {
+  const typeMap = {
+    dock: '机场',
+    drone_visible: '无人机可见光',
+    drone_infrared: '无人机红外'
+  }
+  return typeMap[type]
+}
+
+// 获取航线任务进度数据
+const loadWaylineProgress = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    const { dockSns } = getCachedDeviceSns()
+    
+    if (!workspaceId || dockSns.length === 0) {
+      return
+    }
+    
+    // 获取第一个机场的航线任务进度
+    const dockSn = dockSns[0]
+    const progressData = await fetchWaylineProgress(workspaceId, dockSn)
+    waylineProgress.value = progressData
+    
+    // 如果有job_id，获取详细信息
+    if (progressData.job_id) {
+      const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
+      waylineJobDetail.value = jobDetail
+    }
+  } catch (err) {
+    // 静默处理错误
   }
 }
 
@@ -784,6 +995,105 @@ const currentAlarmData = computed(() => {
   return currentTab.value === 'device' ? deviceAlarmData.value : inspectionAlarmData.value
 })
 
+// 航线任务相关计算属性
+const waylineTaskName = computed(() => {
+  return waylineJobDetail.value?.name || '暂无任务'
+})
+
+const waylineTaskStartTime = computed(() => {
+  if (!waylineJobDetail.value?.begin_time) return '--'
+  return formatTimestamp(new Date(waylineJobDetail.value.begin_time).getTime())
+})
+
+const waylineCurrentWaypoint = computed(() => {
+  return waylineProgress.value?.ext?.current_waypoint_index || 0
+})
+
+const waylineTaskStatus = computed(() => {
+  // 优先使用progress返回数据中的status字段
+  const status = waylineProgress.value?.status
+  if (!status) return 'waiting'
+  
+  const statusMap: Record<string, string> = {
+    'canceled': 'failed',
+    'failed': 'failed',
+    'in_progress': 'running',
+    'ok': 'completed',
+    'partially_done': 'completed',
+    'paused': 'paused',
+    'rejected': 'failed',
+    'sent': 'waiting',
+    'timeout': 'failed'
+  }
+  
+  return statusMap[status] || 'waiting'
+})
+
+const waylineProgressPercent = computed(() => {
+  const progress = waylineProgress.value?.progress
+  if (!progress) return 0
+  
+  // 使用current_waypoint_index和total_waypoints计算进度
+  const currentWaypoint = progress.current_waypoint_index || 0
+  const totalWaypoints = progress.total_waypoints || 1
+  
+  // 计算百分比并取整数
+  const percent = Math.round((currentWaypoint / totalWaypoints) * 100)
+  
+  // 确保百分比在0-100范围内
+  return Math.max(0, Math.min(100, percent))
+})
+
+const waylineTaskStatusText = computed(() => {
+  const status = waylineProgress.value?.status
+  if (!status) return '未知'
+  
+  const statusTextMap: Record<string, string> = {
+    'canceled': '取消或终止',
+    'failed': '失败',
+    'in_progress': '执行中',
+    'ok': '执行成功',
+    'partially_done': '部分完成',
+    'paused': '暂停',
+    'rejected': '拒绝',
+    'sent': '已下发',
+    'timeout': '超时'
+  }
+  
+  return statusTextMap[status] || '未知'
+})
+
+// 按钮状态控制
+const canCancelTask = computed(() => {
+  const status = waylineProgress.value?.status
+  return status === 'in_progress' || status === 'paused'
+})
+
+const canResumeRoute = computed(() => {
+  const status = waylineProgress.value?.status
+  return status === 'paused'
+})
+
+const canPauseRoute = computed(() => {
+  const status = waylineProgress.value?.status
+  return status === 'in_progress'
+})
+
+const canCancelReturnHome = computed(() => {
+  // 当无人机正在返航时可以取消返航
+  // 这里可以根据实际业务逻辑调整条件
+  const status = waylineProgress.value?.status
+  return status === 'in_progress' || status === 'paused'
+})
+
+const canReturnHome = computed(() => {
+  // 当无人机在线且不在仓时可以执行返航
+  // 这里可以根据实际业务逻辑调整条件
+  const isDroneOnline = droneStatus.value?.isOnline
+  const isInDock = droneStatus.value?.inDock === 1
+  return isDroneOnline && !isInDock
+})
+
 // 切换标签
 const switchTab = (tab: string) => {
   currentTab.value = tab
@@ -795,11 +1105,38 @@ const currentScreenMode = ref('一分屏')
 
 const toggleScreenMenu = () => {
   showScreenMenu.value = !showScreenMenu.value
+  // 关闭云台菜单
+  gimbalMenuVisible.value = false
 }
 
 const selectScreenMode = (mode: string) => {
   currentScreenMode.value = mode
   showScreenMenu.value = false
+}
+
+// 点击外部关闭菜单
+const closeMenus = () => {
+  showScreenMenu.value = false
+  gimbalMenuVisible.value = false
+}
+
+// 切换云台菜单
+const toggleGimbalMenu = (event: Event) => {
+  const button = event.currentTarget as HTMLElement
+  const rect = button.getBoundingClientRect()
+  
+  gimbalMenuVisible.value = !gimbalMenuVisible.value
+  
+  if (gimbalMenuVisible.value) {
+    // 设置菜单位置
+    nextTick(() => {
+      const menu = document.querySelector('.gimbal-menu') as HTMLElement
+      if (menu) {
+        menu.style.left = rect.left + 'px'
+        menu.style.top = (rect.bottom + 4) + 'px'
+      }
+    })
+  }
 }
 
 // 告警趋势图表实例
@@ -822,12 +1159,18 @@ const mapContainer = ref<HTMLElement | null>(null)
 let amapInstance: any = null
 let amapApiRef: any = null
 const dockMarkers = ref<any[]>([])
+const droneMarkers = ref<any[]>([])
 const isInitialLoad = ref(true)
 
 // 视频播放器相关
 const videoStreamUrl = ref<string>('')
 const videoPlayer = ref<any>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
+
+// 云台切换相关
+const currentVideoType = ref<'dock' | 'drone_visible' | 'drone_infrared'>('dock')
+const videoLoading = ref(false)
+const gimbalMenuVisible = ref(false)
 
 // WGS84坐标转GCJ-02坐标的转换函数
 const transformWGS84ToGCJ02 = (wgsLng: number, wgsLat: number) => {
@@ -881,7 +1224,6 @@ const transformLng = (lng: number, lat: number) => {
 // 添加机场标记到地图
 const addDockMarker = (longitude: number, latitude: number, dockInfo: any) => {
   if (!amapInstance || !amapApiRef) {
-    console.warn('地图未初始化，无法添加标记')
     return
   }
 
@@ -924,23 +1266,66 @@ const clearDockMarkers = () => {
   }
 }
 
-// 更新机场标记
-const updateDockMarkers = (shouldCenter = false) => {
+// 添加无人机标记到地图
+const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => {
+  if (!amapInstance || !amapApiRef) {
+    return
+  }
+
+  const AMap = amapApiRef
   
+  // 创建无人机标记点
+  const marker = new AMap.Marker({
+    position: [longitude, latitude],
+    title: `无人机: ${droneInfo?.deviceSn || '未知设备'}`,
+    content: `
+      <img 
+        src="${mapDroneIcon}" 
+        style="
+          width: 32px;
+          height: 32px;
+          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+        "
+        alt="无人机"
+      />
+    `,
+    anchor: 'center',
+    offset: new AMap.Pixel(0, 0)
+  })
+
+  // 添加到地图
+  amapInstance.add(marker)
+  droneMarkers.value.push(marker)
+}
+
+// 清除所有无人机标记
+const clearDroneMarkers = () => {
+  if (droneMarkers.value.length > 0) {
+    droneMarkers.value.forEach(marker => {
+      if (amapInstance) {
+        amapInstance.remove(marker)
+      }
+    })
+    droneMarkers.value = []
+  }
+}
+
+// 更新地图标记（机场和无人机）
+const updateMapMarkers = (shouldCenter = false) => {
   // 清除现有标记
   clearDockMarkers()
+  clearDroneMarkers()
   
   // 检查是否有位置数据
   if (position.value && position.value.longitude && position.value.latitude) {
+    // console.log('定位数据可用:', position.value)
     const wgsLongitude = position.value.longitude
     const wgsLatitude = position.value.latitude
-    
     
     // 将WGS84坐标转换为GCJ-02坐标
     const gcjCoords = transformWGS84ToGCJ02(wgsLongitude, wgsLatitude)
     const longitude = gcjCoords.longitude
     const latitude = gcjCoords.latitude
-    
     
     // 获取机场设备信息
     const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
@@ -948,7 +1333,7 @@ const updateDockMarkers = (shouldCenter = false) => {
     
     const dockInfo = {
       deviceSn: deviceSn,
-      isOnline: droneStatus?.isOnline || false,
+      isOnline: dockStatus.value?.isOnline || false,
       longitude: longitude,
       latitude: latitude,
       height: position.value.height || 0
@@ -957,13 +1342,53 @@ const updateDockMarkers = (shouldCenter = false) => {
     // 添加机场标记
     addDockMarker(longitude, latitude, dockInfo)
     
+    // 获取无人机设备信息
+    const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
+    const droneDeviceSn = cachedDroneSns.length > 0 ? cachedDroneSns[0] : '未知设备'
+    
+    // 检查无人机是否有独立的坐标数据
+    let droneLongitude = longitude
+    let droneLatitude = latitude
+    let droneHeight = position.value.height || 0
+    
+    if (droneStatus.value && droneStatus.value.longitude && droneStatus.value.latitude) {
+      // 无人机有独立的坐标数据
+      const droneWgsLongitude = droneStatus.value.longitude
+      const droneWgsLatitude = droneStatus.value.latitude
+      
+      // 将WGS84坐标转换为GCJ-02坐标
+      const droneGcjCoords = transformWGS84ToGCJ02(droneWgsLongitude, droneWgsLatitude)
+      droneLongitude = droneGcjCoords.longitude
+      droneLatitude = droneGcjCoords.latitude
+      droneHeight = droneStatus.value.height || 0
+    } else {
+      // 无人机没有独立坐标数据，使用机场坐标
+    }
+    
+    const droneInfo = {
+      deviceSn: droneDeviceSn,
+      isOnline: droneStatus.value?.isOnline || false,
+      longitude: droneLongitude,
+      latitude: droneLatitude,
+      height: droneHeight
+    }
+    
+    // 添加无人机标记
+    addDroneMarker(droneLongitude, droneLatitude, droneInfo)
+    
     // 只在初始加载或明确要求时才设置地图中心
     if (shouldCenter && amapInstance) {
       amapInstance.setCenter([longitude, latitude])
+      // 确保地图样式保持为卫星图
+      if (amapApiRef) {
+        amapInstance.setLayers([
+          new amapApiRef.TileLayer.Satellite(),
+          new amapApiRef.TileLayer.RoadNet()
+        ])
+      }
     }
-    
   } else {
-    console.warn('无设备坐标数据，无法添加机场标记')
+    // 无设备坐标数据，无法添加标记
   }
 }
 
@@ -975,27 +1400,27 @@ const totalTime = ref('00:00')
 // 初始化视频播放器
 const initVideoPlayer = () => {
   const savedVideoUrl = localStorage.getItem('video_stream_url')
+  const savedVideoType = localStorage.getItem('current_video_type')
+  
   if (savedVideoUrl) {
     videoStreamUrl.value = savedVideoUrl
-    console.log('从localStorage获取到视频流地址:', savedVideoUrl)
-    
-    // 延迟初始化播放器，确保DOM已经渲染
-    nextTick(() => {
-      startVideoPlayback()
-    })
-  } else {
-    console.log('没有找到视频流地址')
   }
+  
+  if (savedVideoType) {
+    currentVideoType.value = savedVideoType as 'dock' | 'drone_visible' | 'drone_infrared'
+  }
+  
+  // 延迟初始化播放器，确保DOM已经渲染
+  nextTick(() => {
+    startVideoPlayback()
+  })
 }
 
 // 开始视频播放
 const startVideoPlayback = () => {
   if (!videoElement.value || !videoStreamUrl.value) {
-    console.log('视频元素或地址不存在')
     return
   }
-
-  console.log('开始视频播放，地址:', videoStreamUrl.value)
 
   try {
     // 销毁之前的播放器实例
@@ -1031,17 +1456,13 @@ const startVideoPlayback = () => {
 
     // 检查是否是webrtc地址
     if (videoStreamUrl.value.startsWith('webrtc://')) {
-      console.log('检测到webrtc地址，使用WebRTC播放')
       startWebRTCPlayback()
     } else if (videoStreamUrl.value.startsWith('rtmp://')) {
-      console.log('检测到rtmp地址，使用flv.js播放')
       
       if (flvjs.isSupported()) {
-        console.log('浏览器支持flv.js，开始播放flv视频')
         
         // 将rtmp地址转换为http-flv地址
         const flvUrl = videoStreamUrl.value.replace(/^rtmp:\/\/[^\/]+/, 'http://10.10.1.3:8000')
-        console.log('转换后的flv地址:', flvUrl)
         
         // 创建flv播放器
         videoPlayer.value = flvjs.createPlayer({
@@ -1067,13 +1488,10 @@ const startVideoPlayback = () => {
         if (videoElement.value) {
           videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
         }
-
-        console.log('flv播放器初始化成功')
       } else {
-        console.error('浏览器不支持flv.js')
+        // 浏览器不支持flv.js
       }
     } else {
-      console.log('未知地址格式，尝试直接播放:', videoStreamUrl.value)
       videoElement.value.src = videoStreamUrl.value
       videoElement.value.load()
       
@@ -1081,11 +1499,11 @@ const startVideoPlayback = () => {
       videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
       
       videoElement.value.play().catch(error => {
-        console.error('视频播放失败:', error)
+        // 静默处理播放失败
       })
     }
   } catch (error) {
-    console.error('视频播放器初始化失败:', error)
+    // 静默处理初始化失败
   }
 }
 
@@ -1100,7 +1518,6 @@ const buildApiUrl = (webrtcUrl: string) => {
     const url = new URL(webrtcUrl)
     return `http://${url.hostname}:1985`
   } catch (error) {
-    console.error('解析WebRTC URL失败:', error)
     // 后备方案
     return webrtcUrl.replace('webrtc://', 'http://').replace(':8000', ':1985').split('/')[0]
   }
@@ -1109,18 +1526,15 @@ const buildApiUrl = (webrtcUrl: string) => {
 // 开始WebRTC播放
 const startWebRTCPlayback = async () => {
   if (isPlaying) {
-    console.log('WebRTC已在播放中，先停止当前播放')
     stopWebRTCPlayback()
   }
 
   const serverUrl = videoStreamUrl.value
   if (!serverUrl) {
-    console.error('请输入服务器地址')
     return
   }
 
   try {
-    console.log('正在连接WebRTC...')
     
     // 确保之前的连接已清理
     if (pc) {
@@ -1137,25 +1551,23 @@ const startWebRTCPlayback = async () => {
 
     // 处理远程流
     pc.ontrack = (e) => {
-      console.log('收到远程流:', e.streams[0])
       if (videoElement.value) {
         videoElement.value.srcObject = e.streams[0]
         
         // 强制设置WebRTC视频播放器样式
         videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
         
-        videoElement.value.play().catch(err => console.error('播放失败:', err))
+        videoElement.value.play().catch(err => {
+          // 静默处理播放失败
+        })
       }
     }
 
     // ICE连接状态监听
     pc.oniceconnectionstatechange = () => {
-      console.log('ICE连接状态:', pc?.iceConnectionState)
       if (pc?.iceConnectionState === 'connected') {
-        console.log('WebRTC连接成功，正在播放...')
         isPlaying = true
       } else if (pc?.iceConnectionState === 'failed') {
-        console.error('WebRTC连接失败')
         stopWebRTCPlayback()
       }
     }
@@ -1170,12 +1582,6 @@ const startWebRTCPlayback = async () => {
 
     // 构建SRS API地址
     const apiUrl = buildApiUrl(serverUrl)
-    console.log('API地址:', apiUrl)
-    
-    console.log('发送的请求数据:', {
-      sdp: offer.sdp,
-      streamurl: serverUrl
-    })
 
     const response = await fetch(`${apiUrl}/rtc/v1/play/`, {
       method: 'POST',
@@ -1204,10 +1610,7 @@ const startWebRTCPlayback = async () => {
       sdp: data.sdp
     })
 
-    console.log('WebRTC连接建立成功')
-
   } catch (error) {
-    console.error('WebRTC播放失败:', error)
     stopWebRTCPlayback()
   }
 }
@@ -1224,7 +1627,6 @@ const stopWebRTCPlayback = () => {
   }
   
   isPlaying = false
-  console.log('WebRTC播放已停止')
 }
 
 // 停止视频播放
@@ -1238,20 +1640,17 @@ const stopVideoPlayback = () => {
     videoPlayer.value.detachMediaElement()
     videoPlayer.value.destroy()
     videoPlayer.value = null
-    console.log('flv播放器已停止')
   }
   
   if (videoElement.value) {
     videoElement.value.pause()
     videoElement.value.src = ''
     videoElement.value.load()
-    console.log('原生video播放器已停止')
   }
 }
 
 // 重新加载视频
 const reloadVideo = () => {
-  console.log('重新加载视频')
   stopVideoPlayback()
   // 增加延迟确保资源完全清理
   setTimeout(() => {
@@ -1296,7 +1695,7 @@ const loadWaylineFiles = async () => {
       selectedWayline.value = waylineFiles.value[0].wayline_id
     }
   } catch (err) {
-    console.error('加载航线文件失败:', err)
+    // 静默处理错误
   }
 }
 
@@ -1362,10 +1761,25 @@ const onDispatchTaskConfirm = async () => {
       return
     }
     
+    // 创建任务
     const response = await createJob(workspaceId, form)
-    console.log('任务下发成功:', response)
+    console.log('任务创建成功:', response)
+    
+    // 获取job_id并执行任务
+    if (response && response.job_id) {
+      try {
+        await executeJob(workspaceId, response.job_id)
+        console.log('任务执行指令已发送')
+        alert('任务下发并执行成功')
+      } catch (executeErr) {
+        console.error('任务执行失败:', executeErr)
+        alert('任务下发成功，但执行失败')
+      }
+    } else {
+      alert('任务下发成功，但未获取到任务ID')
+    }
+    
     dispatchTaskDialog.value.visible = false
-    alert('任务下发成功')
   } catch (err) {
     console.error('任务下发失败:', err)
     alert('任务下发失败')
@@ -1375,6 +1789,158 @@ const onDispatchTaskConfirm = async () => {
 // 下发任务取消
 const onDispatchTaskCancel = () => {
   dispatchTaskDialog.value.visible = false
+}
+
+// 取消任务处理
+const handleCancelTask = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      alert('未找到workspace_id')
+      return
+    }
+    
+    if (!waylineProgress.value?.job_id) {
+      alert('没有正在执行的任务')
+      return
+    }
+    
+    if (!confirm('确定要取消当前任务吗？')) {
+      return
+    }
+    
+    await stopJob(workspaceId, waylineProgress.value.job_id)
+    alert('任务取消指令已发送')
+    
+    // 刷新任务进度
+    setTimeout(() => {
+      loadWaylineProgress()
+    }, 1000)
+  } catch (err) {
+    console.error('取消任务失败:', err)
+    alert('取消任务失败')
+  }
+}
+
+// 航线暂停处理
+const handlePauseRoute = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      alert('未找到workspace_id')
+      return
+    }
+    
+    if (!waylineProgress.value?.job_id) {
+      alert('没有正在执行的任务')
+      return
+    }
+    
+    await pauseJob(workspaceId, waylineProgress.value.job_id)
+    alert('航线暂停指令已发送')
+    
+    // 刷新任务进度
+    setTimeout(() => {
+      loadWaylineProgress()
+    }, 1000)
+  } catch (err) {
+    console.error('航线暂停失败:', err)
+    alert('航线暂停失败')
+  }
+}
+
+// 航线恢复处理
+const handleResumeRoute = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      alert('未找到workspace_id')
+      return
+    }
+    
+    if (!waylineProgress.value?.job_id) {
+      alert('没有正在执行的任务')
+      return
+    }
+    
+    await resumeJob(workspaceId, waylineProgress.value.job_id)
+    alert('航线恢复指令已发送')
+    
+    // 刷新任务进度
+    setTimeout(() => {
+      loadWaylineProgress()
+    }, 1000)
+  } catch (err) {
+    console.error('航线恢复失败:', err)
+    alert('航线恢复失败')
+  }
+}
+
+// 取消返航处理
+const handleCancelReturnHome = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      alert('未找到workspace_id')
+      return
+    }
+    
+    const { dockSns } = getCachedDeviceSns()
+    if (dockSns.length === 0) {
+      alert('未找到可用的机场设备')
+      return
+    }
+    
+    if (!confirm('确定要取消返航吗？')) {
+      return
+    }
+    
+    await cancelReturnHome(workspaceId, dockSns[0])
+    alert('取消返航指令已发送')
+    
+    // 刷新任务进度
+    setTimeout(() => {
+      loadWaylineProgress()
+    }, 1000)
+  } catch (err) {
+    console.error('取消返航失败:', err)
+    alert('取消返航失败')
+  }
+}
+
+// 一键返航处理
+const handleReturnHome = async () => {
+  try {
+    // 获取缓存的机场SN
+    const { dockSns } = getCachedDeviceSns()
+    if (dockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    // 使用第一个机场SN
+    const dockSn = dockSns[0]
+    
+    // 弹出确认对话框
+    const confirmed = confirm('确定要执行一键返航吗？')
+    if (!confirmed) {
+      return
+    }
+    
+    // 调用一键返航API
+    const result = await controlApi.returnHome(dockSn)
+    
+    // 检查结果并提示用户
+    if (result.code === 0) {
+      alert('一键返航指令发送成功！')
+    } else {
+      alert(`一键返航失败: ${result.message}`)
+    }
+    
+  } catch (error: any) {
+    console.error('一键返航失败:', error)
+    alert(`一键返航失败: ${error.message || error}`)
+  }
 }
 
 // 初始化告警趋势图表
@@ -1735,12 +2301,124 @@ const initLineChart = () => {
     ]
   }
   lineChart.setOption(option)
+  // 新增：如果有接口数据，立即用接口数据覆盖
+  updateFlightStatisticsChart()
+}
+
+// 更新飞行统计图表
+const updateFlightStatisticsChart = () => {
+  if (!lineChart || !flightStatistics.value) return
+  
+  const dailyStats = flightStatistics.value.daily_stats || []
+  const dates = dailyStats.map((item: any) => {
+    const date = new Date(item.date)
+    return `${date.getMonth() + 1}-${date.getDate().toString().padStart(2, '0')}`
+  })
+  const taskCounts = dailyStats.map((item: any) => item.total_tasks || 0)
+  
+  const option = {
+    grid: {
+      top: '12%',
+      left: '1%',
+      right: '1%',
+      bottom: '2%',
+      containLabel: true
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'none'
+      },
+      formatter: (params: any) => {
+        const data = params[0]
+        return `${data.name}<br/>任务数：${data.value}`
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: {
+        lineStyle: {
+          color: 'rgba(255, 255, 255, 0.1)'
+        }
+      },
+      axisLabel: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: 12,
+        margin: 8
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        show: false
+      },
+      splitLine: {
+        lineStyle: {
+          color: 'rgba(255, 255, 255, 0.1)'
+        }
+      },
+      axisLabel: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: 12,
+        margin: 8
+      }
+    },
+    series: [
+      {
+        data: taskCounts,
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 8,
+        itemStyle: {
+          color: '#59C0FC',
+          borderWidth: 2,
+          borderColor: '#fff'
+        },
+        lineStyle: {
+          color: '#59C0FC',
+          width: 3
+        },
+        label: {
+          show: true,
+          position: 'top',
+          distance: 5,
+          color: '#fff',
+          fontSize: 11,
+          backgroundColor: 'rgba(89, 192, 252, 0.2)',
+          borderRadius: 4,
+          padding: [2, 4],
+          formatter: '{c}'
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              {
+                offset: 0,
+                color: 'rgba(89, 192, 252, 0.3)'
+              },
+              {
+                offset: 1,
+                color: 'rgba(89, 192, 252, 0.1)'
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+  lineChart.setOption(option)
 }
 
 // 监听视频流地址变化
 watch(() => videoStreamUrl.value, (newUrl) => {
   if (newUrl) {
-    console.log('视频流地址已更新，重新初始化播放器')
     nextTick(() => {
       startVideoPlayback()
     })
@@ -1749,17 +2427,27 @@ watch(() => videoStreamUrl.value, (newUrl) => {
 
 // 组件挂载时初始化
 onMounted(async () => {
+  console.log('开始初始化首页')
+  
   // 获取最新报警数据
   await loadLatestAlarmData()
   
   // 加载机场状态数据
   await loadDockStatus()
+  console.log('机场状态加载完成:', dockStatus.value)
   
   // 加载无人机状态数据
   await loadDroneStatus()
+  console.log('无人机状态加载完成:', droneStatus.value)
   
   // 加载航线文件列表
   await loadWaylineFiles()
+  
+  // 加载航线任务进度数据
+  await loadWaylineProgress()
+  
+  // 加载飞行统计数据
+  await loadFlightStatistics(7)
   
   // 初始化视频播放器
   initVideoPlayer()
@@ -1780,6 +2468,9 @@ onMounted(async () => {
     lineChart?.resize()
   })
 
+  console.log('数据加载完成，开始初始化地图')
+  console.log('当前定位数据:', position.value)
+  
   // 初始化地图
   if (mapContainer.value) {
     AMapLoader.load({
@@ -1799,35 +2490,56 @@ onMounted(async () => {
           new AMap.TileLayer.RoadNet()
         ]
       })
-      // 放大缩小工具放左上角
-      amapInstance.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
-      amapInstance.addControl(new AMap.MapType({ position: 'RB' }))
       
       
       // 地图加载完成后更新机场标记
       amapInstance.on('complete', () => {
-        // 延迟一下确保设备状态数据已加载
+        console.log('地图加载完成，开始定位')
+        console.log('当前定位数据:', position.value)
+        console.log('当前机场状态:', dockStatus.value)
+        
+        // 地图加载完成后立即尝试定位
+        updateMapMarkers(isInitialLoad.value)
+        // 标记初始加载完成
+        isInitialLoad.value = false
+        
+        // 如果第一次定位失败，延迟后再次尝试
         setTimeout(() => {
-          // 初始加载时需要定位到机场位置
-          updateDockMarkers(isInitialLoad.value)
-          // 标记初始加载完成
-          isInitialLoad.value = false
-        }, 1000)
+          console.log('延迟后再次尝试定位')
+          // console.log('当前定位数据:', position.value)
+          if (isInitialLoad.value) {
+            updateMapMarkers(true)
+            isInitialLoad.value = false
+          }
+        }, 2000)
       })
     }).catch((error) => {
-      console.warn('地图加载失败:', error)
+      // 地图加载失败
     })
   }
   
   // 设置机场状态自动刷新（每5秒）
   statusRefreshTimer = setInterval(async () => {
     await loadDockStatus()
+    // 更新地图标记
+    if (amapInstance) {
+      updateMapMarkers()
+    }
   }, 5000)
   
   // 设置无人机状态自动刷新（每2秒）
   droneStatusRefreshTimer = setInterval(async () => {
     await loadDroneStatus()
+    // 更新地图标记
+    if (amapInstance) {
+      updateMapMarkers()
+    }
   }, 2000)
+  
+  // 设置航线任务进度自动刷新（每3秒）
+  waylineProgressTimer.value = setInterval(async () => {
+    await loadWaylineProgress()
+  }, 3000)
 })
 
 // 组件卸载时清理
@@ -1844,8 +2556,15 @@ onUnmounted(() => {
     droneStatusRefreshTimer = null
   }
   
+  // 清理航线任务进度刷新定时器
+  if (waylineProgressTimer.value) {
+    clearInterval(waylineProgressTimer.value)
+    waylineProgressTimer.value = null
+  }
+  
   // 清理地图标记
   clearDockMarkers()
+  clearDroneMarkers()
   
   // 清理地图实例
   if (amapInstance) {
@@ -1919,7 +2638,6 @@ const toggleFullscreen = () => {
   const playerElement = document.querySelector('.player_box')
   
   if (!playerElement) {
-    console.warn('视频播放器元素未找到')
     return
   }
 
@@ -1954,7 +2672,6 @@ const toggleFullscreen = () => {
       }
     }
   } catch (error) {
-    console.error('全屏操作失败:', error)
     alert('全屏功能暂时不可用，请检查浏览器设置')
   }
 }
@@ -2703,6 +3420,25 @@ const toggleFullscreen = () => {
   background: #662626;
 }
 
+/* 禁用状态样式 */
+.control-row .span.disabled,
+.control-row .span1.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.control-row .span.disabled:hover,
+.control-row .span1.disabled:hover {
+  border-color: rgba(38, 131, 182, 0);
+  background: #0c3c56;
+}
+
+.control-row .span1.disabled:hover {
+  border-color: rgba(182, 38, 38, 0);
+  background: #561c1c;
+}
+
 /* 任务信息样式 */
 .on4-bottom-t {
   display: flex;
@@ -3320,8 +4056,8 @@ const toggleFullscreen = () => {
 
 .trend-chart {
   width: calc(100% - 40px);
-  height: calc(100% - 20px);
-  margin-top: clamp(-18px, -2vw, -25px);
+  height: calc(100% - 10px);
+  margin-top: 5px;
 }
 
 /* 航线任务样式 */
@@ -3400,6 +4136,48 @@ const toggleFullscreen = () => {
   border-radius: 3px;
   font-size: 12px;
   border: 1px solid #0BED96;
+  line-height: 20px;
+  padding: 0;
+}
+
+.status-btn.running {
+  width: 60px;
+  height: 20px;
+  text-align: center;
+  color: #1890ff;
+  background: linear-gradient(#1890ff54, #1890ff00);
+  box-shadow: inset 0 0 6px #1890ff;
+  border-radius: 3px;
+  font-size: 12px;
+  border: 1px solid #1890ff;
+  line-height: 20px;
+  padding: 0;
+}
+
+.status-btn.completed {
+  width: 60px;
+  height: 20px;
+  text-align: center;
+  color: #52c41a;
+  background: linear-gradient(#52c41a54, #52c41a00);
+  box-shadow: inset 0 0 6px #52c41a;
+  border-radius: 3px;
+  font-size: 12px;
+  border: 1px solid #52c41a;
+  line-height: 20px;
+  padding: 0;
+}
+
+.status-btn.failed {
+  width: 60px;
+  height: 20px;
+  text-align: center;
+  color: #ff4d4f;
+  background: linear-gradient(#ff4d4f54, #ff4d4f00);
+  box-shadow: inset 0 0 6px #ff4d4f;
+  border-radius: 3px;
+  font-size: 12px;
+  border: 1px solid #ff4d4f;
   line-height: 20px;
   padding: 0;
 }
@@ -3584,8 +4362,8 @@ const toggleFullscreen = () => {
 }
 
 .chart-box:nth-child(2) .progress-text span {
-  color: #00ff7f;
-  text-shadow: 0 0 5px rgba(0, 255, 127, 0.7);
+  color: #00e1ff;
+  text-shadow: 0 0 5px rgba(0, 225, 255, 0.7);
 }
 
 /* 图例样式 */
@@ -4049,6 +4827,34 @@ const toggleFullscreen = () => {
   box-shadow: 0 0 10px rgba(255, 77, 79, 0.7), inset 0 0 5px rgba(255, 77, 79, 0.5);
 }
 
+.status-circle.completed {
+  border-color: #52c41a;
+  box-shadow: 0 0 10px rgba(82, 196, 26, 0.7), inset 0 0 5px rgba(82, 196, 26, 0.5);
+}
+
+.status-circle.running {
+  border-color: #1890ff;
+  box-shadow: 0 0 10px rgba(24, 144, 255, 0.7), inset 0 0 5px rgba(24, 144, 255, 0.5);
+  animation: pulse-running 2s infinite;
+}
+
+.status-circle.waiting {
+  border-color: #faad14;
+  box-shadow: 0 0 10px rgba(250, 173, 20, 0.7), inset 0 0 5px rgba(250, 173, 20, 0.5);
+}
+
+@keyframes pulse-running {
+  0% {
+    box-shadow: 0 0 10px rgba(24, 144, 255, 0.7), inset 0 0 5px rgba(24, 144, 255, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(24, 144, 255, 0.9), inset 0 0 8px rgba(24, 144, 255, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(24, 144, 255, 0.7), inset 0 0 5px rgba(24, 144, 255, 0.5);
+  }
+}
+
 @media (max-width: 1400px) {
   .status-circle {
     width: 110px;
@@ -4483,6 +5289,86 @@ const toggleFullscreen = () => {
   /* 移除绝对定位，因为现在center-controls为空 */
 }
 
+/* 云台切换按钮样式 */
+.gimbal-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  z-index: 10000;
+}
+
+.gimbal-btn {
+  background: rgba(89, 192, 252, 0.1);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #59C0FC;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  min-width: 120px;
+  justify-content: space-between;
+}
+
+.gimbal-btn:hover {
+  background: rgba(89, 192, 252, 0.2);
+  border-color: rgba(89, 192, 252, 0.5);
+}
+
+.gimbal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gimbal-btn.loading {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.gimbal-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  transition: transform 0.3s ease;
+}
+
+.gimbal-btn:hover svg:last-child {
+  transform: rotate(180deg);
+}
+
+.gimbal-menu {
+  position: fixed;
+  background: rgba(20, 30, 40, 0.95);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 6px;
+  padding: 8px 0;
+  z-index: 99999;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 120px;
+}
+
+.gimbal-menu .menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.gimbal-menu .menu-item:hover {
+  background: rgba(89, 192, 252, 0.1);
+  color: #59C0FC;
+}
+
+.gimbal-menu .menu-item.active {
+  background: rgba(89, 192, 252, 0.2);
+  color: #59C0FC;
+}
+
 .fullscreen-btn {
   background: none;
   border: none;
@@ -4506,5 +5392,54 @@ const toggleFullscreen = () => {
   height: 24px;
   transition: color 0.3s ease;
   fill: currentColor; /* 使用当前文字颜色 */
+}
+
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+}
+
+.loading-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-text::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(89, 192, 252, 0.3);
+  border-top: 2px solid #59C0FC;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #ff6b6b;
+  font-size: 14px;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.error-text {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 6px;
+  padding: 12px 16px;
+  max-width: 100%;
 }
 </style>

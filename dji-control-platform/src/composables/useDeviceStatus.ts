@@ -65,7 +65,7 @@ export function useDeviceStatus() {
     
     // 使用第一个无人机作为主要设备
     const mainDroneSn = droneSns[0]
-    console.log('获取无人机状态:', mainDroneSn)
+    // console.log('获取无人机状态:', mainDroneSn)
     
     loading.value = true
     error.value = null
@@ -143,19 +143,21 @@ export function useDeviceStatus() {
   
   // 无人机状态
   const droneStatus = computed(() => {
-    // 优先使用无人机设备状态
-    const droneOsdData = droneDeviceStatus.value?.osd?.data || droneDeviceStatus.value
-    
-    if (droneOsdData && droneOsdData.battery !== undefined) {
-      // 无人机数据解析
-      const battery = droneOsdData.battery
+    // 优先使用无人机自己的状态数据
+    if (droneDeviceStatus.value) {
+      // 获取无人机OSD数据
+      const droneOsdData = (droneDeviceStatus.value as any).osd?.data || droneDeviceStatus.value
+      
       return {
-        isOnline: droneDeviceStatus.value?.online === true,
-        batteryPercent: battery?.capacity_percent,
-        chargeState: battery?.capacity_percent < 100 ? 1 : 0, // 简化充电状态判断
-        chargeText: battery?.capacity_percent < 100 ? '充电中' : '未充电',
-        inDock: droneOsdData.drone_in_dock,
-        inDockText: droneOsdData.drone_in_dock !== undefined ? StatusMaps.dronePosition[droneOsdData.drone_in_dock as keyof typeof StatusMaps.dronePosition] : undefined,
+        inDock: 0, // 无人机自己的状态数据表示不在仓
+        inDockText: '不在仓',
+        isOnline: (droneDeviceStatus.value as any).online === true,
+        // 电量和充电状态从机场status数据中获取
+        chargeState: osdData.value?.drone_charge_state?.state,
+        chargeText: osdData.value?.drone_charge_state?.state !== undefined ? StatusMaps.chargeState[osdData.value.drone_charge_state.state as keyof typeof StatusMaps.chargeState] : undefined,
+        batteryPercent: osdData.value?.drone_charge_state?.capacity_percent || osdData.value?.battery,
+        battery: osdData.value?.battery,
+        // 使用无人机status话题的数据
         modeCode: droneOsdData.mode_code,
         totalFlightDistance: droneOsdData.total_flight_distance,
         totalFlightSorties: droneOsdData.total_flight_sorties,
@@ -173,7 +175,7 @@ export function useDeviceStatus() {
       }
     }
     
-    // 如果没有无人机数据，回退到机场数据中的无人机信息
+    // 如果没有无人机状态数据，则使用机场status中的无人机充电状态信息
     if (!osdData.value) return null
     
     const isDroneOnline = osdData.value.sub_device?.device_online_status === 1
@@ -181,10 +183,26 @@ export function useDeviceStatus() {
     return {
       inDock: osdData.value.drone_in_dock,
       inDockText: osdData.value.drone_in_dock !== undefined ? StatusMaps.dronePosition[osdData.value.drone_in_dock as keyof typeof StatusMaps.dronePosition] : undefined,
-      isOnline: isDroneOnline || osdData.value.drone_in_dock === 1, // 子设备在线或在舱内都认为在线
+      isOnline: false, // 拿不到无人机自己的status数据时算离线
       chargeState: osdData.value.drone_charge_state?.state,
       chargeText: osdData.value.drone_charge_state?.state !== undefined ? StatusMaps.chargeState[osdData.value.drone_charge_state.state as keyof typeof StatusMaps.chargeState] : undefined,
-      batteryPercent: osdData.value.drone_charge_state?.capacity_percent
+      batteryPercent: osdData.value.drone_charge_state?.capacity_percent || osdData.value.battery,
+      battery: osdData.value.battery,
+      // 使用机场status中的无人机信息
+      modeCode: osdData.value.mode_code,
+      totalFlightDistance: osdData.value.total_flight_distance,
+      totalFlightSorties: osdData.value.total_flight_sorties,
+      totalFlightTime: osdData.value.total_flight_time,
+      height: osdData.value.height,
+      horizontalSpeed: osdData.value.horizontal_speed,
+      verticalSpeed: osdData.value.vertical_speed,
+      latitude: osdData.value.latitude,
+      longitude: osdData.value.longitude,
+      attitude: {
+        head: osdData.value.attitude_head,
+        pitch: osdData.value.attitude_pitch,
+        roll: osdData.value.attitude_roll
+      }
     }
   })
   

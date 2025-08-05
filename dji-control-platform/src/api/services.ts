@@ -757,12 +757,172 @@ export const waylineApi = {
         job_id: string
         name: string
         file_id: string
+        file_name: string
         dock_sn: string
+        dock_name: string
         workspace_id: string
         task_type: number
+        wayline_type: number
         status: number
+        progress: number
+        out_of_control_action: number
+        rth_altitude: number
+        media_count: number
+        uploaded_count: number
+        username: string
+        begin_time: string
+        end_time: string
+        execute_time: string
+        completed_time: string
+        error_code: number
         create_time: string
+        update_time: string
+        uploading: boolean
       }
     }>(`/wayline/workspaces/${workspaceId}/flight-tasks`, data)
+  },
+
+  // 获取航线任务实时进度
+  getWaylineProgress: (workspaceId: string, dockSn: string) => {
+    return apiClient.get<{
+      code: number
+      message: string
+      data: {
+        dock_sn: string
+        job_id: string
+        status: string
+        progress: {
+          current_step: number
+          percent: number
+          current_waypoint_index: number
+          total_waypoints: number
+        }
+        ext: {
+          current_waypoint_index: number
+          media_count: number
+          flight_id: string
+          track_id: string
+          wayline_mission_state: number
+          wayline_id: number
+        }
+        timestamp: number
+        result: number
+      }
+    }>(`/wayline/workspaces/${workspaceId}/docks/${dockSn}/progress`)
+  },
+
+  // 获取航线任务详细信息
+  getWaylineJobDetail: (workspaceId: string, jobId: string) => {
+    return apiClient.get<{
+      code: number
+      message: string
+      data: {
+        job_id: string
+        name: string
+        file_id: string
+        file_name: string
+        dock_sn: string
+        dock_name: string
+        workspace_id: string
+        task_type: number
+        wayline_type: number
+        status: number
+        progress: any
+        out_of_control_action: number
+        rth_altitude: number
+        media_count: number
+        uploaded_count: number
+        username: string
+        begin_time: string
+        end_time: string | null
+        execute_time: string | null
+        completed_time: string | null
+        error_code: string | null
+        create_time: string
+        update_time: string
+        uploading: boolean
+      }
+    }>(`/wayline/workspaces/${workspaceId}/jobs/${jobId}`)
+  },
+
+  // 取消返航
+  cancelReturnHome: (workspaceId: string, dockSn: string) => {
+    return apiClient.post<{
+      code: number
+      message: string
+    }>(`/wayline/workspaces/${workspaceId}/docks/${dockSn}/cancel-return-home`)
+  },
+
+  // 取消任务
+  stopJob: (workspaceId: string, jobId: string) => {
+    return apiClient.post<{
+      code: number
+      message: string
+    }>(`/wayline/workspaces/${workspaceId}/jobs/${jobId}/stop`)
+  },
+
+  // 航线暂停
+  pauseJob: (workspaceId: string, jobId: string) => {
+    return apiClient.post<{
+      code: number
+      message: string
+    }>(`/wayline/workspaces/${workspaceId}/jobs/${jobId}/pause`)
+  },
+
+  // 航线恢复
+  resumeJob: (workspaceId: string, jobId: string) => {
+    return apiClient.post<{
+      code: number
+      message: string
+    }>(`/wayline/workspaces/${workspaceId}/jobs/${jobId}/resume`)
+  },
+
+  // 执行任务
+  executeJob: (workspaceId: string, jobId: string) => {
+    return apiClient.post<{
+      code: number
+      message: string
+    }>(`/wayline/workspaces/${workspaceId}/jobs/${jobId}/execute`)
+  },
+
+  // 获取飞行统计报表
+  getFlightStatistics: (workspaceId: string, days?: number) => {
+    return apiClient.get<{
+      code: number
+      message: string
+      data: {
+        summary: {
+          total_tasks: number
+          completed_tasks: number
+          failed_tasks: number
+          canceled_tasks: number
+          in_progress_tasks: number
+          total_flight_time: number
+          total_distance: number
+          total_media_count: number
+        }
+        daily_stats: Array<{
+          date: string
+          total_tasks: number
+          completed_tasks: number
+          failed_tasks: number
+          canceled_tasks: number
+          in_progress_tasks: number
+          total_flight_time: number
+          total_distance: number
+          total_media_count: number
+        }>
+        status_stats: Array<{
+          status: number
+          status_name: string
+          count: number
+          percentage: number
+        }>
+        date_range: {
+          start_date: string
+          end_date: string
+        }
+      }
+    }>(`/wayline/workspaces/${workspaceId}/reports/flight-statistics`, days ? { days } : {})
   }
 } 

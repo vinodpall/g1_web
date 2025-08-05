@@ -276,9 +276,10 @@ export function useAuth() {
           
           // 优先选择机场视频流
           const dockVideoDevice = getBestVideoDevice('dock')
+          let dockWebrtcUrl = ''
+          let dockLivestreamResponse = null
           if (dockVideoDevice) {
             console.log('选择机场视频设备:', dockVideoDevice)
-            
             // 获取机场SN用于API调用
             if (dockSns.length === 0) {
               console.error('没有找到机场设备，无法启动视频流')
@@ -286,54 +287,71 @@ export function useAuth() {
             }
             const dockSn = dockSns[0] // 使用第一个机场SN
             console.log('登录 - 使用机场SN调用视频流接口:', dockSn)
-            
             // 启动视频流，使用机场SN作为device_sn，传递video_id参数
             console.log('开始启动机场视频流...')
-            const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
+            dockLivestreamResponse = await livestreamApi.startLivestream(dockSn, {
               video_id: dockVideoDevice.videoId
             })
-            console.log('机场视频流启动成功:', livestreamResponse)
-            
+            console.log('机场视频流启动成功:', dockLivestreamResponse)
             // 处理push_url地址，替换为webrtc地址
-            const pushUrl = livestreamResponse.push_url
-            const webrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            const pushUrl = dockLivestreamResponse.push_url
+            dockWebrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
             console.log('原始push_url:', pushUrl)
-            console.log('转换后的webrtc地址:', webrtcUrl)
-            
+            console.log('转换后的webrtc地址:', dockWebrtcUrl)
             // 保存视频流地址到localStorage
-            localStorage.setItem('video_stream_url', webrtcUrl)
-            localStorage.setItem('video_bid', livestreamResponse.bid)
+            localStorage.setItem('video_stream_url', dockWebrtcUrl)
+            localStorage.setItem('video_bid', dockLivestreamResponse.bid)
             localStorage.setItem('current_video_type', 'dock')
-            
             console.log('机场视频流地址已保存到localStorage')
-          } else {
-            // 如果没有机场视频，尝试无人机可见光视频
-            const droneVisibleDevice = getBestVideoDevice('drone_visible')
-            if (droneVisibleDevice) {
-              console.log('没有机场视频，选择无人机可见光视频设备:', droneVisibleDevice)
-              
-              if (dockSns.length === 0) {
-                console.error('没有找到机场设备，无法启动视频流')
-                return
-              }
-              const dockSn = dockSns[0]
-              
-              const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
+          }
+
+          // 无人机可见光视频流
+          let droneVisibleWebrtcUrl = ''
+          let droneVisibleLivestreamResponse = null
+          const droneVisibleDevice = getBestVideoDevice('drone_visible')
+          if (droneVisibleDevice && dockSns.length > 0) {
+            const dockSn = dockSns[0]
+            try {
+              droneVisibleLivestreamResponse = await livestreamApi.startLivestream(dockSn, {
                 video_id: droneVisibleDevice.videoId
               })
-              
-              const pushUrl = livestreamResponse.push_url
-              const webrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
-              
-              localStorage.setItem('video_stream_url', webrtcUrl)
-              localStorage.setItem('video_bid', livestreamResponse.bid)
-              localStorage.setItem('current_video_type', 'drone_visible')
-              
-              console.log('无人机可见光视频流地址已保存到localStorage')
-            } else {
-              console.warn('没有找到可用的视频设备')
+              const pushUrl = droneVisibleLivestreamResponse.push_url
+              droneVisibleWebrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            } catch (e) {
+              // 无人机未起飞时这里会报错，忽略即可
             }
           }
+
+          // 无人机红外视频流（如有）
+          let droneInfraredWebrtcUrl = ''
+          let droneInfraredLivestreamResponse = null
+          const droneInfraredDevice = getBestVideoDevice('drone_infrared')
+          if (droneInfraredDevice && dockSns.length > 0) {
+            const dockSn = dockSns[0]
+            try {
+              droneInfraredLivestreamResponse = await livestreamApi.startLivestream(dockSn, {
+                video_id: droneInfraredDevice.videoId
+              })
+              const pushUrl = droneInfraredLivestreamResponse.push_url
+              droneInfraredWebrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            } catch (e) {
+              // 无人机未起飞时这里会报错，忽略即可
+            }
+          }
+
+          // 组装 video_streams 数组并写入缓存
+          const videoStreams = []
+          if (dockWebrtcUrl) {
+            videoStreams.push({ type: 'dock', url: dockWebrtcUrl })
+          }
+          if (droneVisibleWebrtcUrl) {
+            videoStreams.push({ type: 'drone_visible', url: droneVisibleWebrtcUrl })
+          }
+          if (droneInfraredWebrtcUrl) {
+            videoStreams.push({ type: 'drone_infrared', url: droneInfraredWebrtcUrl })
+          }
+          localStorage.setItem('video_streams', JSON.stringify(videoStreams))
+          
         } catch (videoError) {
           console.warn('登录时获取视频流失败:', videoError)
           // 不抛出错误，避免影响登录流程
@@ -1135,6 +1153,132 @@ export function useWaylineJobs() {
     }
   }
 
+  // 获取航线任务实时进度
+  const fetchWaylineProgress = async (workspaceId: string, dockSn: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await waylineApi.getWaylineProgress(workspaceId, dockSn)
+      // console.log('航线任务进度获取成功:', response)
+      return response.data
+    } catch (err) {
+      // console.error('获取航线任务进度失败:', err)
+      error.value = err instanceof Error ? err.message : '获取航线任务进度失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 获取航线任务详细信息
+  const fetchWaylineJobDetail = async (workspaceId: string, jobId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await waylineApi.getWaylineJobDetail(workspaceId, jobId)
+      // console.log('航线任务详情获取成功:', response)
+      return response.data
+    } catch (err) {
+      // console.error('获取航线任务详情失败:', err)
+      error.value = err instanceof Error ? err.message : '获取航线任务详情失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 取消返航
+  const cancelReturnHome = async (workspaceId: string, dockSn: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await waylineApi.cancelReturnHome(workspaceId, dockSn)
+      console.log('取消返航成功:', response)
+      return response
+    } catch (err) {
+      console.error('取消返航失败:', err)
+      error.value = err instanceof Error ? err.message : '取消返航失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 取消任务
+  const stopJob = async (workspaceId: string, jobId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await waylineApi.stopJob(workspaceId, jobId)
+      console.log('取消任务成功:', response)
+      return response
+    } catch (err) {
+      console.error('取消任务失败:', err)
+      error.value = err instanceof Error ? err.message : '取消任务失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 航线暂停
+  const pauseJob = async (workspaceId: string, jobId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await waylineApi.pauseJob(workspaceId, jobId)
+      console.log('航线暂停成功:', response)
+      return response
+    } catch (err) {
+      console.error('航线暂停失败:', err)
+      error.value = err instanceof Error ? err.message : '航线暂停失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 航线恢复
+  const resumeJob = async (workspaceId: string, jobId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await waylineApi.resumeJob(workspaceId, jobId)
+      console.log('航线恢复成功:', response)
+      return response
+    } catch (err) {
+      console.error('航线恢复失败:', err)
+      error.value = err instanceof Error ? err.message : '航线恢复失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 执行任务
+  const executeJob = async (workspaceId: string, jobId: string) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await waylineApi.executeJob(workspaceId, jobId)
+      console.log('执行任务成功:', response)
+      return response
+    } catch (err) {
+      console.error('执行任务失败:', err)
+      error.value = err instanceof Error ? err.message : '执行任务失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     jobs: readonly(jobs),
     waylineFiles: readonly(waylineFiles),
@@ -1145,7 +1289,14 @@ export function useWaylineJobs() {
     fetchJobs,
     fetchWaylineFiles,
     fetchWaylineDetail,
+    fetchWaylineProgress,
+    fetchWaylineJobDetail,
     createJob,
+    cancelReturnHome,
+    stopJob,
+    pauseJob,
+    resumeJob,
+    executeJob,
     clearJobs,
     clearWaylineDetail
   }

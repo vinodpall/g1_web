@@ -12,9 +12,6 @@
           <img :src="tab.icon" :alt="tab.label" />
         </div>
       </div>
-      <div class="sidebar-menu-bottom">
-        <img src="@/assets/source_data/svg_data/sheet.svg" alt="菜单" />
-      </div>
     </aside>
     <!-- 主体内容区 -->
     <main class="main-content">
@@ -280,7 +277,7 @@ const router = useRouter()
 const route = useRoute()
 
 // 使用航线文件API
-const { waylineFiles, waylineDetail, fetchWaylineFiles, fetchWaylineDetail, createJob } = useWaylineJobs()
+const { waylineFiles, waylineDetail, fetchWaylineFiles, fetchWaylineDetail, createJob, executeJob } = useWaylineJobs()
 const { getCachedWorkspaceId, getCachedDeviceSns } = useDevices()
 
 // 航线文件相关
@@ -565,10 +562,25 @@ async function onDispatchTaskConfirm() {
       return
     }
     
+    // 创建任务
     const response = await createJob(workspaceId, form)
-    console.log('任务下发成功:', response)
+    console.log('任务创建成功:', response)
+    
+    // 获取job_id并执行任务
+    if (response && response.job_id) {
+      try {
+        await executeJob(workspaceId, response.job_id)
+        console.log('任务执行指令已发送')
+        alert('任务下发并执行成功')
+      } catch (executeErr) {
+        console.error('任务执行失败:', executeErr)
+        alert('任务下发成功，但执行失败')
+      }
+    } else {
+      alert('任务下发成功，但未获取到任务ID')
+    }
+    
     dispatchTaskDialog.value.visible = false
-    alert('任务下发成功')
   } catch (err) {
     console.error('任务下发失败:', err)
     alert('任务下发失败')

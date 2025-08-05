@@ -508,12 +508,16 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   margin-top: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 8px;
 }
 .user-label {
   color: #b6b6b6;
   font-size: 15px;
   margin-right: 2px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .user-input, .user-select {
   background: transparent;
@@ -531,6 +535,7 @@ onMounted(async () => {
   transition: border 0.2s, box-shadow 0.2s;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 .user-input:focus, .user-select:focus {
   outline: none;
@@ -552,6 +557,7 @@ onMounted(async () => {
 .custom-select-wrapper {
   position: relative;
   display: inline-block;
+  flex-shrink: 0;
 }
 .custom-select-arrow {
   position: absolute;

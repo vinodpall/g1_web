@@ -6,6 +6,7 @@ export interface DeviceStatus {
   latitude?: number
   height?: number
   connect_status?: boolean
+  online?: boolean
   osd?: {
     data: {
       environment_temperature?: number
@@ -18,6 +19,20 @@ export interface DeviceStatus {
       drone_in_dock?: number
       cover_state?: number
       job_number?: number
+      // 无人机特有字段
+      total_flight_distance?: number
+      total_flight_sorties?: number
+      total_flight_time?: number
+      horizontal_speed?: number
+      vertical_speed?: number
+      attitude_head?: number
+      attitude_pitch?: number
+      attitude_roll?: number
+      battery?: number
+      // 子设备状态
+      sub_device?: {
+        device_online_status?: number
+      }
       position_state?: {
         is_fixed: number
         quality: number
@@ -41,11 +56,12 @@ export interface DeviceStatus {
 export const StatusMaps = {
   // 机场模式状态
   dockMode: {
-    0: '空闲',
-    1: '任务中',
-    2: '充电中',
-    3: '维护中',
-    4: '离线'
+    0: '空闲中',
+    1: '现场调试',
+    2: '远程调试',
+    3: '固件升级中',
+    4: '作业中',
+    5: '待标定'
   },
   // 舱盖状态
   coverState: {

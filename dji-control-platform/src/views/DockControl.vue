@@ -232,6 +232,7 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
 import { useDeviceStore } from '../stores/device'
+import { StatusMaps } from '../api/deviceStatus'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
@@ -242,6 +243,7 @@ import plane2Img from '@/assets/source_data/plane_2.png'
 import batteryImg from '@/assets/source_data/Battery.png'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
+import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
 import droneCloseIcon from '@/assets/source_data/svg_data/drone_close.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
@@ -258,6 +260,7 @@ const deviceStore = useDeviceStore()
 const { 
   fetchDeviceStatus, 
   fetchMainDeviceStatus,
+  fetchDroneStatus,
   droneStatus, 
   dockStatus,
   environment,
@@ -271,7 +274,7 @@ const {
   formatRainfall,
   formatNetworkRate,
   formatAccTime,
-  position // ← 这里加上 position
+  position
 } = useDeviceStatus()
 
 const sidebarTabs = [
@@ -295,10 +298,13 @@ const amapInstance = ref<any>(null)
 const amapApiRef = ref<any>(null)
 const remoteEnabled = ref(false)
 const dockMarkers = ref<any[]>([])
+const droneMarkers = ref<any[]>([])
 const isInitialLoad = ref(true)
 
 // 设备状态刷新定时器
 const statusRefreshTimer = ref<number | null>(null)
+// 无人机状态刷新定时器
+const droneStatusRefreshTimer = ref<number | null>(null)
 const toggleRemote = () => {
   remoteEnabled.value = !remoteEnabled.value
 }
@@ -368,7 +374,7 @@ const dockInfoItems = computed(() => {
   { value: formatRainfall(environment.value?.rainfall), label: '降水量' },
   { value: formatWindSpeed(environment.value?.windSpeed), label: '风速' },
   { value: osdData.value?.tilt_angle?.valid ? `${osdData.value.tilt_angle.value.toFixed(2)}°` : '--°', label: '倾斜角度' },
-  { value: osdData.value?.poe_link_status === 1 ? '已连接' : '未连接', label: 'PoE接口' },
+  { value: osdData.value?.mode_code !== undefined ? StatusMaps.dockMode[osdData.value.mode_code as keyof typeof StatusMaps.dockMode] || '未知' : '未知', label: '机场状态' },
   { value: osdData.value?.poe_power_output ? `${osdData.value.poe_power_output}W` : '暂无', label: 'PoE功率' },
 ]
 })
@@ -466,10 +472,55 @@ const clearDockMarkers = () => {
   }
 }
 
-// 更新机场标记
-const updateDockMarkers = (shouldCenter = false) => {
+// 添加无人机标记到地图
+const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => {
+  if (!amapInstance.value || !amapApiRef.value) {
+    return
+  }
+
+  const AMap = amapApiRef.value
+  
+  // 创建无人机标记点
+  const marker = new AMap.Marker({
+    position: [longitude, latitude],
+    title: `无人机: ${droneInfo?.deviceSn || '未知设备'}`,
+    content: `
+      <img 
+        src="${mapDroneIcon}" 
+        style="
+          width: 32px;
+          height: 32px;
+          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+        "
+        alt="无人机"
+      />
+    `,
+    anchor: 'center',
+    offset: new AMap.Pixel(0, 0)
+  })
+
+  // 添加到地图
+  amapInstance.value.add(marker)
+  droneMarkers.value.push(marker)
+}
+
+// 清除所有无人机标记
+const clearDroneMarkers = () => {
+  if (droneMarkers.value.length > 0) {
+    droneMarkers.value.forEach(marker => {
+      if (amapInstance.value) {
+        amapInstance.value.remove(marker)
+      }
+    })
+    droneMarkers.value = []
+  }
+}
+
+// 更新地图标记（机场和无人机）
+const updateMapMarkers = (shouldCenter = false) => {
   // 清除现有标记
   clearDockMarkers()
+  clearDroneMarkers()
   
   // 检查是否有位置数据
   if (position.value && position.value.longitude && position.value.latitude) {
@@ -496,10 +547,53 @@ const updateDockMarkers = (shouldCenter = false) => {
     // 添加机场标记
     addDockMarker(longitude, latitude, dockInfo)
     
+    // 获取无人机设备信息
+    const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
+    const droneDeviceSn = cachedDroneSns.length > 0 ? cachedDroneSns[0] : '未知设备'
+    
+    // 检查无人机是否有独立的坐标数据
+    let droneLongitude = longitude
+    let droneLatitude = latitude
+    let droneHeight = position.value.height || 0
+    
+    if (droneStatus.value && droneStatus.value.longitude && droneStatus.value.latitude) {
+      // 无人机有独立的坐标数据
+      const droneWgsLongitude = droneStatus.value.longitude
+      const droneWgsLatitude = droneStatus.value.latitude
+      
+      // 将WGS84坐标转换为GCJ-02坐标
+      const droneGcjCoords = transformWGS84ToGCJ02(droneWgsLongitude, droneWgsLatitude)
+      droneLongitude = droneGcjCoords.longitude
+      droneLatitude = droneGcjCoords.latitude
+      droneHeight = droneStatus.value.height || 0
+    } else {
+      // 无人机没有独立坐标数据，使用机场坐标
+    }
+    
+    const droneInfo = {
+      deviceSn: droneDeviceSn,
+      isOnline: droneStatus.value?.isOnline || false,
+      longitude: droneLongitude,
+      latitude: droneLatitude,
+      height: droneHeight
+    }
+    
+    // 添加无人机标记
+    addDroneMarker(droneLongitude, droneLatitude, droneInfo)
+    
     // 只在初始加载或明确要求时才设置地图中心
     if (shouldCenter && amapInstance.value) {
       amapInstance.value.setCenter([longitude, latitude])
+      // 确保地图样式保持为卫星图
+      if (amapApiRef.value) {
+        amapInstance.value.setLayers([
+          new amapApiRef.value.TileLayer.Satellite(),
+          new amapApiRef.value.TileLayer.RoadNet()
+        ])
+      }
     }
+  } else {
+    // 无设备坐标数据，无法添加标记
   }
 }
 
@@ -517,19 +611,32 @@ let isPlaying = false
 
 // 获取机场视频流地址
 const getDockVideoFromCache = () => {
+  // 优先从video_streams缓存中获取机场视频
   const videoStreamsStr = localStorage.getItem('video_streams')
   if (videoStreamsStr) {
     try {
       const videoStreams = JSON.parse(videoStreamsStr)
-      if (videoStreams.dock_video_url) {
-        return videoStreams.dock_video_url
+      const dockStream = videoStreams.find((stream: any) => stream.type === 'dock')
+      if (dockStream) {
+        return dockStream.url
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error('解析video_streams缓存失败:', error)
+    }
   }
+  
+  // 备用方案1：使用首页的通用视频地址
+  const videoStreamUrl = localStorage.getItem('video_stream_url')
+  if (videoStreamUrl) {
+    return videoStreamUrl
+  }
+  
+  // 备用方案2：使用机场专用视频地址
   const dockVideoUrl = localStorage.getItem('dock_video_stream_url')
   if (dockVideoUrl) {
     return dockVideoUrl
   }
+  
   return ''
 }
 
@@ -548,7 +655,7 @@ const initVideoPlayer = async () => {
         startVideoPlayback()
       }, 200)
     } else {
-      videoStatus.value = '未获取到机场视频流地址'
+      videoStatus.value = '未找到机场视频流地址'
       videoLoading.value = false
     }
   } catch (error) {
@@ -797,6 +904,11 @@ const stopVideoPlayback = () => {
 onMounted(async () => {
   // 加载设备状态数据（使用缓存的设备SN）
   await fetchMainDeviceStatus()
+  // 加载无人机状态数据
+  await fetchDroneStatus()
+  
+  // 初始化视频播放器
+  await initVideoPlayer()
   
   AMapLoader.load({
     key: '6f9eaf51960441fa4f813ea2d7e7cfff',
@@ -809,25 +921,26 @@ onMounted(async () => {
       center: [116.397428, 39.90923],
       logoEnable: false,
       copyrightEnable: false,
-      mapStyle: 'amap://styles/satellite', // 强制设置卫星图样式
+      mapStyle: 'amap://styles/satellite', // 设置为卫星图样式
       layers: [
         new AMap.TileLayer.Satellite(),
         new AMap.TileLayer.RoadNet()
       ]
     })
-    amapInstance.value.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
-    amapInstance.value.addControl(new AMap.MapType({ position: 'RB' }))
     
     // 地图加载完成后更新机场标记
     amapInstance.value.on('complete', () => {
       // 延迟一下确保设备状态数据已加载
       setTimeout(() => {
         // 初始加载时需要定位到机场位置
-        updateDockMarkers(isInitialLoad.value)
+        updateMapMarkers(isInitialLoad.value)
         // 标记初始加载完成
         isInitialLoad.value = false
       }, 1000)
     })
+  }).catch((error) => {
+    console.error('地图加载失败:', error)
+    // 可以在这里添加备用方案，比如显示一个简单的div
   })
   
   // 设置设备状态自动刷新（每5秒）
@@ -835,9 +948,18 @@ onMounted(async () => {
     await fetchMainDeviceStatus()
     // 设备状态更新后，更新地图标记（不定位）
     if (amapInstance.value) {
-      updateDockMarkers()
+      updateMapMarkers()
     }
   }, 5000)
+  
+  // 设置无人机状态自动刷新（每2秒）
+  droneStatusRefreshTimer.value = setInterval(async () => {
+    await fetchDroneStatus()
+    // 无人机状态更新后，更新地图标记（不定位）
+    if (amapInstance.value) {
+      updateMapMarkers()
+    }
+  }, 2000)
 })
 onBeforeUnmount(() => {
   // 清理设备状态刷新定时器
@@ -846,8 +968,15 @@ onBeforeUnmount(() => {
     statusRefreshTimer.value = null
   }
   
+  // 清理无人机状态刷新定时器
+  if (droneStatusRefreshTimer.value) {
+    clearInterval(droneStatusRefreshTimer.value)
+    droneStatusRefreshTimer.value = null
+  }
+  
   // 清理地图标记
   clearDockMarkers()
+  clearDroneMarkers()
   
   // 清理地图实例
   if (amapInstance.value) {
@@ -1511,6 +1640,7 @@ const updateProgress = (percent: number) => {
 .sidebar-menu-bottom img:hover {
   opacity: 1;
 }
+
 .sidebar-tab {
   width: 40px;
   height: 40px;

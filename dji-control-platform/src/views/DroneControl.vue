@@ -60,22 +60,42 @@
                     </div>
                     <div class="task-progress-divider"></div>
                     <div class="task-progress-actions-btns">
-                      <span class="span">暂停</span>
-                      <span class="span1">停止</span>
+                      <span 
+                        class="span" 
+                        :class="{ disabled: !canPauseRoute }"
+                        @click="canPauseRoute ? handlePauseRoute() : null"
+                      >
+                        暂停
+                      </span>
+                      <span 
+                        class="span1" 
+                        :class="{ disabled: !canCancelTask }"
+                        @click="canCancelTask ? handleCancelTask() : null"
+                      >
+                        停止
+                      </span>
+                      <span 
+                        class="span-resume" 
+                        :class="{ disabled: !canResumeRoute }"
+                        @click="canResumeRoute ? handleResumeRoute() : null"
+                        v-if="waylineTaskStatus === 'paused'"
+                      >
+                        恢复
+                      </span>
                     </div>
                   </div>
                   <div class="task-stats-panel">
                     <div class="task-stat-card stat-purple">
                       <div class="stat-title">今日任务总数</div>
-                      <div class="stat-value">8</div>
+                      <div class="stat-value">{{ todayTotalTasks }}</div>
                     </div>
                     <div class="task-stat-card stat-blue">
                       <div class="stat-title">未执行/已执行</div>
-                      <div class="stat-value">3/8</div>
+                      <div class="stat-value">{{ todayUnexecutedTasks }}/{{ todayCompletedTasks }}</div>
                     </div>
                     <div class="task-stat-card stat-green">
                       <div class="stat-title">正常/异常</div>
-                      <div class="stat-value">6/2</div>
+                      <div class="stat-value">{{ todayNormalTasks }}/{{ todayAbnormalTasks }}</div>
                     </div>
                   </div>
                 </div>
@@ -84,9 +104,6 @@
               </div>
               <div class="robot-status-footer">
                 <span>飞行速度：{{ formatSpeed(gpsStatus?.totalSpeed) }}</span>
-                <span>，经度：{{ formatCoordinate(getDroneCoordinate().longitude, 'longitude') }}</span>
-                <span>，纬度：{{ formatCoordinate(getDroneCoordinate().latitude, 'latitude') }}</span>
-                <span>，高度：{{ formatHeight(getDroneCoordinate().height) }}</span>
                 <span>，风向：东南风</span>
                 <span>，降水：{{ formatRainfall(environment?.rainfall) }}</span>
                 <span>，温度：{{ formatTemperature(environment?.environmentTemperature) }}</span>
@@ -407,8 +424,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { controlApi, drcApi, livestreamApi } from '../api/services'
+import { controlApi, drcApi, livestreamApi, waylineApi } from '../api/services'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
+import { useWaylineJobs, useDevices } from '../composables/useApi'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
@@ -452,10 +470,16 @@ const {
   formatTemperature,
   formatHumidity,
   formatWindSpeed,
-  formatRainfall,
-  formatCoordinate,
-  formatHeight
+  formatRainfall
 } = useDeviceStatus()
+
+// 使用航线任务API
+const { fetchWaylineProgress, fetchWaylineJobDetail, stopJob, pauseJob, resumeJob } = useWaylineJobs()
+const { getCachedWorkspaceId, getCachedDeviceSns } = useDevices()
+
+// 航线任务相关数据
+const waylineProgress = ref<any>(null)
+const waylineJobDetail = ref<any>(null)
 
 const sidebarTabs = [
   {
@@ -472,8 +496,176 @@ const sidebarTabs = [
   }
 ]
 const currentTab = ref('plane')
-const progressPercent = ref(40) // 改为40%测试效果
-const currentRouteName = ref('测试航线A') // 当前航线名称
+
+// 航线任务相关计算属性
+const progressPercent = computed(() => {
+  const progress = waylineProgress.value?.progress
+  console.log('progressPercent - waylineProgress:', waylineProgress.value)
+  console.log('progressPercent - progress:', progress)
+  
+  if (!progress) {
+    console.log('progressPercent - 没有progress数据，返回0')
+    return 0
+  }
+  
+  // 使用current_waypoint_index和total_waypoints计算进度
+  const currentWaypoint = progress.current_waypoint_index || 0
+  const totalWaypoints = progress.total_waypoints || 1
+  
+  console.log('progressPercent - currentWaypoint:', currentWaypoint, 'totalWaypoints:', totalWaypoints)
+  
+  // 计算百分比并取整数
+  const percent = Math.round((currentWaypoint / totalWaypoints) * 100)
+  
+  // 确保百分比在0-100范围内
+  const result = Math.max(0, Math.min(100, percent))
+  console.log('progressPercent - 计算结果:', result)
+  return result
+})
+
+const currentRouteName = computed(() => {
+  console.log('currentRouteName - waylineJobDetail:', waylineJobDetail.value)
+  const result = waylineJobDetail.value?.name || '暂无任务'
+  console.log('currentRouteName - 结果:', result)
+  return result
+})
+
+const waylineTaskStatus = computed(() => {
+  const status = waylineProgress.value?.status
+  if (!status) return 'waiting'
+  
+  const statusMap: Record<string, string> = {
+    'canceled': 'failed',
+    'failed': 'failed',
+    'in_progress': 'running',
+    'ok': 'completed',
+    'partially_done': 'completed',
+    'paused': 'paused',
+    'rejected': 'failed',
+    'sent': 'waiting',
+    'timeout': 'failed'
+  }
+  
+  return statusMap[status] || 'waiting'
+})
+
+const waylineTaskStatusText = computed(() => {
+  const status = waylineProgress.value?.status
+  if (!status) return '未知'
+  
+  const statusTextMap: Record<string, string> = {
+    'canceled': '取消或终止',
+    'failed': '失败',
+    'in_progress': '执行中',
+    'ok': '执行成功',
+    'partially_done': '部分完成',
+    'paused': '暂停',
+    'rejected': '拒绝',
+    'sent': '已下发',
+    'timeout': '超时'
+  }
+  
+  return statusTextMap[status] || '未知'
+})
+
+// 按钮状态控制
+const canCancelTask = computed(() => {
+  const status = waylineProgress.value?.status
+  return status === 'in_progress' || status === 'paused'
+})
+
+const canResumeRoute = computed(() => {
+  const status = waylineProgress.value?.status
+  return status === 'paused'
+})
+
+const canPauseRoute = computed(() => {
+  const status = waylineProgress.value?.status
+  return status === 'in_progress'
+})
+
+// 任务控制处理函数
+const handleCancelTask = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      alert('未找到workspace_id')
+      return
+    }
+    
+    if (!waylineProgress.value?.job_id) {
+      alert('没有正在执行的任务')
+      return
+    }
+    
+    if (!confirm('确定要取消当前任务吗？')) {
+      return
+    }
+    
+    await stopJob(workspaceId, waylineProgress.value.job_id)
+    alert('任务取消指令已发送')
+    
+    // 刷新任务进度
+    setTimeout(() => {
+      loadWaylineProgress()
+    }, 1000)
+  } catch (err) {
+    console.error('取消任务失败:', err)
+    alert('取消任务失败')
+  }
+}
+
+const handlePauseRoute = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      alert('未找到workspace_id')
+      return
+    }
+    
+    if (!waylineProgress.value?.job_id) {
+      alert('没有正在执行的任务')
+      return
+    }
+    
+    await pauseJob(workspaceId, waylineProgress.value.job_id)
+    alert('航线暂停指令已发送')
+    
+    // 刷新任务进度
+    setTimeout(() => {
+      loadWaylineProgress()
+    }, 1000)
+  } catch (err) {
+    console.error('航线暂停失败:', err)
+    alert('航线暂停失败')
+  }
+}
+
+const handleResumeRoute = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      alert('未找到workspace_id')
+      return
+    }
+    
+    if (!waylineProgress.value?.job_id) {
+      alert('没有正在执行的任务')
+      return
+    }
+    
+    await resumeJob(workspaceId, waylineProgress.value.job_id)
+    alert('航线恢复指令已发送')
+    
+    // 刷新任务进度
+    setTimeout(() => {
+      loadWaylineProgress()
+    }, 1000)
+  } catch (err) {
+    console.error('航线恢复失败:', err)
+    alert('航线恢复失败')
+  }
+}
 const amapInstance = ref<any>(null)
 const amapApiRef = ref<any>(null); // 新增
 const remoteEnabled = ref(false);
@@ -523,8 +715,6 @@ const DRC_STATUS_CHECK_INTERVAL = 5000 // 每5秒检查一次DRC状态
 
 // 设备状态刷新定时器
 const statusRefreshTimer = ref<number | null>(null)
-// 无人机状态刷新定时器
-const droneStatusRefreshTimer = ref<number | null>(null)
 
 // 视频流相关状态管理
 const videoStreamUrl = ref<string>('')
@@ -546,7 +736,7 @@ const totalTime = ref('00:00')
 const toggleRemote = () => {
   remoteEnabled.value = !remoteEnabled.value;
 };
-const isSatellite = ref(true); // 默认为卫星图模式
+const isSatellite = ref(true); // 默认为卫星图模式，确保显示卫星图
 const isInitialLoad = ref(true); // 标记是否为初始加载
 const toggleMapLayer = () => {
   if (!amapInstance.value || !amapApiRef.value) return;
@@ -572,35 +762,6 @@ const toggleScreenMenu = () => {
 const selectScreenMode = (mode: string) => {
   currentScreenMode.value = mode
   showScreenMenu.value = false
-}
-
-// 获取无人机坐标的函数
-const getDroneCoordinate = () => {
-  // 检查无人机是否在仓
-  const isDroneInDock = droneStatus.value?.inDock === 1
-  
-  if (isDroneInDock) {
-    // 无人机在仓，使用机场坐标和高度
-    return {
-      longitude: position.value?.longitude,
-      latitude: position.value?.latitude,
-      height: position.value?.height
-    }
-  } else if (droneStatus.value?.longitude && droneStatus.value?.latitude) {
-    // 无人机不在仓且有独立的坐标数据
-    return {
-      longitude: droneStatus.value.longitude,
-      latitude: droneStatus.value.latitude,
-      height: droneStatus.value.height
-    }
-  } else {
-    // 无人机没有独立坐标数据，使用机场坐标
-    return {
-      longitude: position.value?.longitude,
-      latitude: position.value?.latitude,
-      height: position.value?.height
-    }
-  }
 }
 
 // WGS84坐标转GCJ-02坐标系
@@ -791,32 +952,18 @@ const updateMapMarkers = (shouldCenter = false) => {
     let droneLatitude = latitude
     let droneHeight = position.value.height || 0
     
-    // 检查无人机是否在仓
-    const isDroneInDock = droneStatus.value?.inDock === 1
-    
-    if (isDroneInDock) {
-      // 无人机在仓，使用机场坐标和高度
-      droneLongitude = longitude
-      droneLatitude = latitude
-      droneHeight = position.value.height || 0
-      console.log('无人机在仓，使用机场坐标和高度:', { longitude: droneLongitude, latitude: droneLatitude, height: droneHeight })
-    } else if (droneStatus.value && droneStatus.value.longitude && droneStatus.value.latitude) {
-      // 无人机不在仓且有独立的坐标数据
+    if (droneStatus.value && droneStatus.value.longitude && droneStatus.value.latitude) {
+      // 无人机有独立的坐标数据
       const droneWgsLongitude = droneStatus.value.longitude
       const droneWgsLatitude = droneStatus.value.latitude
-      
-      console.log('无人机不在仓，使用独立坐标:', { longitude: droneWgsLongitude, latitude: droneWgsLatitude })
       
       // 将WGS84坐标转换为GCJ-02坐标
       const droneGcjCoords = transformWGS84ToGCJ02(droneWgsLongitude, droneWgsLatitude)
       droneLongitude = droneGcjCoords.longitude
       droneLatitude = droneGcjCoords.latitude
       droneHeight = droneStatus.value.height || 0
-      
-      console.log('无人机转换后坐标:', { longitude: droneLongitude, latitude: droneLatitude, height: droneHeight })
     } else {
       // 无人机没有独立坐标数据，使用机场坐标
-      console.log('无人机使用机场坐标:', { longitude: droneLongitude, latitude: droneLatitude, height: droneHeight })
     }
     
     const droneInfo = {
@@ -827,18 +974,22 @@ const updateMapMarkers = (shouldCenter = false) => {
       height: droneHeight
     }
     
-    console.log('添加无人机标记:', droneInfo)
-    
     // 添加无人机标记
     addDroneMarker(droneLongitude, droneLatitude, droneInfo)
     
     // 只在初始加载或明确要求时才设置地图中心
     if (shouldCenter && amapInstance.value) {
       amapInstance.value.setCenter([longitude, latitude])
+      // 确保地图样式保持为卫星图
+      if (amapApiRef.value) {
+        amapInstance.value.setLayers([
+          new amapApiRef.value.TileLayer.Satellite(),
+          new amapApiRef.value.TileLayer.RoadNet()
+        ])
+      }
     }
   } else {
     // 无设备坐标数据，无法添加标记
-    console.log('无设备坐标数据，无法添加标记')
   }
 }
 
@@ -1036,11 +1187,15 @@ const getCurrentVideoInfo = () => {
       const videoStreams = JSON.parse(videoStreamsStr)
       
       // 优先返回无人机可见光视频
-      if (videoStreams.drone_visible_video_url && videoCache.value.droneVisible) {
+      const droneVisibleStream = videoStreams.find((stream: any) => stream.type === 'drone_visible')
+      const droneInfraredStream = videoStreams.find((stream: any) => stream.type === 'drone_infrared')
+      const dockStream = videoStreams.find((stream: any) => stream.type === 'dock')
+      
+      if (droneVisibleStream && videoCache.value.droneVisible) {
         return videoCache.value.droneVisible
-      } else if (videoStreams.drone_infrared_video_url && videoCache.value.droneInfrared) {
+      } else if (droneInfraredStream && videoCache.value.droneInfrared) {
         return videoCache.value.droneInfrared
-      } else if (videoStreams.dock_video_url && videoCache.value.dock) {
+      } else if (dockStream && videoCache.value.dock) {
         return videoCache.value.dock
       }
     } catch (error: any) {
@@ -1068,10 +1223,13 @@ const getDroneVideoFromCache = () => {
       const videoStreams = JSON.parse(videoStreamsStr)
       
       // 优先返回无人机可见光视频
-      if (videoStreams.drone_visible_video_url) {
-        return videoStreams.drone_visible_video_url
-      } else if (videoStreams.drone_infrared_video_url) {
-        return videoStreams.drone_infrared_video_url
+      const droneVisibleStream = videoStreams.find((stream: any) => stream.type === 'drone_visible')
+      const droneInfraredStream = videoStreams.find((stream: any) => stream.type === 'drone_infrared')
+      
+      if (droneVisibleStream) {
+        return droneVisibleStream.url
+      } else if (droneInfraredStream) {
+        return droneInfraredStream.url
       }
     } catch (error: any) {
     }
@@ -1145,7 +1303,6 @@ const startVideoPlayback = () => {
         // 自动播放视频
         if (videoElement.value && videoElement.value.paused) {
           videoElement.value.play().catch((error) => {
-            console.error('自动播放失败:', error)
             videoStatus.value = '请点击播放按钮'
           })
         }
@@ -1179,7 +1336,7 @@ const startVideoPlayback = () => {
         // 数据加载完成后尝试自动播放
         if (videoElement.value && videoElement.value.paused) {
           videoElement.value.play().catch((error) => {
-            console.warn('loadeddata自动播放失败:', error)
+            // 静默处理自动播放失败
           })
         }
       }
@@ -1188,8 +1345,6 @@ const startVideoPlayback = () => {
       videoElement.value.onerror = (error) => {
         videoLoading.value = false
         videoStatus.value = '视频加载失败'
-        // 不使用alert，避免打扰用户
-        console.error('视频播放失败，请点击刷新按钮重试')
       }
     }
 
@@ -1239,7 +1394,6 @@ const startVideoPlayback = () => {
       
       // 尝试立即播放，失败则等待canplay事件
       videoElement.value.play().catch((error) => {
-        console.log('立即播放失败，等待canplay事件:', error)
         videoStatus.value = '等待视频就绪...'
       })
     }
@@ -1440,11 +1594,7 @@ const refreshVideoCapacityAndCache = async () => {
     }
     
     // 存储所有视频流地址
-    const videoStreams = {
-      dock_video_url: '',
-      drone_visible_video_url: '',
-      drone_infrared_video_url: ''
-    }
+    const videoStreams = []
     
     // 分析所有可用设备并获取视频流
     for (const device of capacityResponse.available_devices || []) {
@@ -1463,7 +1613,10 @@ const refreshVideoCapacityAndCache = async () => {
               video_id: analysis.dock.video_id
             })
             const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
-            videoStreams.dock_video_url = webrtcUrl
+            videoStreams.push({
+              type: 'dock',
+              url: webrtcUrl
+            })
           } catch (error: any) {
             // 获取机场视频流失败
           }
@@ -1479,7 +1632,10 @@ const refreshVideoCapacityAndCache = async () => {
               video_id: analysis.droneVisible.video_id
             })
             const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
-            videoStreams.drone_visible_video_url = webrtcUrl
+            videoStreams.push({
+              type: 'drone_visible',
+              url: webrtcUrl
+            })
           } catch (error: any) {
             // 获取无人机可见光视频流失败
           }
@@ -1494,7 +1650,10 @@ const refreshVideoCapacityAndCache = async () => {
               video_id: analysis.droneInfrared.video_id
             })
             const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
-            videoStreams.drone_infrared_video_url = webrtcUrl
+            videoStreams.push({
+              type: 'drone_infrared',
+              url: webrtcUrl
+            })
           } catch (error: any) {
             // 获取无人机红外视频流失败
           }
@@ -1511,12 +1670,16 @@ const refreshVideoCapacityAndCache = async () => {
     localStorage.setItem('video_streams', JSON.stringify(videoStreams))
     
     // 优先返回无人机可见光视频地址
-    if (videoStreams.drone_visible_video_url) {
-      return videoStreams.drone_visible_video_url
-    } else if (videoStreams.drone_infrared_video_url) {
-      return videoStreams.drone_infrared_video_url
-    } else if (videoStreams.dock_video_url) {
-      return videoStreams.dock_video_url
+    const droneVisibleStream = videoStreams.find(stream => stream.type === 'drone_visible')
+    const droneInfraredStream = videoStreams.find(stream => stream.type === 'drone_infrared')
+    const dockStream = videoStreams.find(stream => stream.type === 'dock')
+    
+    if (droneVisibleStream) {
+      return droneVisibleStream.url
+    } else if (droneInfraredStream) {
+      return droneInfraredStream.url
+    } else if (dockStream) {
+      return dockStream.url
     } else {
       throw new Error('没有找到可用的视频流')
     }
@@ -1611,8 +1774,6 @@ onMounted(async () => {
         new AMap.TileLayer.RoadNet()
       ]
     })
-    amapInstance.value.addControl(new AMap.ToolBar({ liteStyle: true, position: 'LT' }))
-    amapInstance.value.addControl(new AMap.MapType({ position: 'RB' }))
     
     // 地图加载完成后更新机场标记
     amapInstance.value.on('complete', () => {
@@ -1651,33 +1812,74 @@ onMounted(async () => {
   // 获取无人机状态数据
   await fetchDroneStatus()
   
+  // 获取机场状态数据（包含无人机充电状态）
+  await fetchMainDeviceStatus()
+  
+  // 获取航线任务进度数据
+  await loadWaylineProgress()
+  
   // 首次获取设备状态后，更新地图标记
   if (amapInstance.value) {
     updateMapMarkers()
   }
   
-  // 设置机场状态自动刷新（每5秒）
+  // 设置机场状态自动刷新（每3秒，包含无人机充电状态）
   statusRefreshTimer.value = setInterval(async () => {
     await fetchMainDeviceStatus()
+    // 获取无人机状态数据
+    await fetchDroneStatus()
+    // 获取航线任务进度数据
+    await loadWaylineProgress()
     // 设备状态更新后，更新地图标记
     if (amapInstance.value) {
       updateMapMarkers()
     }
-  }, 5000)
+  }, 3000)
   
-  // 设置无人机状态自动刷新（每2秒）
-  droneStatusRefreshTimer.value = setInterval(async () => {
-    await fetchDroneStatus()
-    // 无人机状态更新后，更新地图标记
-    if (amapInstance.value) {
-      updateMapMarkers()
-    }
-  }, 2000)
+  loadTodayFlightStatistics()
 })
 
-// 测试方法：动态改变进度
+// 获取航线任务进度数据
+const loadWaylineProgress = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    const { dockSns } = getCachedDeviceSns()
+    
+    // console.log('loadWaylineProgress - workspaceId:', workspaceId)
+    // console.log('loadWaylineProgress - dockSns:', dockSns)
+    
+    if (!workspaceId || dockSns.length === 0) {
+      // console.log('loadWaylineProgress - 缺少workspaceId或dockSns')
+      return
+    }
+    
+    // 获取第一个机场的航线任务进度
+    const dockSn = dockSns[0]
+    // console.log('loadWaylineProgress - 使用dockSn:', dockSn)
+    
+    const progressData = await fetchWaylineProgress(workspaceId, dockSn)
+    // console.log('loadWaylineProgress - progressData:', progressData)
+    waylineProgress.value = progressData
+    
+    // 如果有job_id，获取详细信息
+    if (progressData?.job_id) {
+      // console.log('loadWaylineProgress - 获取任务详情，job_id:', progressData.job_id)
+      const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
+      // console.log('loadWaylineProgress - jobDetail:', jobDetail)
+      waylineJobDetail.value = jobDetail
+    } else {
+      // console.log('loadWaylineProgress - 没有job_id，清空任务详情')
+      waylineJobDetail.value = null
+    }
+  } catch (err) {
+    console.error('loadWaylineProgress - 错误:', err)
+  }
+}
+
+// 测试方法：动态改变进度（已移除，现在使用真实数据）
 const updateProgress = (percent: number) => {
-  progressPercent.value = Math.max(0, Math.min(100, percent))
+  // 现在进度由真实数据计算，不再需要手动设置
+  console.log('进度已改为使用真实数据计算')
 }
 
 const handleTabClick = (key: string) => {
@@ -1702,8 +1904,6 @@ const checkDrcStatus = async () => {
     
     // 检查DRC是否就绪
     const readyResponse = await drcApi.checkDrcReady(dockSn)
-    // console.log('DRC就绪检查结果:', readyResponse)
-    
     if (readyResponse.code === 0 && readyResponse.data) {
       drcStatus.value.ready = readyResponse.data.ready
       drcStatus.value.reason = readyResponse.data.reason || ''
@@ -1711,7 +1911,6 @@ const checkDrcStatus = async () => {
 
     // 获取DRC当前状态
     const statusResponse = await drcApi.getDrcStatus(dockSn)
-    // console.log('DRC状态获取结果:', statusResponse)
     
     if (statusResponse.code === 0 && statusResponse.data) {
       drcStatus.value.drc_mode = statusResponse.data.drc_mode
@@ -1719,10 +1918,7 @@ const checkDrcStatus = async () => {
       // 更新前端DRC模式状态
       isDrcModeActive.value = statusResponse.data.drc_mode === 'active'
     }
-    
-    // console.log('DRC状态更新:', drcStatus.value)
   } catch (error: any) {
-    // console.error('检查DRC状态失败:', error)
     // 网络错误时保持当前状态不变，避免频繁切换
   }
 }
@@ -1792,7 +1988,7 @@ const getAvailablePayloadIndexes = async () => {
       }
     }
   } catch (error) {
-    // console.error('获取可用payload索引失败:', error)
+    // 静默处理错误
   }
   
   return ["99-0-0"] // 默认值
@@ -1802,8 +1998,7 @@ const getAvailablePayloadIndexes = async () => {
 const getBestPayloadIndex = () => {
   // 直接返回标准格式，这个格式在你提供的API响应中存在
   const payloadIndex = "99-0-0"
-  // console.log('getBestPayloadIndex 返回:', payloadIndex)
-  return payloadIndex
+      return payloadIndex
 }
 
 // 获取设备的payload_index（用于视频相关操作）
@@ -1977,7 +2172,6 @@ const acquireControlAuthority = async () => {
     
     // 获取最佳的payload_index
     const payloadIndex = getBestPayloadIndex()
-    // console.log('获取控制权 - payload索引:', payloadIndex)
     
     if (!payloadIndex) {
       alert('没有找到可用的载荷信息')
@@ -2032,7 +2226,6 @@ const releaseControlAuthority = async () => {
     
     // 获取最佳的payload_index
     const payloadIndex = getBestPayloadIndex()
-    // console.log('释放控制权 - payload索引:', payloadIndex)
     
     if (!payloadIndex) {
       alert('没有找到可用的载荷信息')
@@ -2080,7 +2273,6 @@ const checkAuthorityStatus = async () => {
     // 获取当前用户信息
     const userStr = localStorage.getItem('user')
     if (!userStr) {
-      console.error('未找到用户信息')
       return
     }
     
@@ -2123,16 +2315,9 @@ const checkAuthorityStatus = async () => {
       // 更新云台控制状态
       isGimbalControlEnabled.value = hasControlAuthority.value
       
-      // console.log('权限状态检查结果:', {
-      //   currentUserId,
-      //   hasFlightAuthority,
-      //   hasPayloadAuthority,
-      //   flightAuthorityUser: data.flight_authority?.user_id,
-      //   payloadAuthorityUsers: data.payload_authorities ? Object.values(data.payload_authorities).map((auth: any) => auth.user_id) : []
-      // })
     }
   } catch (error: any) {
-    // console.error('检查权限状态失败:', error)
+    // 静默处理错误
   }
 }
 
@@ -2210,7 +2395,6 @@ const handleReturnHome = async () => {
 
 // 一键起飞处理函数
 const handleTakeoff = async () => {
-  console.log('开始一键起飞...')
   takeoffLoading.value = true
   
   try {
@@ -2249,8 +2433,6 @@ const handleTakeoff = async () => {
       return
     }
     
-    console.log(`起飞参数: 纬度=${dockLat}, 经度=${dockLng}, 高度=${dockAlt}m`)
-    
     // 弹出确认对话框
     const confirmed = confirm('确定要执行一键起飞吗？无人机将起飞到30米高度。')
     if (!confirmed) {
@@ -2280,8 +2462,6 @@ const handleTakeoff = async () => {
     
     const result = await controlApi.takeoffToPoint(dockSn, takeoffParams)
     
-    console.log('一键起飞结果:', result)
-    
     if (result.code === 0) {
       alert('一键起飞指令已发送成功！')
     } else {
@@ -2289,7 +2469,6 @@ const handleTakeoff = async () => {
     }
     
   } catch (error: any) {
-    console.error('起飞失败:', error)
     alert(`起飞失败: ${error.message || '请稍后重试'}`)
   } finally {
     takeoffLoading.value = false
@@ -2374,8 +2553,6 @@ const handleToggleDrcMode = async () => {
     // 退出DRC模式
     try {
       const result = await drcApi.exitDrcMode(dockSn)
-      // console.log('退出DRC模式结果:', result)
-      
       if (result.code === 0) {
         isDrcModeActive.value = false
         alert('已退出DRC模式')
@@ -2397,7 +2574,6 @@ const handleToggleDrcMode = async () => {
     // 进入DRC模式
     try {
       const result = await drcApi.enterDrcMode(dockSn)
-      // console.log('进入DRC模式结果:', result)
       
       if (result.code === 0) {
         isDrcModeActive.value = true
@@ -2536,11 +2712,7 @@ onBeforeUnmount(() => {
     statusRefreshTimer.value = null
   }
   
-  // 清理无人机状态刷新定时器
-  if (droneStatusRefreshTimer.value) {
-    clearInterval(droneStatusRefreshTimer.value)
-    droneStatusRefreshTimer.value = null
-  }
+
   
   // 清理地图标记
   clearDockMarkers()
@@ -2551,6 +2723,39 @@ onBeforeUnmount(() => {
     amapInstance.value = null
   }
 })
+
+// 顶部统计数据
+const todayTotalTasks = ref(0)
+const todayCompletedTasks = ref(0)
+const todayUnexecutedTasks = ref(0)
+const todayNormalTasks = ref(0)
+const todayAbnormalTasks = ref(0)
+
+// 获取workspace_id
+function getWorkspaceId() {
+  return localStorage.getItem('workspace_id')
+}
+
+// 获取今日飞行统计
+const loadTodayFlightStatistics = async () => {
+  const workspaceId = getWorkspaceId()
+  if (!workspaceId) return
+  try {
+    const res = await waylineApi.getFlightStatistics(workspaceId, 1)
+    if (res.code === 0 && res.data) {
+      const summary = res.data.summary || {}
+      const statusStats = res.data.status_stats || []
+      todayTotalTasks.value = summary.total_tasks || 0
+      todayCompletedTasks.value = summary.completed_tasks || 0
+      todayUnexecutedTasks.value = summary.total_tasks - summary.completed_tasks - summary.failed_tasks - summary.canceled_tasks
+      // 正常/异常
+      todayNormalTasks.value = statusStats.find(s => s.status_name === 'SUCCESS')?.count || 0
+      todayAbnormalTasks.value = statusStats.find(s => s.status_name === 'FAILED')?.count || 0
+    }
+  } catch (e) {
+    // 可加错误提示
+  }
+}
 </script>
 
 <style scoped>
@@ -2899,9 +3104,9 @@ onBeforeUnmount(() => {
 }
 .video-card {
   flex: 2;
-  /* 去掉背景色和阴影 */
+  /* 参考机场控制页面的框线样式 */
   background: none !important;
-  border: none !important; /* 修改：完全去掉边框 */
+  border: 1.5px solid #164159;
   border-radius: 8px;
   box-shadow: none;
   display: flex;
@@ -3668,6 +3873,45 @@ onBeforeUnmount(() => {
   border-color: rgba(182, 38, 38, 0.8);
   background: #662626;
 }
+
+/* 禁用状态样式 */
+.task-progress-actions-btns .span.disabled,
+.task-progress-actions-btns .span1.disabled,
+.task-progress-actions-btns .span-resume.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #2a2a2a;
+  border-color: #555;
+  color: #888;
+}
+
+.task-progress-actions-btns .span.disabled:hover,
+.task-progress-actions-btns .span1.disabled:hover,
+.task-progress-actions-btns .span-resume.disabled:hover {
+  background: #2a2a2a;
+  border-color: #555;
+}
+
+/* 恢复按钮样式 */
+.task-progress-actions-btns .span-resume {
+  width: clamp(60px, 6vw, 70px);
+  height: 30px;
+  line-height: 30px;
+  text-align: center;
+  background: #1c561c;
+  border-radius: 4px;
+  border: 1px solid rgba(38, 182, 38, 0.8);
+  color: #67fd67;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.3s;
+}
+
+.task-progress-actions-btns .span-resume:hover {
+  border-color: rgba(38, 182, 38, 0.8);
+  background: #266626;
+}
 .task-stats-panel {
   display: flex;
   gap: 12px;
@@ -3873,9 +4117,9 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 2;
   background: rgba(0, 12, 23, .5);
-  border-radius: 0; /* 修改：去掉圆角 */
+  border-radius: 4px;
   overflow: hidden;
-  padding: 0; /* 修改：去掉所有padding */
+  padding: 12px 12px 0 12px;
   margin: 0; /* 确保没有外边距 */
   border: none; /* 确保没有边框 */
 }
@@ -3884,7 +4128,7 @@ onBeforeUnmount(() => {
   position: relative;
   padding: 0;
   width: 100%;
-  height: calc(100% - 40px); /* 减去底部控制条的高度 */
+  height: calc(100% - 52px); /* 减去底部控制条的高度和padding */
 }
 .player_container {
   width: 100%;
