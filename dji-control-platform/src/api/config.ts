@@ -54,21 +54,18 @@ export class ApiClient {
 
     try {
       const response = await fetch(url, config)
-      
-      if (!response.ok) {
-        console.error('API请求失败:', response.status, response.statusText)
-        console.error('请求URL:', url)
-        console.error('响应头:', Object.fromEntries(response.headers.entries()))
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      // 检查响应内容类型
       const contentType = response.headers.get('content-type')
+      let data: any = null;
       if (contentType && contentType.includes('application/json')) {
-        return await response.json()
+        data = await response.json();
       } else {
-        return await response.text() as T
+        data = await response.text();
       }
+      if (!response.ok) {
+        // 直接抛出data，这样catch能拿到后端的detail字段
+        throw data;
+      }
+      return data;
     } catch (error) {
       console.error('API请求失败:', error)
       throw error

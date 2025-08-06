@@ -341,14 +341,62 @@ export function useAuth() {
 
           // 组装 video_streams 数组并写入缓存
           const videoStreams = []
-          if (dockWebrtcUrl) {
-            videoStreams.push({ type: 'dock', url: dockWebrtcUrl })
+          
+          // 从capacity数据中获取真实的switchable_video_types
+          const getSwitchableTypesFromCapacity = (deviceSn: string, videoId: string) => {
+            if (!capacityResponse.available_devices) return []
+            
+            for (const device of capacityResponse.available_devices) {
+              if (device.sn === deviceSn && device.camera_list) {
+                for (const camera of device.camera_list) {
+                  if (camera.video_list) {
+                    for (const video of camera.video_list) {
+                      const currentVideoId = `${device.sn}/${camera.camera_index}/${video.video_index}`
+                      if (currentVideoId === videoId) {
+                        return video.switchable_video_types || []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            return []
           }
-          if (droneVisibleWebrtcUrl) {
-            videoStreams.push({ type: 'drone_visible', url: droneVisibleWebrtcUrl })
+          
+          if (dockWebrtcUrl && dockVideoDevice) {
+            const switchableTypes = getSwitchableTypesFromCapacity(dockVideoDevice.deviceSn, dockVideoDevice.videoId)
+            videoStreams.push({ 
+              type: 'dock', 
+              url: dockWebrtcUrl,
+              switchable_video_types: switchableTypes,
+              device_sn: dockVideoDevice.deviceSn,
+              camera_index: dockVideoDevice.cameraIndex,
+              video_index: dockVideoDevice.videoIndex
+            })
           }
-          if (droneInfraredWebrtcUrl) {
-            videoStreams.push({ type: 'drone_infrared', url: droneInfraredWebrtcUrl })
+          
+          if (droneVisibleWebrtcUrl && droneVisibleDevice) {
+            const switchableTypes = getSwitchableTypesFromCapacity(droneVisibleDevice.deviceSn, droneVisibleDevice.videoId)
+            videoStreams.push({ 
+              type: 'drone_visible', 
+              url: droneVisibleWebrtcUrl,
+              switchable_video_types: switchableTypes,
+              device_sn: droneVisibleDevice.deviceSn,
+              camera_index: droneVisibleDevice.cameraIndex,
+              video_index: droneVisibleDevice.videoIndex
+            })
+          }
+          
+          if (droneInfraredWebrtcUrl && droneInfraredDevice) {
+            const switchableTypes = getSwitchableTypesFromCapacity(droneInfraredDevice.deviceSn, droneInfraredDevice.videoId)
+            videoStreams.push({ 
+              type: 'drone_infrared', 
+              url: droneInfraredWebrtcUrl,
+              switchable_video_types: switchableTypes,
+              device_sn: droneInfraredDevice.deviceSn,
+              camera_index: droneInfraredDevice.cameraIndex,
+              video_index: droneInfraredDevice.videoIndex
+            })
           }
           localStorage.setItem('video_streams', JSON.stringify(videoStreams))
           

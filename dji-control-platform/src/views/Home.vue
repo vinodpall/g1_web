@@ -324,50 +324,47 @@
                     <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
                   </svg>
                 </button>
-              </div>
-            </div>
-            <div class="center-controls">
-              <!-- 云台切换按钮 -->
-              <div class="gimbal-control">
-                <button 
-                  class="gimbal-btn" 
-                  @click.stop="toggleGimbalMenu"
-                  :disabled="videoLoading"
-                  :class="{ 'loading': videoLoading }"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                  </svg>
-                  <span>{{ getVideoTypeName(currentVideoType) }}</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="m192 384 320 384 320-384z"/>
-                  </svg>
-                </button>
-                <!-- 云台切换菜单 -->
-                <div class="gimbal-menu" v-if="gimbalMenuVisible" @click.stop>
-                  <div 
-                    class="menu-item" 
-                    @click.stop="switchGimbal('dock')"
-                    :class="{ 'active': currentVideoType === 'dock' }"
+                <!-- 云台切换按钮放在全屏按钮右侧 -->
+                <div class="gimbal-control">
+                  <button 
+                    class="gimbal-btn" 
+                    @click.stop="toggleGimbalMenu"
+                    :disabled="videoLoading"
+                    :class="{ 'loading': videoLoading }"
+                    title="切换视频源"
                   >
-                    机场视频
-                  </div>
-                  <div 
-                    class="menu-item" 
-                    @click.stop="switchGimbal('drone_visible')"
-                    :class="{ 'active': currentVideoType === 'drone_visible' }"
-                  >
-                    无人机可见光
-                  </div>
-                  <div 
-                    class="menu-item" 
-                    @click.stop="switchGimbal('drone_infrared')"
-                    :class="{ 'active': currentVideoType === 'drone_infrared' }"
-                  >
-                    无人机红外
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                    </svg>
+                  </button>
+                  <!-- 云台切换菜单 -->
+                  <div class="gimbal-menu" v-if="gimbalMenuVisible" @click.stop>
+                    <div 
+                      class="menu-item" 
+                      @click.stop="switchGimbal('dock')"
+                      :class="{ 'active': currentVideoType === 'dock' }"
+                    >
+                      机场视频
+                    </div>
+                    <div 
+                      class="menu-item" 
+                      @click.stop="switchGimbal('drone_visible')"
+                      :class="{ 'active': currentVideoType === 'drone_visible' }"
+                    >
+                      无人机可见光
+                    </div>
+                    <div 
+                      class="menu-item" 
+                      @click.stop="switchGimbal('drone_infrared')"
+                      :class="{ 'active': currentVideoType === 'drone_infrared' }"
+                    >
+                      无人机红外
+                    </div>
                   </div>
                 </div>
               </div>
+            </div>
+            <div class="center-controls">
             </div>
             <div class="right-controls" @click="toggleScreenMenu">
               <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
@@ -436,8 +433,8 @@
           <div v-if="loadingFlightStats" class="loading-container">
             <div class="loading-text">加载中...</div>
           </div>
-          <div v-else-if="flightStatsError" class="error-container">
-            <div class="error-text">{{ flightStatsError }}</div>
+          <div v-else-if="!flightStatistics || !flightStatistics.daily_stats || flightStatistics.daily_stats.length === 0" class="empty-container">
+            <div class="empty-text">暂无数据</div>
           </div>
           <div v-else :ref="el => lineChartRef = el as HTMLElement" class="trend-chart"></div>
         </div>
@@ -467,12 +464,12 @@
               <div class="chart-box">
                 <div class="progress-circle-container">
                   <div class="progress-circle">
-                    <div class="progress-circle-outer-ring"></div>
+                    <div class="progress-circle-outer-ring" v-if="waylineProgressPercent === 0"></div>
                     <div class="progress-circle-left">
-                      <div class="progress-circle-bar blue" :style="{ transform: `rotate(${waylineProgressPercent * 1.8}deg)` }"></div>
+                      <div class="progress-circle-bar blue" :style="{ transform: `rotate(${waylineProgressPercent * 1.8}deg)`, opacity: waylineProgressPercent === 0 ? 0 : 1 }"></div>
                     </div>
                     <div class="progress-circle-right">
-                      <div class="progress-circle-bar orange" :style="{ transform: `rotate(${Math.max(0, (waylineProgressPercent - 50) * 3.6)}deg)` }"></div>
+                      <div class="progress-circle-bar orange" :style="{ transform: `rotate(${Math.max(0, (waylineProgressPercent - 50) * 3.6)}deg)`, opacity: waylineProgressPercent === 0 ? 0 : 1 }"></div>
                     </div>
                     <div class="progress-circle-center">
                       <div class="progress-text">
@@ -795,7 +792,7 @@ const loadFlightStatistics = async (days = 7) => {
   try {
     const workspaceId = getCachedWorkspaceId()
     if (!workspaceId) {
-      flightStatsError.value = '未找到 workspace_id'
+      // 静默处理，不显示错误
       return
     }
     const res = await waylineApi.getFlightStatistics(workspaceId, days)
@@ -804,10 +801,12 @@ const loadFlightStatistics = async (days = 7) => {
       // 更新航线报表图表
       updateFlightStatisticsChart()
     } else {
-      flightStatsError.value = res.message || '获取飞行统计失败'
+      // 静默处理，不显示错误
+      flightStatistics.value = null
     }
   } catch (e: any) {
-    flightStatsError.value = e.message || '获取飞行统计异常'
+    // 静默处理，不显示错误
+    flightStatistics.value = null
   } finally {
     loadingFlightStats.value = false
   }
@@ -5298,24 +5297,22 @@ const toggleFullscreen = () => {
 }
 
 .gimbal-btn {
-  background: rgba(89, 192, 252, 0.1);
-  border: 1px solid rgba(89, 192, 252, 0.3);
-  border-radius: 6px;
-  padding: 8px 12px;
+  background: none;
+  border: none;
   cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   color: #59C0FC;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  min-width: 120px;
-  justify-content: space-between;
+  min-width: 32px;
+  min-height: 32px;
 }
 
 .gimbal-btn:hover {
-  background: rgba(89, 192, 252, 0.2);
-  border-color: rgba(89, 192, 252, 0.5);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .gimbal-btn:disabled {
@@ -5329,14 +5326,14 @@ const toggleFullscreen = () => {
 }
 
 .gimbal-btn svg {
-  width: 16px;
-  height: 16px;
+  width: clamp(16px, 1.2vw, 18px);
+  height: clamp(16px, 1.2vw, 18px);
   fill: currentColor;
-  transition: transform 0.3s ease;
+  transition: all 0.3s ease;
 }
 
-.gimbal-btn:hover svg:last-child {
-  transform: rotate(180deg);
+.gimbal-btn:hover svg {
+  transform: scale(1.1);
 }
 
 .gimbal-menu {
@@ -5373,7 +5370,7 @@ const toggleFullscreen = () => {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0;
+  padding: 8px;
   border-radius: 50%;
   transition: all 0.3s ease;
   display: flex;
@@ -5383,7 +5380,7 @@ const toggleFullscreen = () => {
 }
 
 .fullscreen-btn:hover {
-  background: rgba(89, 192, 252, 0.1);
+  background: rgba(255, 255, 255, 0.1);
   color: #16bbf2; /* 悬停时改变颜色 */
 }
 
@@ -5438,6 +5435,25 @@ const toggleFullscreen = () => {
 .error-text {
   background: rgba(255, 107, 107, 0.1);
   border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 6px;
+  padding: 12px 16px;
+  max-width: 100%;
+}
+
+.empty-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 14px;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.empty-text {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   padding: 12px 16px;
   max-width: 100%;

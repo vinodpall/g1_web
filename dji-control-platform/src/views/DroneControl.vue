@@ -157,6 +157,12 @@
               <!-- <div class="map-layer-switch" @click="toggleMapLayer">
                 {{ isSatellite ? '默认图' : '卫星图' }}
               </div> -->
+              <!-- 无人机追踪按钮 -->
+              <div class="drone-track-btn" @click="toggleDroneTracking" :class="{ 'active': isDroneTracking }" :title="isDroneTracking ? '取消追踪' : '追踪无人机'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+              </div>
             </div>
           </div>
         </section>
@@ -180,6 +186,12 @@
                         >
                           您的浏览器不支持视频播放
                         </video>
+                        
+                        <!-- 标记框绘制画布 -->
+                        <canvas 
+                          ref="visionCanvas"
+                          style="width: 100% !important; height: 100% !important; position: absolute !important; top: 0 !important; left: 0 !important; pointer-events: none !important; z-index: 10 !important;"
+                        />
                       </div>
                     </div>
                   </div>
@@ -216,24 +228,122 @@
                           <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
                         </svg>
                       </button>
+                      <!-- 清晰度设置按钮 -->
+                      <div class="quality-btn-wrapper" style="display: inline-block;">
+                        <button class="quality-btn" @click="toggleQualityMenu" title="设置清晰度">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                          </svg>
+                        </button>
+                      </div>
+                      <!-- 分屏按钮 -->
+                      <div class="split-btn-wrapper" style="display: inline-block;">
+                        <button 
+                          class="split-btn" 
+                          @click="toggleSplitMenu"
+                          :disabled="!canUseScreenSplit"
+                          :class="{ 'disabled': !canUseScreenSplit }"
+                          title="分屏功能"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3 3v18h18V3H3zm16 16H5V5h14v14zM7 7h4v4H7V7zm6 0h4v4h-4V7zM7 13h4v4H7v-4zm6 0h4v4h-4v-4z"/>
+                          </svg>
+                        </button>
+                      </div>
+                      <!-- 分屏菜单 -->
+                      <div v-if="showSplitMenu" class="split-menu" :style="splitMenuStyle">
+                        <div class="split-menu-item" @click="handleScreenSplit(true)">开启分屏</div>
+                        <div class="split-menu-item" @click="handleScreenSplit(false)">关闭分屏</div>
+                      </div>
+                      <!-- 清晰度菜单 -->
+                      <div v-if="showQualityMenu" class="quality-menu" :style="qualityMenuStyle">
+                        <div class="quality-menu-item" @click="handleQualityChange(0)">自适应</div>
+                        <div class="quality-menu-item" @click="handleQualityChange(1)">流畅</div>
+                        <div class="quality-menu-item" @click="handleQualityChange(2)">标清</div>
+                        <div class="quality-menu-item" @click="handleQualityChange(3)">高清</div>
+                        <div class="quality-menu-item" @click="handleQualityChange(4)">超清</div>
+                      </div>
                     </div>
                   </div>
                   <div class="center-controls">
-                  </div>
-                  <div class="right-controls" :class="{ active: showScreenMenu }" @click="toggleScreenMenu">
-                    <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
-                    <i class="el-icon dropdown-icon">
-                      <svg width="20" height="20" viewBox="0 0 1024 1024">
-                        <path fill="#59C0FC" d="m192 384 320 384 320-384z"></path>
-                      </svg>
-                    </i>
-                    <!-- 分屏选择菜单 -->
-                    <div class="screen-menu" v-if="showScreenMenu">
-                      <div class="menu-item" @click="selectScreenMode('一分屏')">一分屏</div>
-                      <div class="menu-item" @click="selectScreenMode('二分屏')">二分屏</div>
-                      <div class="menu-item" @click="selectScreenMode('四分屏')">四分屏</div>
-                      <div class="menu-item" @click="selectScreenMode('六分屏')">六分屏</div>
-                      <div class="menu-item" @click="selectScreenMode('九分屏')">九分屏</div>
+                    <!-- 镜头切换控制 -->
+                    <div class="lens-buttons">
+                      <button 
+                        v-for="videoType in getAvailableVideoTypes()" 
+                        :key="videoType"
+                        class="lens-btn"
+                        :class="{ 'active': currentVideoType === videoType }"
+                        @click="handleLensChange(videoType)"
+                        :disabled="lensChanging"
+                        :title="getVideoTypeName(videoType)"
+                      >
+                        {{ getVideoTypeName(videoType) }}
+                      </button>
+                      
+                      <!-- 视觉连接状态指示器 -->
+                      <div class="vision-status">
+                        <div 
+                          class="vision-indicator" 
+                          :class="{ 
+                            'connected': visionConnected, 
+                            'connecting': visionConnecting, 
+                            'disconnected': !visionConnected && !visionConnecting,
+                            'error': visionError
+                          }"
+                          :title="visionError ? `连接错误: ${visionError}` : visionConnected ? '视觉数据已连接' : visionConnecting ? '正在连接视觉数据...' : '视觉数据未连接'"
+                        ></div>
+                        <span class="vision-label">AI</span>
+                        <button 
+                          class="vision-reconnect-btn" 
+                          @click="reconnectVision"
+                          :disabled="visionConnecting"
+                          title="重连视觉数据"
+                        >
+                          ↻
+                        </button>
+                        <!-- <button 
+                          class="vision-fps-btn" 
+                          @click="showFpsSettings = !showFpsSettings"
+                          title="调整推送频率"
+                        >
+                          ⚙️
+                        </button> -->
+                      </div>
+                      
+                      <!-- FPS设置面板 -->
+                      <!-- <div v-if="showFpsSettings" class="fps-settings-panel">
+                        <div class="fps-setting">
+                          <div class="fps-stats">
+                            <div class="fps-stat">
+                              <span class="stat-label">绘制帧率:</span>
+                              <span class="stat-value">{{ currentFPS }} fps</span>
+                            </div>
+                            <div class="fps-stat">
+                              <span class="stat-label">数据接收:</span>
+                              <span class="stat-value">{{ dataReceiveRate }} fps</span>
+                            </div>
+                            <div class="fps-stat">
+                              <span class="stat-label">推送设置:</span>
+                              <span class="stat-value">{{ currentPushInterval === 0 ? '实时' : Math.round(1000/currentPushInterval) + 'fps' }}</span>
+                            </div>
+                          </div>
+                          
+                          <label>推送间隔: {{ currentPushInterval }}ms</label>
+                          <input 
+                            type="range" 
+                            :min="visionConfig.minPushInterval" 
+                            :max="200" 
+                            v-model="currentPushInterval"
+                            @input="updatePushInterval"
+                            class="fps-slider"
+                          />
+                          <div class="fps-presets">
+                            <button @click="setPushInterval(33)" class="fps-preset">30fps</button>
+                            <button @click="setPushInterval(50)" class="fps-preset">20fps</button>
+                            <button @click="setPushInterval(100)" class="fps-preset">10fps</button>
+                          </div>
+                        </div>
+                      </div> -->
                     </div>
                   </div>
                 </div>
@@ -369,7 +479,7 @@
                       <div class="authority-tooltip-arrow"></div>
                     </div>
                   </div>
-                  <button @click="handleTakeoff" :disabled="takeoffLoading">
+                  <button @click="openTakeoffModal" :disabled="takeoffLoading">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_fly.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">{{ takeoffLoading ? '起飞中...' : '一键起飞' }}</span>
                   </button>
@@ -385,12 +495,52 @@
                 </div>
                 <div class="gimbal-btns-area">
                   <div class="gimbal-dir-row">
-                    <button class="gimbal-dir-btn" :disabled="!isGimbalControlEnabled" @click="handleGimbalControl('down')"><img src="@/assets/source_data/svg_data/camera_up.svg" /></button>
+                    <button 
+                      class="gimbal-dir-btn" 
+                      :disabled="!isGimbalControlEnabled" 
+                      @mousedown="startGimbalControl('down')"
+                      @mouseup="stopGimbalControl"
+                      @mouseleave="stopGimbalControl"
+                      @touchstart="startGimbalControl('down')"
+                      @touchend="stopGimbalControl"
+                    >
+                      <img src="@/assets/source_data/svg_data/camera_up.svg" />
+                    </button>
                   </div>
                   <div class="gimbal-dir-row">
-                    <button class="gimbal-dir-btn" :disabled="!isGimbalControlEnabled" @click="handleGimbalControl('left')"><img src="@/assets/source_data/svg_data/camera_left.svg" /></button>
-                    <button class="gimbal-dir-btn" :disabled="!isGimbalControlEnabled" @click="handleGimbalControl('up')"><img src="@/assets/source_data/svg_data/camera_down.svg" /></button>
-                    <button class="gimbal-dir-btn" :disabled="!isGimbalControlEnabled" @click="handleGimbalControl('right')"><img src="@/assets/source_data/svg_data/camera_right.svg" /></button>
+                    <button 
+                      class="gimbal-dir-btn" 
+                      :disabled="!isGimbalControlEnabled" 
+                      @mousedown="startGimbalControl('left')"
+                      @mouseup="stopGimbalControl"
+                      @mouseleave="stopGimbalControl"
+                      @touchstart="startGimbalControl('left')"
+                      @touchend="stopGimbalControl"
+                    >
+                      <img src="@/assets/source_data/svg_data/camera_left.svg" />
+                    </button>
+                    <button 
+                      class="gimbal-dir-btn" 
+                      :disabled="!isGimbalControlEnabled" 
+                      @mousedown="startGimbalControl('up')"
+                      @mouseup="stopGimbalControl"
+                      @mouseleave="stopGimbalControl"
+                      @touchstart="startGimbalControl('up')"
+                      @touchend="stopGimbalControl"
+                    >
+                      <img src="@/assets/source_data/svg_data/camera_down.svg" />
+                    </button>
+                    <button 
+                      class="gimbal-dir-btn" 
+                      :disabled="!isGimbalControlEnabled" 
+                      @mousedown="startGimbalControl('right')"
+                      @mouseup="stopGimbalControl"
+                      @mouseleave="stopGimbalControl"
+                      @touchstart="startGimbalControl('right')"
+                      @touchend="stopGimbalControl"
+                    >
+                      <img src="@/assets/source_data/svg_data/camera_right.svg" />
+                    </button>
                   </div>
                   <div class="gimbal-separator"></div>
                   <div class="gimbal-func-row">
@@ -418,6 +568,87 @@
         </section>
       </div>
     </main>
+    
+    <!-- 起飞参数设置弹窗 -->
+    <div v-if="showTakeoffModal" class="custom-dialog-mask" @click="closeTakeoffModal">
+      <div class="takeoff-modal" @click.stop>
+        <div class="takeoff-modal-content">
+          <div class="takeoff-modal-title">起飞参数设置</div>
+          <div class="takeoff-modal-form">
+            <div class="takeoff-modal-row">
+              <label>目标高度：</label>
+              <input 
+                type="number" 
+                v-model="takeoffParams.target_height" 
+                class="takeoff-modal-input"
+                min="10" 
+                max="120"
+                step="1"
+              />
+              <span class="unit-label">米</span>
+            </div>
+            <div class="takeoff-modal-row">
+              <label>返航高度：</label>
+              <input 
+                type="number" 
+                v-model="takeoffParams.rth_altitude" 
+                class="takeoff-modal-input"
+                min="30" 
+                max="200"
+                step="1"
+              />
+              <span class="unit-label">米</span>
+            </div>
+            <div class="takeoff-modal-row">
+              <label>最大飞行速度：</label>
+              <input 
+                type="number" 
+                v-model="takeoffParams.max_speed" 
+                class="takeoff-modal-input"
+                min="5" 
+                max="20"
+                step="0.5"
+              />
+              <span class="unit-label">m/s</span>
+            </div>
+            <div class="takeoff-modal-row">
+              <label>算法开关：</label>
+              <div class="takeoff-switch-wrapper">
+                <div
+                  class="switch-container"
+                  :class="{ active: takeoffParams.enable_vision }"
+                  @click="takeoffParams.enable_vision = !takeoffParams.enable_vision"
+                >
+                  <div class="switch-toggle"></div>
+                </div>
+                <span class="takeoff-switch-label">{{ takeoffParams.enable_vision ? '开启' : '关闭' }}</span>
+              </div>
+            </div>
+            <div class="takeoff-modal-row">
+              <label>算法选择：</label>
+              <div class="takeoff-algorithm-options">
+                <label v-for="(name, id) in algorithmOptions" :key="id" class="takeoff-algorithm-option">
+                  <input 
+                    type="checkbox" 
+                    :value="id" 
+                    v-model="takeoffParams.vision_algorithms"
+                    class="takeoff-algorithm-checkbox"
+                    :disabled="!takeoffParams.enable_vision"
+                  />
+                  <span class="takeoff-algorithm-label" :class="{ 'disabled': !takeoffParams.enable_vision }">{{ name }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="takeoff-modal-actions">
+            <button class="mission-btn mission-btn-cancel" @click="closeTakeoffModal">取消</button>
+            <button class="mission-btn mission-btn-pause" @click="confirmTakeoff" :disabled="takeoffLoading">
+              {{ takeoffLoading ? '起飞中...' : '确认起飞' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -427,6 +658,8 @@ import { useRouter } from 'vue-router'
 import { controlApi, drcApi, livestreamApi, waylineApi } from '../api/services'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
 import { useWaylineJobs, useDevices } from '../composables/useApi'
+import { useVisionWebSocket } from '../composables/useVisionWebSocket'
+import { visionConfig, logVisionConfig } from '@/config/vision'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
@@ -465,6 +698,7 @@ const {
   droneStatus, 
   gpsStatus,
   environment,
+  osdData,
   formatBattery,
   formatSpeed,
   formatTemperature,
@@ -500,11 +734,8 @@ const currentTab = ref('plane')
 // 航线任务相关计算属性
 const progressPercent = computed(() => {
   const progress = waylineProgress.value?.progress
-  console.log('progressPercent - waylineProgress:', waylineProgress.value)
-  console.log('progressPercent - progress:', progress)
   
   if (!progress) {
-    console.log('progressPercent - 没有progress数据，返回0')
     return 0
   }
   
@@ -512,21 +743,16 @@ const progressPercent = computed(() => {
   const currentWaypoint = progress.current_waypoint_index || 0
   const totalWaypoints = progress.total_waypoints || 1
   
-  console.log('progressPercent - currentWaypoint:', currentWaypoint, 'totalWaypoints:', totalWaypoints)
-  
   // 计算百分比并取整数
   const percent = Math.round((currentWaypoint / totalWaypoints) * 100)
   
   // 确保百分比在0-100范围内
   const result = Math.max(0, Math.min(100, percent))
-  console.log('progressPercent - 计算结果:', result)
   return result
 })
 
 const currentRouteName = computed(() => {
-  console.log('currentRouteName - waylineJobDetail:', waylineJobDetail.value)
   const result = waylineJobDetail.value?.name || '暂无任务'
-  console.log('currentRouteName - 结果:', result)
   return result
 })
 
@@ -710,6 +936,11 @@ const currentControlType = ref<string | null>(null)
 const CONTROL_INTERVAL_MS = 100 // 每100ms发送一次控制指令
 const CONTROL_SPEED = 0.5 // 默认控制速度
 
+// 云台控制相关状态
+const gimbalControlInterval = ref<number | null>(null)
+const currentGimbalDirection = ref<string | null>(null)
+const GIMBAL_CONTROL_INTERVAL_MS = 200 // 每200ms发送一次云台控制指令
+
 // DRC状态相关
 const DRC_STATUS_CHECK_INTERVAL = 5000 // 每5秒检查一次DRC状态
 
@@ -720,13 +951,139 @@ const statusRefreshTimer = ref<number | null>(null)
 const videoStreamUrl = ref<string>('')
 const videoPlayer = ref<any>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
+const visionCanvas = ref<HTMLCanvasElement | null>(null)
 const videoLoading = ref(false)
 const videoStatus = ref('正在检查视频流状态...')
 const videoBid = ref<string | null>(null)
 const refreshingVideo = ref(false)
 
+// 视觉WebSocket相关状态
+const {
+  isConnected: visionConnected,
+  isConnecting: visionConnecting,
+  latestVisionData,
+  connectionError: visionError,
+  connect: connectVision,
+  disconnect: disconnectVision,
+  configurePushInterval,
+  subscribeAlgorithms
+} = useVisionWebSocket()
+
+// 推送频率控制
+const currentPushInterval = ref(visionConfig.defaultPushInterval)
+const showFpsSettings = ref(false)
+
+// 绘制性能相关（实时模式）
+let animationFrameId: number | null = null // 保留用于清理
+
+// 帧率统计
+let frameCount = 0
+let lastFpsTime = 0
+const currentFPS = ref(0)
+const dataReceiveRate = ref(0) // 数据接收频率
+
+// 镜头切换相关状态
+const currentVideoStream = ref<any>(null)
+const currentVideoType = ref<string>('')
+const lensChanging = ref(false)
+
+// 清晰度设置相关状态
+const showQualityMenu = ref(false)
+const currentQuality = ref<number>(0)
+const qualityChanging = ref(false)
+
+// 分屏相关状态
+const splitChanging = ref(false)
+const splitEnabled = ref(false) // 分屏开启状态
+const showSplitMenu = ref(false)
+const canUseScreenSplit = computed(() => {
+  // 只有在红外镜头时才能使用分屏功能
+  return currentVideoType.value === 'ir'
+})
+
+// 无人机追踪相关状态
+const isDroneTracking = ref(false)
+
+// 航线显示相关状态
+const waylineMarkers = ref<any[]>([])
+const waylinePolyline = ref<any>(null)
+const currentWaypointMarker = ref<any>(null)
+
+// 分屏菜单样式计算属性
+const splitMenuStyle = computed(() => {
+  if (!showSplitMenu.value) return {}
+  
+  // 获取按钮位置
+  const button = document.querySelector('.split-btn') as HTMLElement
+  if (!button) return {}
+  
+  const rect = button.getBoundingClientRect()
+  return {
+    top: `${rect.bottom + 4}px`,
+    right: `${window.innerWidth - rect.right}px`
+  }
+})
+
+// 清晰度菜单样式计算属性
+const qualityMenuStyle = computed(() => {
+  if (!showQualityMenu.value) return {}
+  
+  // 获取按钮位置
+  const button = document.querySelector('.quality-btn') as HTMLElement
+  if (!button) return {}
+  
+  const rect = button.getBoundingClientRect()
+  return {
+    top: `${rect.bottom + 4}px`,
+    right: `${window.innerWidth - rect.right}px`
+  }
+})
+
 // 起飞相关状态
 const takeoffLoading = ref(false)
+const showTakeoffModal = ref(false)
+const takeoffParams = ref({
+  target_height: 30,
+  security_takeoff_height: 30,
+  rth_altitude: 50,
+  max_speed: 12,
+  commander_flight_height: 100,
+  rc_lost_action: 2,
+  commander_mode_lost_action: 1,
+  rth_mode: 1, // 默认使用设定高度返航
+  commander_flight_mode: 0,
+  vision_algorithms: [] as number[],
+  vision_threshold: 0.5,
+  enable_vision: false
+})
+
+// 算法选项
+const algorithmOptions = {
+  49: "常熟1号线路灯",
+  50: "常熟2号线路灯", 
+  51: "常熟3号线路灯",
+  52: "常熟楼宇亮化",
+  9: "人车检测"
+}
+
+// 初始化起飞参数（基于当前机场高度）
+const initTakeoffParams = () => {
+  const dockAlt = position.value?.height || 0
+  takeoffParams.value = {
+    target_height: 30,
+    security_takeoff_height: Math.max(20, dockAlt + 10),
+    rth_altitude: Math.max(50, dockAlt + 30),
+    max_speed: 12,
+    commander_flight_height: Math.max(100, dockAlt + 50),
+    rc_lost_action: 2,
+    commander_mode_lost_action: 1,
+    rth_mode: 1, // 默认使用设定高度返航
+    commander_flight_mode: 0,
+    vision_algorithms: [],
+    vision_threshold: 0.5,
+    enable_vision: false
+  }
+}
 
 // 视频播放控制相关
 const isVideoPlaying = ref(false)
@@ -754,15 +1111,7 @@ const toggleMapLayer = () => {
   }
 };
 
-const showScreenMenu = ref(false)
-const currentScreenMode = ref('一分屏')
-const toggleScreenMenu = () => {
-  showScreenMenu.value = !showScreenMenu.value
-}
-const selectScreenMode = (mode: string) => {
-  currentScreenMode.value = mode
-  showScreenMenu.value = false
-}
+
 
 // WGS84坐标转GCJ-02坐标系
 const transformWGS84ToGCJ02 = (wgsLng: number, wgsLat: number) => {
@@ -1192,10 +1541,19 @@ const getCurrentVideoInfo = () => {
       const dockStream = videoStreams.find((stream: any) => stream.type === 'dock')
       
       if (droneVisibleStream && videoCache.value.droneVisible) {
+        // 设置当前视频流信息
+        currentVideoStream.value = droneVisibleStream
+        currentVideoType.value = droneVisibleStream.switchable_video_types?.[0] || 'normal'
         return videoCache.value.droneVisible
       } else if (droneInfraredStream && videoCache.value.droneInfrared) {
+        // 设置当前视频流信息
+        currentVideoStream.value = droneInfraredStream
+        currentVideoType.value = droneInfraredStream.switchable_video_types?.[0] || 'ir'
         return videoCache.value.droneInfrared
       } else if (dockStream && videoCache.value.dock) {
+        // 设置当前视频流信息
+        currentVideoStream.value = dockStream
+        currentVideoType.value = dockStream.switchable_video_types?.[0] || 'normal'
         return videoCache.value.dock
       }
     } catch (error: any) {
@@ -1254,6 +1612,27 @@ const initVideoPlayer = async () => {
   if (droneVideoUrl) {
     // 使用缓存的视频地址
     videoStreamUrl.value = droneVideoUrl
+    
+    // 设置当前视频流信息
+    const videoStreamsStr = localStorage.getItem('video_streams')
+    if (videoStreamsStr) {
+      try {
+        const videoStreams = JSON.parse(videoStreamsStr)
+        const droneVisibleStream = videoStreams.find((stream: any) => stream.type === 'drone_visible')
+        const droneInfraredStream = videoStreams.find((stream: any) => stream.type === 'drone_infrared')
+        
+        if (droneVisibleStream) {
+          currentVideoStream.value = droneVisibleStream
+          currentVideoType.value = droneVisibleStream.switchable_video_types?.[0] || 'normal'
+        } else if (droneInfraredStream) {
+          currentVideoStream.value = droneInfraredStream
+          currentVideoType.value = droneInfraredStream.switchable_video_types?.[0] || 'ir'
+        }
+      } catch (error) {
+        console.error('解析video_streams缓存失败:', error)
+      }
+    }
+    
     // 延迟初始化播放器，确保DOM已经渲染
     await nextTick()
     startVideoPlayback()
@@ -1593,8 +1972,28 @@ const refreshVideoCapacityAndCache = async () => {
       lastUpdated: new Date().toISOString()
     }
     
+    // 获取现有的video_streams缓存，保留机场数据
+    const existingVideoStreamsStr = localStorage.getItem('video_streams')
+    let existingVideoStreams: any[] = []
+    if (existingVideoStreamsStr) {
+      try {
+        existingVideoStreams = JSON.parse(existingVideoStreamsStr)
+      } catch (error) {
+        console.warn('解析现有video_streams缓存失败:', error)
+      }
+    }
+    
+    // 保留现有的机场视频流数据
+    const existingDockStream = existingVideoStreams.find(stream => stream.type === 'dock')
+    
     // 存储所有视频流地址
     const videoStreams = []
+    
+    // 如果有现有的机场视频流，先添加进去
+    if (existingDockStream) {
+      videoStreams.push(existingDockStream)
+  
+    }
     
     // 分析所有可用设备并获取视频流
     for (const device of capacityResponse.available_devices || []) {
@@ -1603,8 +2002,8 @@ const refreshVideoCapacityAndCache = async () => {
       
       // 根据设备类型归类并启动视频流
       if (cachedDockSns.includes(device.sn)) {
-        // 机场设备
-        if (analysis.dock && !newCache.dock) {
+        // 机场设备 - 只在没有现有机场数据时才更新
+        if (analysis.dock && !newCache.dock && !existingDockStream) {
           newCache.dock = analysis.dock
           
           // 启动机场视频流
@@ -1615,14 +2014,21 @@ const refreshVideoCapacityAndCache = async () => {
             const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
             videoStreams.push({
               type: 'dock',
-              url: webrtcUrl
+              url: webrtcUrl,
+              switchable_video_types: analysis.dock.switchable_video_types || [],
+              device_sn: device.sn,
+              camera_index: analysis.dock.camera_index,
+              video_index: analysis.dock.video_index
             })
           } catch (error: any) {
             // 获取机场视频流失败
           }
+        } else if (analysis.dock && !newCache.dock) {
+          // 如果有现有机场数据，直接使用
+          newCache.dock = analysis.dock
         }
       } else if (cachedDroneSns.includes(device.sn)) {
-        // 无人机设备
+        // 无人机设备 - 总是更新无人机数据
         if (analysis.droneVisible && !newCache.droneVisible) {
           newCache.droneVisible = analysis.droneVisible
           
@@ -1634,7 +2040,11 @@ const refreshVideoCapacityAndCache = async () => {
             const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
             videoStreams.push({
               type: 'drone_visible',
-              url: webrtcUrl
+              url: webrtcUrl,
+              switchable_video_types: analysis.droneVisible.switchable_video_types || [],
+              device_sn: device.sn,
+              camera_index: analysis.droneVisible.camera_index,
+              video_index: analysis.droneVisible.video_index
             })
           } catch (error: any) {
             // 获取无人机可见光视频流失败
@@ -1652,7 +2062,11 @@ const refreshVideoCapacityAndCache = async () => {
             const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
             videoStreams.push({
               type: 'drone_infrared',
-              url: webrtcUrl
+              url: webrtcUrl,
+              switchable_video_types: analysis.droneInfrared.switchable_video_types || [],
+              device_sn: device.sn,
+              camera_index: analysis.droneInfrared.camera_index,
+              video_index: analysis.droneInfrared.video_index
             })
           } catch (error: any) {
             // 获取无人机红外视频流失败
@@ -1674,11 +2088,18 @@ const refreshVideoCapacityAndCache = async () => {
     const droneInfraredStream = videoStreams.find(stream => stream.type === 'drone_infrared')
     const dockStream = videoStreams.find(stream => stream.type === 'dock')
     
+    // 更新当前视频流信息
     if (droneVisibleStream) {
+      currentVideoStream.value = droneVisibleStream
+      currentVideoType.value = droneVisibleStream.switchable_video_types?.[0] || 'normal'
       return droneVisibleStream.url
     } else if (droneInfraredStream) {
+      currentVideoStream.value = droneInfraredStream
+      currentVideoType.value = droneInfraredStream.switchable_video_types?.[0] || 'ir'
       return droneInfraredStream.url
     } else if (dockStream) {
+      currentVideoStream.value = dockStream
+      currentVideoType.value = dockStream.switchable_video_types?.[0] || 'normal'
       return dockStream.url
     } else {
       throw new Error('没有找到可用的视频流')
@@ -1709,6 +2130,364 @@ const reloadVideo = async () => {
   // 确保DOM更新后再开始播放
   await nextTick()
   startVideoPlayback()
+}
+
+// 视觉WebSocket初始化
+const initVisionWebSocket = () => {
+  // 获取缓存的机场SN（与其他函数保持一致）
+  const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+  
+  if (cachedDockSns.length === 0) {
+    console.error('Vision WebSocket 初始化失败：未找到缓存的机场SN')
+    return
+  }
+  
+  const targetDeviceSn = cachedDockSns[0]
+  
+  // 显示配置信息
+  logVisionConfig()
+  
+  console.log('Vision WebSocket 初始化参数:')
+  console.log('- 缓存的机场SN:', cachedDockSns)
+  console.log('- 最终使用的设备SN:', targetDeviceSn)
+  
+  // 连接视觉WebSocket
+  connectVision(targetDeviceSn)
+  
+  // 订阅默认算法并设置最快推送频率
+  setTimeout(() => {
+    if (visionConnected.value) {
+      console.log('Vision WebSocket 连接成功，订阅算法', visionConfig.defaultAlgorithms)
+      subscribeAlgorithms(visionConfig.defaultAlgorithms)
+      
+      // 设置为最快推送频率
+      currentPushInterval.value = visionConfig.minPushInterval
+      configurePushInterval(visionConfig.minPushInterval)
+      // console.log('🚀 已设置为最快推送频率:', visionConfig.minPushInterval, 'ms (60fps)')
+    }
+  }, 1000)
+}
+
+// 监听视觉数据变化并绘制标记框（添加调试信息）
+let lastDataTime = 0
+let dataCount = 0
+watch(latestVisionData, (newData) => {
+  if (newData && visionCanvas.value && videoElement.value) {
+    console.log('收到视觉数据:', newData) // 新增：打印每帧视觉数据
+    const now = performance.now()
+    
+    // 统计数据接收频率
+    dataCount++
+    if (now - lastDataTime >= 1000) {
+      const dataRate = Math.round(dataCount * 1000 / (now - lastDataTime))
+      dataReceiveRate.value = dataRate
+      console.log(`📊 数据接收频率: ${dataRate} 次/秒`)
+      dataCount = 0
+      lastDataTime = now
+    }
+    
+    // 检查数据时间戳
+    if (newData.frame_time) {
+      const frameTimeMs = newData.frame_time * 1000
+      const dataAge = Date.now() - frameTimeMs
+      console.log('frame_time:', newData.frame_time, 'frameTimeMs:', frameTimeMs, 'dataAge:', dataAge)
+      if (dataAge > 100) {
+        console.warn(`⏰ 数据延迟: ${dataAge}ms (frame_time)`)
+      }
+    } else if (newData.timestamp) {
+      const dataAge = Date.now() - newData.timestamp
+      if (dataAge > 100) {
+        console.warn(`⏰ 数据延迟: ${dataAge}ms (timestamp)`)
+      }
+    }
+    
+    // 检查检测结果数量
+    let totalDetections = 0
+    if (newData.results) {
+      Object.values(newData.results).forEach((result: any) => {
+        if (result.detections) {
+          totalDetections += result.detections.length
+        }
+      })
+    }
+    console.log(`🎯 当前帧检测到 ${totalDetections} 个目标`)
+    
+    scheduleVisionDataDraw(newData)
+  }
+})
+
+// 立即绘制（无延迟，事件驱动）
+const scheduleVisionDataDraw = (visionData: any) => {
+  // 直接绘制，不等待requestAnimationFrame
+  drawVisionData(visionData)
+  
+  // 统计FPS（保留用于监控）
+  const now = performance.now()
+  frameCount++
+  if (now - lastFpsTime >= 1000) {
+    currentFPS.value = Math.round(frameCount * 1000 / (now - lastFpsTime))
+    frameCount = 0
+    lastFpsTime = now
+  }
+}
+
+// 监听视频尺寸变化，重新调整画布尺寸（防抖优化）
+let resizeTimeout: number | null = null
+const resizeCanvas = () => {
+  if (resizeTimeout) {
+    clearTimeout(resizeTimeout)
+  }
+  
+  resizeTimeout = setTimeout(() => {
+    if (visionCanvas.value && videoElement.value) {
+      const rect = videoElement.value.getBoundingClientRect()
+      const devicePixelRatio = window.devicePixelRatio || 1
+      
+      // 设置实际尺寸
+      visionCanvas.value.width = rect.width * devicePixelRatio
+      visionCanvas.value.height = rect.height * devicePixelRatio
+      
+      // 设置CSS尺寸
+      visionCanvas.value.style.width = rect.width + 'px'
+      visionCanvas.value.style.height = rect.height + 'px'
+      
+      // 缩放绘制上下文以匹配设备像素比
+      const ctx = visionCanvas.value.getContext('2d')
+      if (ctx) {
+        ctx.scale(devicePixelRatio, devicePixelRatio)
+      }
+      
+      // 如果有最新的视觉数据，重新绘制
+      if (latestVisionData.value) {
+        scheduleVisionDataDraw(latestVisionData.value)
+      }
+    }
+  }, 100) // 100ms防抖
+}
+
+// 监听窗口大小变化
+let resizeObserver: ResizeObserver | null = null
+
+// 绘制视觉数据（标记框、设备信息等）- 优化版本
+const drawVisionData = (visionData: any) => {
+  if (!visionCanvas.value || !videoElement.value) return
+  
+  const canvas = visionCanvas.value
+  const video = videoElement.value
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  
+  // 获取画布实际尺寸（考虑设备像素比）
+  const rect = video.getBoundingClientRect()
+  const canvasWidth = rect.width
+  const canvasHeight = rect.height
+  
+  // 清空画布
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight)
+  
+  // 获取视频实际尺寸
+  const videoWidth = video.videoWidth || canvasWidth
+  const videoHeight = video.videoHeight || canvasHeight
+  
+  if (videoWidth === 0 || videoHeight === 0) return
+  
+  // 计算缩放比例
+  const scaleX = canvasWidth / videoWidth
+  const scaleY = canvasHeight / videoHeight
+  
+  // 批量绘制所有算法的检测结果
+  if (visionData.results) {
+    // 收集所有检测框数据
+    const allDetections: Array<{detection: any, isActive: boolean}> = []
+    
+    Object.entries(visionData.results).forEach(([algorithmId, result]: [string, any]) => {
+      if (result.detections && result.detections.length > 0) {
+        result.detections.forEach((detection: any) => {
+          allDetections.push({ detection, isActive: result.active })
+        })
+      }
+    })
+    
+    // 批量绘制所有检测框
+    if (allDetections.length > 0) {
+      drawBoundingBoxesBatch(ctx, allDetections, canvasWidth, canvasHeight)
+    }
+  }
+  
+  // 不绘制设备信息
+}
+
+// 批量绘制标记框（优化性能）
+const drawBoundingBoxesBatch = (ctx: CanvasRenderingContext2D, detections: Array<{detection: any, isActive: boolean}>, canvasWidth: number, canvasHeight: number) => {
+  // 设置通用的绘制参数
+  ctx.lineWidth = 2
+  ctx.font = '14px Arial'
+  
+  detections.forEach(({detection, isActive}) => {
+    const { bbox, label, confidence } = detection
+    
+    // 转换归一化坐标到画布坐标
+    const x = bbox.x * canvasWidth
+    const y = bbox.y * canvasHeight
+    const width = bbox.width * canvasWidth
+    const height = bbox.height * canvasHeight
+    
+    // 根据算法状态和置信度设置颜色
+    let strokeColor: string
+    if (!isActive) {
+      strokeColor = visionConfig.colors.inactive
+    } else if (confidence > visionConfig.confidenceThresholds.high) {
+      strokeColor = visionConfig.colors.highConfidence
+    } else if (confidence > visionConfig.confidenceThresholds.medium) {
+      strokeColor = visionConfig.colors.mediumConfidence
+    } else {
+      strokeColor = visionConfig.colors.lowConfidence
+    }
+    
+    // 设置线条样式
+    ctx.strokeStyle = strokeColor
+    ctx.setLineDash(isActive ? [] : [5, 5])
+    
+    // 绘制矩形框
+    ctx.strokeRect(x, y, width, height)
+    
+    // 绘制标签
+    const labelText = `${label} ${(confidence * 100).toFixed(1)}%`
+    const textMetrics = ctx.measureText(labelText)
+    const textWidth = textMetrics.width + 8
+    const textHeight = 20
+    
+    // 标签背景
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+    ctx.fillRect(x, y - textHeight, textWidth, textHeight)
+    
+    // 标签文字
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(labelText, x + 4, y - 6)
+  })
+  
+  // 重置线条样式
+  ctx.setLineDash([])
+}
+
+// 原始绘制标记框函数（保留用于兼容）
+const drawBoundingBox = (ctx: CanvasRenderingContext2D, detection: any, isActive: boolean, scaleX: number, scaleY: number) => {
+  const { bbox, label, confidence } = detection
+  
+  // 转换归一化坐标到画布坐标
+  const x = bbox.x * ctx.canvas.width
+  const y = bbox.y * ctx.canvas.height
+  const width = bbox.width * ctx.canvas.width
+  const height = bbox.height * ctx.canvas.height
+  
+  // 根据算法状态和置信度设置颜色
+  let strokeColor: string
+  if (!isActive) {
+    strokeColor = visionConfig.colors.inactive
+  } else if (confidence > visionConfig.confidenceThresholds.high) {
+    strokeColor = visionConfig.colors.highConfidence
+  } else if (confidence > visionConfig.confidenceThresholds.medium) {
+    strokeColor = visionConfig.colors.mediumConfidence
+  } else {
+    strokeColor = visionConfig.colors.lowConfidence
+  }
+  
+  // 设置线条样式
+  ctx.strokeStyle = strokeColor
+  ctx.lineWidth = 2
+  ctx.setLineDash(isActive ? [] : [5, 5]) // 未激活算法使用虚线
+  
+  // 绘制矩形框
+  ctx.strokeRect(x, y, width, height)
+  
+  // 绘制标签背景
+  const labelText = `${label} ${(confidence * 100).toFixed(1)}%`
+  ctx.font = '14px Arial'
+  const textMetrics = ctx.measureText(labelText)
+  const textWidth = textMetrics.width + 8
+  const textHeight = 20
+  
+  // 标签背景
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(x, y - textHeight, textWidth, textHeight)
+  
+  // 标签文字
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(labelText, x + 4, y - 6)
+  
+  // 重置线条样式
+  ctx.setLineDash([])
+}
+
+// 绘制设备信息
+const drawDeviceInfo = (ctx: CanvasRenderingContext2D, deviceProperties: any, canvasWidth?: number, canvasHeight?: number) => {
+  if (!deviceProperties) return
+  
+  const info = []
+  
+  if (deviceProperties.position) {
+    info.push(`位置: ${deviceProperties.position.latitude.toFixed(6)}, ${deviceProperties.position.longitude.toFixed(6)}`)
+    info.push(`高度: ${deviceProperties.position.height.toFixed(1)}m`)
+  }
+  
+  if (deviceProperties.attitude) {
+    info.push(`姿态: P:${deviceProperties.attitude.pitch}° R:${deviceProperties.attitude.roll}° Y:${deviceProperties.attitude.yaw}°`)
+  }
+  
+  if (deviceProperties.battery) {
+    info.push(`电池: ${deviceProperties.battery}%`)
+  }
+  
+  if (deviceProperties.velocity) {
+    const speed = Math.sqrt(
+      Math.pow(deviceProperties.velocity.x, 2) + 
+      Math.pow(deviceProperties.velocity.y, 2) + 
+      Math.pow(deviceProperties.velocity.z, 2)
+    ).toFixed(1)
+    info.push(`速度: ${speed}m/s`)
+  }
+  
+  // 绘制信息文本（右上角）
+  ctx.font = '12px Arial'
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  const actualWidth = canvasWidth || ctx.canvas.width
+  const textX = actualWidth - 200
+  let textY = 20
+  
+  info.forEach((text, index) => {
+    const metrics = ctx.measureText(text)
+    ctx.fillRect(textX - 5, textY - 15, metrics.width + 10, 18)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(text, textX, textY)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+    textY += 20
+  })
+}
+
+// 重连视觉WebSocket
+const reconnectVision = () => {
+  // 先断开现有连接
+  disconnectVision()
+  
+  // 等待一会儿后重新连接
+  setTimeout(() => {
+    initVisionWebSocket()
+  }, 500)
+}
+
+// 更新推送频率
+const updatePushInterval = () => {
+  if (visionConnected.value) {
+    configurePushInterval(currentPushInterval.value)
+    console.log(`🎛️ 更新推送频率: ${currentPushInterval.value}ms (${Math.round(1000/currentPushInterval.value)}fps)`)
+  }
+}
+
+// 设置预设推送频率
+const setPushInterval = (interval: number) => {
+  currentPushInterval.value = interval
+  updatePushInterval()
+  showFpsSettings.value = false
 }
 
 // 格式化时间
@@ -1756,87 +2535,553 @@ const updateVideoTime = () => {
   }
 }
 
-onMounted(async () => {
-  AMapLoader.load({
-    key: '6f9eaf51960441fa4f813ea2d7e7cfff', 
-    version: '2.0',
-    plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch', 'AMap.MapType']
-  }).then((AMap) => {
-    amapApiRef.value = AMap; // 缓存 AMap
-    amapInstance.value = new AMap.Map('amap-container', {
-      zoom: 18,
-      center: [116.397428, 39.90923],
-      logoEnable: false,
-      copyrightEnable: false,
-      mapStyle: 'amap://styles/satellite', // 强制设置卫星图样式
-      layers: [
-        new AMap.TileLayer.Satellite(),
-        new AMap.TileLayer.RoadNet()
-      ]
+// 获取可用的视频类型列表（只返回三个主要类型）
+const getAvailableVideoTypes = () => {
+  // 只返回三个主要镜头类型
+  return ['wide', 'zoom', 'ir']
+}
+
+// 获取视频类型名称
+const getVideoTypeName = (videoType: string) => {
+  const typeMap: Record<string, string> = {
+    'wide': '广角',
+    'zoom': '变焦',
+    'ir': '红外',
+    'night': '夜视',
+    'day': '日间'
+  }
+  return typeMap[videoType] || videoType
+}
+
+// 处理镜头切换
+const handleLensChange = async (videoType: string) => {
+  if (lensChanging.value) {
+    return
+  }
+  
+  try {
+    lensChanging.value = true
+    
+    // 如果没有currentVideoStream，尝试从缓存中获取
+    if (!currentVideoStream.value) {
+      const videoStreamsStr = localStorage.getItem('video_streams')
+      if (videoStreamsStr) {
+        try {
+          const videoStreams = JSON.parse(videoStreamsStr)
+          const droneVisibleStream = videoStreams.find((stream: any) => stream.type === 'drone_visible')
+          const droneInfraredStream = videoStreams.find((stream: any) => stream.type === 'drone_infrared')
+          
+          if (droneVisibleStream) {
+            currentVideoStream.value = droneVisibleStream
+            currentVideoType.value = droneVisibleStream.switchable_video_types?.[0] || 'normal'
+          } else if (droneInfraredStream) {
+            currentVideoStream.value = droneInfraredStream
+            currentVideoType.value = droneInfraredStream.switchable_video_types?.[0] || 'ir'
+          } else {
+            alert('没有找到可用的视频流')
+            return
+          }
+        } catch (error) {
+          alert('解析视频流缓存失败')
+          return
+        }
+      } else {
+        alert('没有找到可用的视频流')
+        return
+      }
+    }
+    
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    const dockSn = cachedDockSns[0]
+    
+    // 构建video_id
+    const videoId = `${currentVideoStream.value.device_sn}/${currentVideoStream.value.camera_index}/${currentVideoStream.value.video_index}`
+    
+    // 获取原始的视频类型（用于API调用）
+    const originalVideoType = getOriginalVideoType(videoType)
+    
+    // 调用镜头切换API
+    const result = await livestreamApi.changeLens(dockSn, {
+      video_id: videoId,
+      video_type: originalVideoType
     })
     
-    // 地图加载完成后更新机场标记
-    amapInstance.value.on('complete', () => {
-              // 延迟一下确保设备状态数据已加载
-        setTimeout(() => {
-          // 初始加载时需要定位到无人机位置
-          updateMapMarkers(isInitialLoad.value)
-          // 标记初始加载完成
-          isInitialLoad.value = false
-        }, 1000)
+    // 检查返回的message来判断是否成功
+    if (result.message && result.message.includes('Change livestream lens command sent')) {
+      currentVideoType.value = videoType
+      // 静默处理成功，不显示弹窗
+    } else {
+      const msg = result?.detail || result?.message || '镜头切换失败';
+      alert(msg)
+    }
+    
+  } catch (error: any) {
+    console.error('接口异常', error);
+    let msg = (error && error.response && error.response.data && error.response.data.detail)
+      || error?.detail
+      || error?.message
+      || (typeof error === 'string' ? error : JSON.stringify(error));
+    alert(msg)
+  } finally {
+    lensChanging.value = false
+  }
+}
+
+// 获取原始视频类型（用于API调用）
+const getOriginalVideoType = (displayType: string) => {
+  // 反向映射，将显示类型映射回原始类型
+  const reverseMapping: Record<string, string> = {
+    'wide': 'wide', // 使用wide，因为API需要wide类型
+    'zoom': 'zoom',
+    'ir': 'ir',
+    'night': 'night',
+    'day': 'day'
+  }
+  
+  return reverseMapping[displayType] || displayType
+}
+
+// 切换清晰度菜单
+const toggleQualityMenu = (event: Event) => {
+  event.stopPropagation()
+  showQualityMenu.value = !showQualityMenu.value
+  
+  if (showQualityMenu.value) {
+    // 延迟计算位置，确保DOM已更新
+    nextTick(() => {
+      const button = document.querySelector('.quality-btn') as HTMLElement
+      if (button) {
+        const rect = button.getBoundingClientRect()
+        const menu = document.querySelector('.quality-menu') as HTMLElement
+        if (menu) {
+          menu.style.top = `${rect.bottom + 4}px`
+          menu.style.right = `${window.innerWidth - rect.right}px`
+        }
+      }
     })
-  })
+  }
+}
+
+// 切换分屏菜单
+const toggleSplitMenu = (event: Event) => {
+  event.stopPropagation()
+  showSplitMenu.value = !showSplitMenu.value
   
-  // 启动DRC状态轮询
-  startDrcStatusPolling()
+  if (showSplitMenu.value) {
+    // 延迟计算位置，确保DOM已更新
+    nextTick(() => {
+      const button = document.querySelector('.split-btn') as HTMLElement
+      if (button) {
+        const rect = button.getBoundingClientRect()
+        const menu = document.querySelector('.split-menu') as HTMLElement
+        if (menu) {
+          menu.style.top = `${rect.bottom + 4}px`
+          menu.style.right = `${window.innerWidth - rect.right}px`
+        }
+      }
+    })
+  }
+}
+
+// 切换无人机追踪
+const toggleDroneTracking = () => {
+  isDroneTracking.value = !isDroneTracking.value
+  if (isDroneTracking.value) {
+    centerToDroneMarker();
+  }
+}
+
+// 更新无人机追踪位置
+const updateDroneTracking = () => {
+  if (isDroneTracking.value) {
+    centerToDroneMarker();
+  }
+}
+
+// 清除航线显示
+const clearWaylineDisplay = () => {
+  if (amapInstance.value) {
+    // 清除航点标记
+    waylineMarkers.value.forEach(marker => {
+      amapInstance.value.remove(marker)
+    })
+    waylineMarkers.value = []
+    
+    // 清除航线
+    if (waylinePolyline.value) {
+      amapInstance.value.remove(waylinePolyline.value)
+      waylinePolyline.value = null
+    }
+    
+    // 清除当前航点标记
+    if (currentWaypointMarker.value) {
+      amapInstance.value.remove(currentWaypointMarker.value)
+      currentWaypointMarker.value = null
+    }
+  }
+}
+
+// 显示航点和航线
+const displayWayline = () => {
+  if (!amapInstance.value || !waylineJobDetail.value) {
+    return
+  }
   
-  // 检查控制权限状态
-  checkAuthorityStatus()
+  // 先清除之前的显示
+  clearWaylineDisplay()
   
-  // 启动权限状态轮询，每10秒检查一次
-  const authorityInterval = setInterval(checkAuthorityStatus, 10000)
+  try {
+    const waylines = waylineJobDetail.value.waylines
+    if (!waylines || waylines.length === 0) {
+      return
+    }
+    
+    const wayline = waylines[0] // 取第一个航线
+    const waypoints = wayline.waypoints || []
+    
+    if (waypoints.length === 0) {
+      return
+    }
+    
+    // 创建航点标记
+    const markers: any[] = []
+    const path: [number, number][] = []
+    
+    waypoints.forEach((waypoint: any, index: number) => {
+      const [wgsLng, wgsLat] = waypoint.coordinates || [0, 0]
+      
+      if (wgsLng && wgsLat) {
+        // 将WGS84坐标转换为GCJ-02坐标
+        const gcjCoords = transformWGS84ToGCJ02(wgsLng, wgsLat)
+        
+        // 创建航点标记
+        const marker = new amapApiRef.value.Marker({
+          position: [gcjCoords.longitude, gcjCoords.latitude],
+          icon: new amapApiRef.value.Icon({
+            size: new amapApiRef.value.Size(20, 20),
+            image: 'data:image/svg+xml;base64,' + btoa(`
+              <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="10" cy="10" r="8" fill="#67d5fd" stroke="#fff" stroke-width="2"/>
+                <text x="10" y="13" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">${index + 1}</text>
+              </svg>
+            `),
+            imageSize: new amapApiRef.value.Size(20, 20)
+          }),
+          title: `航点 ${index + 1}`
+        })
+        
+        markers.push(marker)
+        amapInstance.value.add(marker)
+        path.push([gcjCoords.longitude, gcjCoords.latitude])
+      }
+    })
+    
+    waylineMarkers.value = markers
+    
+    // 创建航线
+    if (path.length > 1) {
+      waylinePolyline.value = new amapApiRef.value.Polyline({
+        path: path,
+        strokeColor: '#67d5fd',
+        strokeWeight: 3,
+        strokeOpacity: 0.8,
+        strokeStyle: 'solid'
+      })
+      amapInstance.value.add(waylinePolyline.value)
+    }
+    
+    // 显示当前航点
+    updateCurrentWaypoint()
+    
+  } catch (error) {
+    console.error('显示航线失败:', error)
+  }
+}
+
+// 更新当前航点显示
+const updateCurrentWaypoint = () => {
+  if (!amapInstance.value || !waylineJobDetail.value || !waylineProgress.value) {
+    return
+  }
   
-  // 在组件销毁时清理定时器
-  onBeforeUnmount(() => {
-    if (authorityInterval) {
-      clearInterval(authorityInterval)
+  // 清除之前的当前航点标记
+  if (currentWaypointMarker.value) {
+    amapInstance.value.remove(currentWaypointMarker.value)
+    currentWaypointMarker.value = null
+  }
+  
+  const waylines = waylineJobDetail.value.waylines
+  if (!waylines || waylines.length === 0) {
+    return
+  }
+  
+  const wayline = waylines[0]
+  const waypoints = wayline.waypoints || []
+  const currentIndex = waylineProgress.value.progress?.current_waypoint_index || 0
+  
+  if (waypoints[currentIndex]) {
+    const [wgsLng, wgsLat] = waypoints[currentIndex].coordinates || [0, 0]
+    
+    if (wgsLng && wgsLat) {
+      // 将WGS84坐标转换为GCJ-02坐标
+      const gcjCoords = transformWGS84ToGCJ02(wgsLng, wgsLat)
+      
+      // 创建当前航点标记（高亮显示）
+      currentWaypointMarker.value = new amapApiRef.value.Marker({
+        position: [gcjCoords.longitude, gcjCoords.latitude],
+        icon: new amapApiRef.value.Icon({
+          size: new amapApiRef.value.Size(24, 24),
+          image: 'data:image/svg+xml;base64,' + btoa(`
+            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" fill="#ff6b6b" stroke="#fff" stroke-width="3"/>
+              <text x="12" y="16" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">${currentIndex + 1}</text>
+            </svg>
+          `),
+          imageSize: new amapApiRef.value.Size(24, 24)
+        }),
+        title: `当前航点 ${currentIndex + 1}`
+      })
+      
+      amapInstance.value.add(currentWaypointMarker.value)
+    }
+  }
+}
+
+// 处理分屏功能
+const handleScreenSplit = async (enable: boolean) => {
+  if (splitChanging.value || !canUseScreenSplit.value) {
+    return
+  }
+  
+  try {
+    splitChanging.value = true
+    showSplitMenu.value = false
+    
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    const dockSn = cachedDockSns[0]
+    
+    // 获取最佳的payload_index
+    const payloadIndex = getBestPayloadIndex()
+    if (!payloadIndex) {
+      alert('没有找到可用的载荷信息')
+      return
+    }
+    
+    // 调用分屏API
+    const result = await controlApi.setScreenSplit(dockSn, {
+      payload_index: payloadIndex,
+      enable: enable
+    })
+    
+    if (result.code === 0) {
+      splitEnabled.value = enable
+      // 静默处理成功，不显示弹窗
+    } else {
+      const msg = result?.detail || result?.message || '分屏设置失败';
+      alert(msg)
+    }
+  } catch (error: any) {
+    console.error('接口异常', error);
+    let msg = (error && error.response && error.response.data && error.response.data.detail)
+      || error?.detail
+      || error?.message
+      || (typeof error === 'string' ? error : JSON.stringify(error));
+    alert(msg)
+  } finally {
+    splitChanging.value = false
+  }
+}
+
+// 处理清晰度切换
+const handleQualityChange = async (quality: number) => {
+  if (qualityChanging.value || !currentVideoStream.value) {
+    return
+  }
+  
+  try {
+    qualityChanging.value = true
+    showQualityMenu.value = false
+    
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    
+    const dockSn = cachedDockSns[0]
+    
+    // 构建video_id
+    const videoId = `${currentVideoStream.value.device_sn}/${currentVideoStream.value.camera_index}/${currentVideoStream.value.video_index}`
+    
+    // 调用清晰度设置API
+    const result = await livestreamApi.setQuality(dockSn, {
+      video_id: videoId,
+      video_quality: quality
+    })
+    
+    // 检查返回的message来判断是否成功
+    if (result.message && result.message.includes('Set livestream quality command sent')) {
+      currentQuality.value = quality
+      // 静默处理成功，不显示弹窗
+    } else {
+      const msg = result?.detail || result?.message || '清晰度设置失败';
+      alert(msg)
+    }
+  } catch (error: any) {
+    console.error('接口异常', error);
+    let msg = (error && error.response && error.response.data && error.response.data.detail)
+      || error?.detail
+      || error?.message
+      || (typeof error === 'string' ? error : JSON.stringify(error));
+    alert(msg)
+  } finally {
+    qualityChanging.value = false
+  }
+}
+
+onMounted(async () => {
+  // 添加点击外部关闭菜单的监听器
+  document.addEventListener('click', (event) => {
+    const target = event.target as Element
+    if (!target.closest('.quality-btn') && !target.closest('.quality-menu')) {
+      showQualityMenu.value = false
+    }
+    if (!target.closest('.split-btn') && !target.closest('.split-menu')) {
+      showSplitMenu.value = false
     }
   })
   
-  // 初始化无人机视频播放器（优先从缓存读取，没有则刷新获取）
-  await initVideoPlayer()
-  
-  // 获取机场状态数据
-  await fetchMainDeviceStatus()
-  
-  // 获取无人机状态数据
-  await fetchDroneStatus()
-  
-  // 获取机场状态数据（包含无人机充电状态）
-  await fetchMainDeviceStatus()
-  
-  // 获取航线任务进度数据
-  await loadWaylineProgress()
-  
-  // 首次获取设备状态后，更新地图标记
-  if (amapInstance.value) {
-    updateMapMarkers()
-  }
-  
-  // 设置机场状态自动刷新（每3秒，包含无人机充电状态）
-  statusRefreshTimer.value = setInterval(async () => {
+  try {
+    AMapLoader.load({
+      key: '6f9eaf51960441fa4f813ea2d7e7cfff', 
+      version: '2.0',
+      plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch', 'AMap.MapType']
+    }).then((AMap) => {
+      amapApiRef.value = AMap; // 缓存 AMap
+      amapInstance.value = new AMap.Map('amap-container', {
+        zoom: 18,
+        center: [116.397428, 39.90923],
+        logoEnable: false,
+        copyrightEnable: false,
+        mapStyle: 'amap://styles/satellite', // 强制设置卫星图样式
+        layers: [
+          new AMap.TileLayer.Satellite(),
+          new AMap.TileLayer.RoadNet()
+        ]
+      })
+      
+      // 地图加载完成后更新机场标记
+      amapInstance.value.on('complete', () => {
+                // 延迟一下确保设备状态数据已加载
+          setTimeout(() => {
+            // 初始加载时需要定位到无人机位置
+            updateMapMarkers(isInitialLoad.value)
+            // 标记初始加载完成
+            isInitialLoad.value = false
+          }, 1000)
+      })
+    }).catch(error => {
+      console.error('AMap加载失败:', error)
+    })
+    
+    // 启动DRC状态轮询
+    startDrcStatusPolling()
+    
+    // 检查控制权限状态
+    checkAuthorityStatus()
+    
+    // 启动权限状态轮询，每10秒检查一次
+    const authorityInterval = setInterval(checkAuthorityStatus, 10000)
+    
+    // 在组件销毁时清理定时器
+    onBeforeUnmount(() => {
+      if (authorityInterval) {
+        clearInterval(authorityInterval)
+      }
+      // 清理云台控制定时器
+      if (gimbalControlInterval.value) {
+        clearInterval(gimbalControlInterval.value)
+        gimbalControlInterval.value = null
+      }
+    })
+    
+    // 初始化无人机视频播放器（优先从缓存读取，没有则刷新获取）
+    try {
+      await initVideoPlayer()
+    } catch (error) {
+      console.error('无人机控制页面 - 视频播放器初始化失败，但不影响其他功能:', error)
+      // 视频播放器初始化失败不应该影响设备状态获取
+    }
+    
+    // 初始化视觉 WebSocket 连接
+    initVisionWebSocket()
+    
+    // 设置视频尺寸变化监听
+    if (videoElement.value && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        resizeCanvas()
+      })
+      resizeObserver.observe(videoElement.value)
+    }
+    
+    // 获取机场状态数据
     await fetchMainDeviceStatus()
+    
     // 获取无人机状态数据
     await fetchDroneStatus()
+    
+    // 获取机场状态数据（包含无人机充电状态）
+    await fetchMainDeviceStatus()
+    
+    // 初始化起飞参数
+    initTakeoffParams()
+    
     // 获取航线任务进度数据
     await loadWaylineProgress()
-    // 设备状态更新后，更新地图标记
+    
+    // 首次获取设备状态后，更新地图标记
     if (amapInstance.value) {
       updateMapMarkers()
     }
-  }, 3000)
-  
-  loadTodayFlightStatistics()
+    
+    // 设置机场状态自动刷新（每3秒，包含无人机充电状态）
+    statusRefreshTimer.value = setInterval(async () => {
+      await fetchMainDeviceStatus()
+      // 获取无人机状态数据
+      await fetchDroneStatus()
+      // 获取航线任务进度数据
+      await loadWaylineProgress()
+      // 设备状态更新后，更新地图标记
+      if (amapInstance.value) {
+        updateMapMarkers()
+        // 更新无人机追踪位置
+        updateDroneTracking()
+        // 更新航线显示
+        if (waylineTaskStatus.value === 'running') {
+          displayWayline()
+        } else {
+          clearWaylineDisplay()
+        }
+      }
+    }, 3000)
+    
+    loadTodayFlightStatistics()
+  } catch (error) {
+    console.error('无人机控制页面 - onMounted 执行出错:', error)
+  }
 })
 
 // 获取航线任务进度数据
@@ -1879,7 +3124,7 @@ const loadWaylineProgress = async () => {
 // 测试方法：动态改变进度（已移除，现在使用真实数据）
 const updateProgress = (percent: number) => {
   // 现在进度由真实数据计算，不再需要手动设置
-  console.log('进度已改为使用真实数据计算')
+  
 }
 
 const handleTabClick = (key: string) => {
@@ -2308,7 +3553,7 @@ const checkAuthorityStatus = async () => {
       controlAuthorityStatus.value.hasPayloadAuthority = hasPayloadAuthority
       controlAuthorityStatus.value.flightAuthorityOwner = data.flight_authority ? {
         username: data.flight_authority.username,
-        user_id: data.flight_authority.user_id
+        user_id: parseInt(data.flight_authority.user_id) || 0
       } : null
       controlAuthorityStatus.value.payloadAuthorityOwner = payloadAuthorityOwner
       
@@ -2358,6 +3603,39 @@ const handleGimbalControl = async (direction: 'up' | 'down' | 'left' | 'right') 
   }
 }
 
+// 开始云台控制（按住持续发送）
+const startGimbalControl = (direction: 'up' | 'down' | 'left' | 'right') => {
+  if (!isGimbalControlEnabled.value) return
+  
+  // 立即发送一次控制指令
+  handleGimbalControl(direction)
+  
+  // 设置当前控制方向
+  currentGimbalDirection.value = direction
+  
+  // 清除之前的定时器
+  if (gimbalControlInterval.value) {
+    clearInterval(gimbalControlInterval.value)
+  }
+  
+  // 设置定时器持续发送控制指令
+  gimbalControlInterval.value = setInterval(() => {
+    handleGimbalControl(direction)
+  }, GIMBAL_CONTROL_INTERVAL_MS)
+}
+
+// 停止云台控制
+const stopGimbalControl = () => {
+  // 清除定时器
+  if (gimbalControlInterval.value) {
+    clearInterval(gimbalControlInterval.value)
+    gimbalControlInterval.value = null
+  }
+  
+  // 清除当前控制方向
+  currentGimbalDirection.value = null
+}
+
 // 一键返航处理函数
 const handleReturnHome = async () => {
   try {
@@ -2393,8 +3671,19 @@ const handleReturnHome = async () => {
   }
 }
 
-// 一键起飞处理函数
-const handleTakeoff = async () => {
+// 关闭起飞参数弹窗
+const closeTakeoffModal = () => {
+  showTakeoffModal.value = false
+}
+
+// 打开起飞参数弹窗
+const openTakeoffModal = () => {
+  initTakeoffParams() // 每次打开时重新初始化参数
+  showTakeoffModal.value = true
+}
+
+// 确认起飞处理函数
+const confirmTakeoff = async () => {
   takeoffLoading.value = true
   
   try {
@@ -2433,37 +3722,30 @@ const handleTakeoff = async () => {
       return
     }
     
-    // 弹出确认对话框
-    const confirmed = confirm('确定要执行一键起飞吗？无人机将起飞到30米高度。')
-    if (!confirmed) {
-      return
-    }
-    
-    // 目标点设置为机场上方30米
-    const targetLat = dockLat
-    const targetLng = dockLng
-    const targetHeight = 30  // 默认起飞到30米
-    
     // 构建起飞参数
-    const takeoffParams = {
-      target_latitude: targetLat,
-      target_longitude: targetLng,
-      target_height: targetHeight,
-      security_takeoff_height: Math.max(20, dockAlt + 10),  // 安全起飞高度：机场高度+10m，最小20m
-      rth_mode: 0,  // 智能高度返航
-      rth_altitude: Math.max(50, dockAlt + 30),  // 返航高度：机场高度+30m，最小50m
-      rc_lost_action: 2,  // 遥控器失控动作: 0-悬停, 1-着陆, 2-返航
-      commander_mode_lost_action: 1,  // 指点飞行失控动作: 0-继续, 1-退出
-      commander_flight_mode: 0,  // 指点飞行模式: 0-智能高度, 1-设定高度
-      commander_flight_height: Math.max(100, dockAlt + 50),  // 指点飞行高度
-      max_speed: 12,  // 最大飞行速度
+    const takeoffApiParams = {
+      target_latitude: dockLat,
+      target_longitude: dockLng,
+      target_height: takeoffParams.value.target_height,
+      security_takeoff_height: takeoffParams.value.security_takeoff_height,
+      rth_mode: takeoffParams.value.rth_mode,
+      rth_altitude: takeoffParams.value.rth_altitude,
+      rc_lost_action: takeoffParams.value.rc_lost_action,
+      commander_mode_lost_action: takeoffParams.value.commander_mode_lost_action,
+      commander_flight_mode: takeoffParams.value.commander_flight_mode,
+      commander_flight_height: takeoffParams.value.commander_flight_height,
+      max_speed: takeoffParams.value.max_speed,
+      vision_algorithms: takeoffParams.value.vision_algorithms,
+      vision_threshold: takeoffParams.value.vision_threshold,
+      enable_vision: takeoffParams.value.enable_vision,
       simulate_mission: { is_enable: 0 }  // 默认不启用模拟模式
     }
     
-    const result = await controlApi.takeoffToPoint(dockSn, takeoffParams)
+    const result = await controlApi.takeoffToPoint(dockSn, takeoffApiParams)
     
     if (result.code === 0) {
       alert('一键起飞指令已发送成功！')
+      closeTakeoffModal()
     } else {
       alert(`起飞失败: ${result.message}`)
     }
@@ -2705,6 +3987,25 @@ onBeforeUnmount(() => {
   stopControl()
   stopDrcStatusPolling()
   stopVideoPlayback() // 停止视频播放
+  disconnectVision() // 断开视觉WebSocket连接
+  
+  // 清理ResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  
+  // 清理动画帧
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+  
+  // 清理定时器
+  if (resizeTimeout) {
+    clearTimeout(resizeTimeout)
+    resizeTimeout = null
+  }
   
   // 清理机场状态刷新定时器
   if (statusRefreshTimer.value) {
@@ -2754,6 +4055,14 @@ const loadTodayFlightStatistics = async () => {
     }
   } catch (e) {
     // 可加错误提示
+  }
+}
+
+// 地图定位到无人机标记实际位置
+const centerToDroneMarker = () => {
+  if (amapInstance.value && droneMarkers.value.length > 0) {
+    const markerPos = droneMarkers.value[0].getPosition();
+    amapInstance.value.setCenter(markerPos);
   }
 }
 </script>
@@ -3139,6 +4448,335 @@ const loadTodayFlightStatistics = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 镜头切换按钮样式 */
+.lens-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.lens-btn {
+  padding: 2px 6px;
+  background: #0c3c56;
+  border: 1px solid rgba(89, 192, 252, 0.5);
+  border-radius: 3px;
+  color: #67d5fd;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.lens-btn:hover {
+  background: #0d4a6b;
+  border-color: rgba(89, 192, 252, 0.8);
+}
+
+.lens-btn.active {
+  background: #59c0fc;
+  border-color: #59c0fc;
+  color: #16213a;
+  font-weight: 600;
+}
+
+.lens-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lens-btn:disabled:hover {
+  background: #0c3c56;
+  border-color: rgba(89, 192, 252, 0.5);
+}
+
+/* 视觉连接状态指示器样式 */
+.vision-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(12, 60, 86, 0.8);
+}
+
+.vision-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.vision-indicator.connected {
+  background: #00ff00;
+  box-shadow: 0 0 6px rgba(0, 255, 0, 0.6);
+  animation: pulse-green 2s ease-in-out infinite;
+}
+
+.vision-indicator.connecting {
+  background: #ffaa00;
+  box-shadow: 0 0 6px rgba(255, 170, 0, 0.6);
+  animation: pulse-orange 1s ease-in-out infinite;
+}
+
+.vision-indicator.disconnected {
+  background: #666;
+  box-shadow: none;
+}
+
+.vision-indicator.error {
+  background: #ff4444;
+  box-shadow: 0 0 6px rgba(255, 68, 68, 0.6);
+  animation: pulse-red 1.5s ease-in-out infinite;
+}
+
+.vision-label {
+  font-size: 10px;
+  color: #67d5fd;
+  font-weight: 500;
+}
+
+.vision-reconnect-btn {
+  background: transparent;
+  border: none;
+  color: #67d5fd;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.vision-reconnect-btn:hover {
+  background: rgba(103, 213, 253, 0.2);
+  transform: rotate(180deg);
+}
+
+.vision-reconnect-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vision-fps-btn {
+  background: transparent;
+  border: none;
+  color: #67d5fd;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+}
+
+.vision-fps-btn:hover {
+  background: rgba(103, 213, 253, 0.2);
+}
+
+/* FPS设置面板 */
+.fps-settings-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: rgba(12, 60, 86, 0.95);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 4px;
+  padding: 10px;
+  min-width: 200px;
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+}
+
+.fps-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(89, 192, 252, 0.2);
+}
+
+.fps-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: #67d5fd;
+  opacity: 0.8;
+}
+
+.stat-value {
+  font-size: 12px;
+  color: #59c0fc;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.fps-setting label {
+  display: block;
+  font-size: 11px;
+  color: #67d5fd;
+  margin-bottom: 8px;
+}
+
+.fps-slider {
+  width: 100%;
+  height: 4px;
+  background: rgba(89, 192, 252, 0.3);
+  outline: none;
+  border-radius: 2px;
+  margin-bottom: 10px;
+}
+
+.fps-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #59c0fc;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.fps-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.fps-preset {
+  padding: 2px 6px;
+  background: rgba(89, 192, 252, 0.2);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 2px;
+  color: #67d5fd;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.fps-preset:hover {
+  background: rgba(89, 192, 252, 0.4);
+  border-color: #59c0fc;
+}
+
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes pulse-orange {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* 清晰度设置按钮样式 */
+.quality-btn {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: #67d5fd;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quality-btn:hover {
+  color: #59c0fc;
+}
+
+.quality-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 分屏按钮样式 */
+.split-btn {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: #67d5fd;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.split-btn:hover {
+  color: #59c0fc;
+}
+
+.split-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.split-btn.disabled:hover {
+  color: #67d5fd;
+}
+
+/* 分屏菜单样式 */
+.split-menu {
+  position: fixed;
+  background: rgba(20, 30, 40, 0.95);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 6px;
+  padding: 4px 0;
+  z-index: 99999;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 80px;
+}
+
+.split-menu-item {
+  padding: 4px 8px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.split-menu-item:hover {
+  background: rgba(89, 192, 252, 0.1);
+  color: #59C0FC;
+}
+
+/* 清晰度菜单样式 */
+.quality-menu {
+  position: fixed;
+  background: rgba(20, 30, 40, 0.95);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 6px;
+  padding: 4px 0;
+  z-index: 99999;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 60px;
+}
+
+.quality-menu-item {
+  padding: 4px 8px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.quality-menu-item:hover {
+  background: rgba(89, 192, 252, 0.1);
+  color: #59C0FC;
 }
 .control-bottom {
   display: flex;
@@ -4356,73 +5994,7 @@ const loadTodayFlightStatistics = async () => {
   color: #59C0FC;
   font-size: 20px;
 }
-.right-controls {
-  display: flex;
-  align-items: center;
-  position: relative;
-  cursor: pointer;
-}
-.screen-icon {
-  width: 20px;
-  height: 20px;
-  margin-right: 6px;
-}
-.el-icon.dropdown-icon {
-  color: #59C0FC;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-}
-.el-icon.dropdown-icon svg {
-  width: 20px;
-  height: 20px;
-  display: block;
-  fill: #59C0FC !important;
-}
-.screen-menu {
-  position: absolute;
-  bottom: 100%;
-  right: 0;
-  background: rgba(0, 12, 23, .9);
-  border: 1px solid rgba(89, 192, 252, 0.3);
-  border-radius: 4px;
-  padding: clamp(6px, 0.5vw, 8px) 0;
-  min-width: clamp(100px, 8vw, 120px);
-  margin-bottom: 8px;
-  z-index: 10;
-}
-.menu-item {
-  padding: clamp(6px, 0.5vw, 8px) clamp(12px, 1vw, 16px);
-  color: #fff;
-  font-size: clamp(12px, 0.9vw, 14px);
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  white-space: nowrap;
-}
-.menu-item:hover {
-  background: rgba(89, 192, 252, 0.1);
-  color: #59C0FC;
-}
-.screen-menu::after {
-  content: '';
-  position: absolute;
-  bottom: -5px;
-  right: 10px;
-  width: 10px;
-  height: 10px;
-  background: rgba(0, 12, 23, .9);
-  border-right: 1px solid rgba(89, 192, 252, 0.3);
-  border-bottom: 1px solid rgba(89, 192, 252, 0.3);
-  transform: rotate(45deg);
-}
-.right-controls .el-icon.dropdown-icon svg {
-  transition: transform 0.2s, fill 0.2s;
-}
-.right-controls.active .el-icon.dropdown-icon svg {
-  transform: rotate(180deg);
-  fill: #16bbf2 !important;
-}
+
 .drone-control-panel, .gimbal-control-panel {
   background: none;
   border: 1.5px solid #164159;
@@ -4754,10 +6326,14 @@ const loadTodayFlightStatistics = async () => {
 
 /* 抢夺控制权气泡弹窗 */
 .authority-tooltip {
-  position: fixed;
+  position: absolute;
+  left: 50%;
+  top: 110%;
+  transform: translateX(-50%);
   z-index: 1000;
   animation: fadeInUp 0.3s ease-out;
-  pointer-events: none;
+  /* pointer-events: none; */
+  pointer-events: auto;
 }
 
 .authority-tooltip-content {
@@ -4837,6 +6413,276 @@ const loadTodayFlightStatistics = async () => {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+}
+
+/* 起飞参数设置弹窗样式 */
+.custom-dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.takeoff-modal {
+  display: flex;
+  background: #172233;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px #0008;
+  overflow: hidden;
+  width: 90%;
+  max-width: 400px;
+  margin: 0 auto;
+  position: relative;
+  border: 1px solid #18344a;
+  transform: translateY(-10%);
+}
+
+.takeoff-modal-content {
+  flex: 1;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  background: #172233;
+}
+
+.takeoff-modal-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #67d5fd;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.takeoff-modal-form {
+  margin-bottom: 20px;
+}
+
+.takeoff-modal-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.takeoff-modal-row label {
+  font-size: 14px;
+  color: #b8c7d9;
+  min-width: 100px;
+  text-align: right;
+}
+
+.takeoff-modal-input {
+  flex: 1;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid #164159;
+  background: transparent;
+  color: #fff;
+  padding: 0 12px;
+  font-size: 14px;
+  box-shadow: 0 0 0 1px #164159 inset;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.takeoff-modal-input:focus {
+  outline: none;
+  border: 1.5px solid #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.takeoff-modal-input:disabled {
+  background: rgba(103, 213, 253, 0.1);
+  color: #67d5fd;
+  border-color: rgba(103, 213, 253, 0.3);
+}
+
+.takeoff-algorithm-options {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid #164159;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px #164159 inset;
+}
+
+/* 自定义滚动条样式 */
+.takeoff-algorithm-options::-webkit-scrollbar {
+  width: 6px;
+}
+
+.takeoff-algorithm-options::-webkit-scrollbar-track {
+  background: rgba(103, 213, 253, 0.1);
+  border-radius: 3px;
+}
+
+.takeoff-algorithm-options::-webkit-scrollbar-thumb {
+  background: rgba(103, 213, 253, 0.3);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.takeoff-algorithm-options::-webkit-scrollbar-thumb:hover {
+  background: rgba(103, 213, 253, 0.5);
+}
+
+/* Firefox 滚动条样式 */
+.takeoff-algorithm-options {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(103, 213, 253, 0.3) rgba(103, 213, 253, 0.1);
+}
+
+.takeoff-algorithm-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: all 0.2s;
+}
+
+.takeoff-algorithm-option:hover {
+  background: rgba(103, 213, 253, 0.1);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 0 -8px;
+}
+
+.takeoff-algorithm-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #67D5FD;
+  cursor: pointer;
+}
+
+.takeoff-algorithm-label {
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.takeoff-algorithm-label.disabled {
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+}
+
+.takeoff-algorithm-checkbox:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Switch开关样式 */
+.takeoff-switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.takeoff-switch-label {
+  color: #b8c7d9;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.takeoff-modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.takeoff-modal-actions .mission-btn {
+  min-width: 100px;
+  height: 36px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.takeoff-modal-actions .mission-btn-cancel {
+  background: rgba(103, 213, 253, 0.1);
+  color: #b8c7d9;
+  border: 1px solid rgba(103, 213, 253, 0.2);
+}
+
+.takeoff-modal-actions .mission-btn-cancel:hover {
+  background: rgba(103, 213, 253, 0.2);
+  color: #67d5fd;
+}
+
+.takeoff-modal-actions .mission-btn-pause {
+  background: #67d5fd;
+  color: #fff;
+}
+
+.takeoff-modal-actions .mission-btn-pause:hover {
+  background: #50c7f7;
+  box-shadow: 0 2px 8px rgba(103, 213, 253, 0.3);
+}
+
+.takeoff-modal-actions .mission-btn-pause:disabled {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+}
+
+.unit-label {
+  margin-left: 8px;
+  color: #b8c7d9;
+  font-size: 14px;
+}
+
+/* 无人机追踪按钮样式 */
+.drone-track-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(22, 34, 51, 0.9);
+  border: 1px solid #164159;
+  border-radius: 50%;
+  color: #b8c7d9;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(4px);
+}
+
+.drone-track-btn:hover {
+  background: rgba(103, 213, 253, 0.1);
+  border-color: #67d5fd;
+  color: #67d5fd;
+}
+
+.drone-track-btn.active {
+  background: rgba(103, 213, 253, 0.2);
+  border-color: #67d5fd;
+  color: #67d5fd;
+}
+
+.drone-track-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* 新增：高分辨率屏幕优化 */

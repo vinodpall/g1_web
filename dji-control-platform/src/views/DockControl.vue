@@ -715,7 +715,9 @@ const startVideoPlayback = () => {
         updateVideoTime()
       }
       videoElement.value.onloadeddata = () => {
-        videoElement.value!.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+        if (videoElement.value) {
+          videoElement.value.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+        }
         // 不在这里立即播放，等待canplay事件
       }
       videoElement.value.onerror = () => {

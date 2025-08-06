@@ -380,6 +380,39 @@ export const livestreamApi = {
       }
       protocol: string
     }>(`/livestream/devices/${deviceSn}/livestream/start`, data)
+  },
+
+  // 切换镜头
+  changeLens: (deviceSn: string, data: {
+    video_id: string
+    video_type: string
+  }) => {
+    return apiClient.post<{
+      message: string
+      bid: string
+    }>(`/livestream/devices/${deviceSn}/livestream/lens-change`, data)
+  },
+
+  // 设置清晰度
+  setQuality: (deviceSn: string, data: {
+    video_id: string
+    video_quality: number
+  }) => {
+    return apiClient.post<{
+      message: string
+      bid: string
+    }>(`/livestream/devices/${deviceSn}/livestream/set-quality`, data)
+  },
+
+  // 分屏控制
+  setScreenSplit: (deviceSn: string, data: {
+    payload_index: string
+    enable: boolean
+  }) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/camera/screen-split`, data)
   }
 }
 
@@ -487,6 +520,8 @@ export const controlApi = {
     commander_flight_mode: number
     commander_flight_height: number
     max_speed: number
+    vision_algorithms?: number[]
+    vision_threshold?: number
     simulate_mission: {
       is_enable: number
       latitude?: number
@@ -498,6 +533,17 @@ export const controlApi = {
       message: string
       data?: any
     }>(`/control/devices/${deviceSn}/takeoff-to-point`, params)
+  },
+
+  // 分屏控制
+  setScreenSplit: (deviceSn: string, data: {
+    payload_index: string
+    enable: boolean
+  }) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/camera/screen-split`, data)
   }
 }
 
