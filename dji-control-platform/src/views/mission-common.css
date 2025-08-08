@@ -157,10 +157,10 @@
   gap: 8px;
 }
 .mission-select {
-  background: #16213a;
+  background: transparent;
   color: #fff;
-  /* border: 1px solid #164159; */
-  border-radius: 4px; /* 只保留右侧圆角 */
+  border: 1px solid #164159;
+  border-radius: 4px;
   padding: 4px 12px;
   font-size: 14px;
   outline: none;
@@ -169,12 +169,26 @@
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  border-left: none; /* 让左侧边框消失 */
   position: relative;
   z-index: 1;
   height: 32px;
   line-height: 32px;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2367d5fd' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 32px;
 }
+
+.mission-select:hover {
+  border-color: #67d5fd;
+}
+
+.mission-select:focus {
+  border-color: #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.2);
+}
+
 .mission-folder-select option[disabled] {
   color: #888;
 }
@@ -248,7 +262,7 @@
   color: #fff;
   font-weight: 600;
   font-size: 16px;
-  padding: 14px 0 14px 24px;
+  padding: 16px 0 16px 24px;
   border-radius: 8px 8px 0 0;
 }
 .mission-th {
@@ -272,7 +286,7 @@
   border-bottom: 1px solid #223a5e;
   font-size: 15px;
   color: #fff;
-  min-height: 44px;
+  min-height: 52px;
   padding-left: 24px;
 }
 .mission-td {
@@ -283,6 +297,29 @@
   flex: 0 0 120px;
   text-align: center;
 }
+
+/* 报警等级样式 */
+.level-badge {
+  display: inline-block;
+  min-width: 48px;
+  padding: 2px 18px;
+  border-radius: 16px;
+  font-size: 15px;
+  text-align: center;
+  font-weight: 500;
+  margin: 0 auto;
+}
+.level-1 {
+  background: rgba(103, 213, 253, 0.08);
+  color: #67d5fd;
+  border: 1px solid #67d5fd;
+}
+.level-2 {
+  background: rgba(253, 103, 103, 0.12);
+  color: #fd6767;
+  border: 1px solid #fd6767;
+}
+
 .mission-icons {
   display: flex;
   gap: 8px;

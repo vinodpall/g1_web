@@ -51,7 +51,6 @@
               </div>
               <!-- 可选：底部状态栏 -->
               <div class="robot-status-footer">
-                <span>风向：东南风</span>
                 <span>，风速：{{ formatWindSpeed(environment?.windSpeed) }}</span>
                 <span>，降水：{{ formatRainfall(environment?.rainfall) }}</span>
                 <span>，温度：{{ formatTemperature(environment?.environmentTemperature) }}</span>
@@ -61,7 +60,14 @@
           </div>
           <!-- 地图卡片 -->
           <div class="card map-card">
-            <div id="amap-container" class="amap-container"></div>
+            <div id="amap-container" class="amap-container">
+              <!-- 无人机追踪按钮 -->
+              <div class="drone-track-btn" @click="toggleDroneTracking" :class="{ 'active': isDroneTracking }" :title="isDroneTracking ? '取消追踪' : '追踪无人机'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+              </div>
+            </div>
           </div>
         </section>
         <!-- 右侧视频与控制区 -->
@@ -232,6 +238,8 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
 import { useDeviceStore } from '../stores/device'
+import { useWaylineJobs } from '../composables/useApi'
+import { useDevices } from '../composables/useApi'
 import { StatusMaps } from '../api/deviceStatus'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
@@ -277,6 +285,12 @@ const {
   position
 } = useDeviceStatus()
 
+// 使用设备API
+const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
+
+// 使用航线任务API
+const { fetchWaylineProgress, fetchWaylineJobDetail, fetchWaylineDetail } = useWaylineJobs()
+
 const sidebarTabs = [
   {
     key: 'plane',
@@ -300,6 +314,19 @@ const remoteEnabled = ref(false)
 const dockMarkers = ref<any[]>([])
 const droneMarkers = ref<any[]>([])
 const isInitialLoad = ref(true)
+
+// 航点任务相关变量
+const waylineProgress = ref<any>(null)
+const waylineJobDetail = ref<any>(null)
+const waylineProgressTimer = ref<number | null>(null)
+
+// 航点和轨迹相关变量
+const waylineMarkers = ref<any[]>([])
+const waylinePolyline = ref<any>(null)
+const currentWaypointMarker = ref<any>(null)
+
+// 追踪无人机
+const isDroneTracking = ref(false)
 
 // 设备状态刷新定时器
 const statusRefreshTimer = ref<number | null>(null)
@@ -446,7 +473,7 @@ const addDockMarker = (longitude: number, latitude: number, dockInfo: any) => {
         style="
           width: 32px;
           height: 32px;
-          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+          filter: brightness(0) saturate(100%) invert(40%) sepia(100%) saturate(10000%) hue-rotate(200deg) brightness(100%) contrast(100%);
         "
         alt="机场"
       />
@@ -490,7 +517,7 @@ const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => 
         style="
           width: 32px;
           height: 32px;
-          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+          filter: brightness(0) saturate(100%) invert(15%) sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%);
         "
         alt="无人机"
       />
@@ -581,6 +608,12 @@ const updateMapMarkers = (shouldCenter = false) => {
     // 添加无人机标记
     addDroneMarker(droneLongitude, droneLatitude, droneInfo)
     
+    // 更新无人机追踪
+    updateDroneTracking()
+    
+    // 更新当前航点显示
+    updateCurrentWaypoint()
+    
     // 只在初始加载或明确要求时才设置地图中心
     if (shouldCenter && amapInstance.value) {
       amapInstance.value.setCenter([longitude, latitude])
@@ -594,6 +627,260 @@ const updateMapMarkers = (shouldCenter = false) => {
     }
   } else {
     // 无设备坐标数据，无法添加标记
+  }
+}
+
+// 获取航线任务进度数据
+const loadWaylineProgress = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    const { dockSns } = getCachedDeviceSns()
+    
+    if (!workspaceId || dockSns.length === 0) {
+      return
+    }
+    
+    // 获取第一个机场的航线任务进度
+    const dockSn = dockSns[0]
+    const progressData = await fetchWaylineProgress(workspaceId, dockSn)
+    waylineProgress.value = progressData
+    
+    // 如果有job_id，获取详细信息
+    if (progressData.job_id) {
+      const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
+      waylineJobDetail.value = jobDetail
+      
+      // 显示航点和轨迹
+      await displayWayline()
+    } else {
+      // 如果没有任务，清除航点和轨迹显示
+      clearWaylineDisplay()
+    }
+  } catch (err) {
+    // 静默处理错误
+  }
+}
+
+// 追踪无人机
+const toggleDroneTracking = () => {
+  isDroneTracking.value = !isDroneTracking.value
+  if (isDroneTracking.value) {
+    centerToDroneMarker();
+  }
+}
+
+// 更新无人机追踪位置
+const updateDroneTracking = () => {
+  if (isDroneTracking.value) {
+    centerToDroneMarker();
+  }
+}
+
+// 地图定位到无人机标记实际位置
+const centerToDroneMarker = () => {
+  if (amapInstance.value && droneMarkers.value.length > 0) {
+    const markerPos = droneMarkers.value[0].getPosition();
+    amapInstance.value.setCenter(markerPos);
+  }
+}
+
+// 清除航线显示
+const clearWaylineDisplay = () => {
+  if (amapInstance.value) {
+    // 清除航点标记
+    waylineMarkers.value.forEach(marker => {
+      amapInstance.value.remove(marker)
+    })
+    waylineMarkers.value = []
+    
+    // 清除航线
+    if (waylinePolyline.value) {
+      amapInstance.value.remove(waylinePolyline.value)
+      waylinePolyline.value = null
+    }
+    
+    // 清除当前航点标记
+    if (currentWaypointMarker.value) {
+      amapInstance.value.remove(currentWaypointMarker.value)
+      currentWaypointMarker.value = null
+    }
+  }
+}
+
+// 显示航点和航线
+const displayWayline = async () => {
+  console.log('displayWayline 开始执行')
+  console.log('amapInstance:', !!amapInstance.value)
+  console.log('amapApiRef:', !!amapApiRef.value)
+  console.log('waylineJobDetail:', waylineJobDetail.value)
+  
+  if (!amapInstance.value || !amapApiRef.value || !waylineJobDetail.value) {
+    console.log('displayWayline 条件不满足，退出')
+    return
+  }
+  
+  // 先清除之前的显示
+  clearWaylineDisplay()
+  
+  try {
+    console.log('waylineJobDetail完整数据:', waylineJobDetail.value)
+    
+    // 检查是否有waylines数据
+    let waylines = waylineJobDetail.value.waylines
+    console.log('waylines:', waylines)
+    
+    // 如果没有waylines数据，尝试通过file_id获取航线文件详情
+    if (!waylines || waylines.length === 0) {
+      console.log('没有找到waylines数据，尝试通过file_id获取航线文件详情')
+      const workspaceId = getCachedWorkspaceId()
+      const fileId = waylineJobDetail.value.file_id
+      
+      if (workspaceId && fileId) {
+        console.log('获取航线文件详情 - workspaceId:', workspaceId, 'fileId:', fileId)
+        try {
+          const waylineDetail = await fetchWaylineDetail(workspaceId, fileId)
+          console.log('航线文件详情:', waylineDetail)
+          waylines = waylineDetail.waylines
+          console.log('从文件详情获取的waylines:', waylines)
+        } catch (error) {
+          console.error('获取航线文件详情失败:', error)
+          return
+        }
+      } else {
+        console.log('缺少workspaceId或fileId，无法获取航线文件详情')
+        return
+      }
+    }
+    
+    if (!waylines || waylines.length === 0) {
+      console.log('仍然没有找到waylines数据')
+      return
+    }
+    
+    const wayline = waylines[0] // 取第一个航线
+    const waypoints = wayline.waypoints || []
+    console.log('waypoints:', waypoints)
+    
+    if (waypoints.length === 0) {
+      console.log('没有找到waypoints数据')
+      return
+    }
+    
+    // 创建航点标记
+    const markers: any[] = []
+    const path: [number, number][] = []
+    
+    console.log('开始创建航点标记，共', waypoints.length, '个航点')
+    
+    waypoints.forEach((waypoint: any, index: number) => {
+      const [wgsLng, wgsLat] = waypoint.coordinates || [0, 0]
+      console.log(`航点 ${index + 1}:`, { wgsLng, wgsLat })
+      
+      if (wgsLng && wgsLat) {
+        // 将WGS84坐标转换为GCJ-02坐标
+        const gcjCoords = transformWGS84ToGCJ02(wgsLng, wgsLat)
+        console.log(`航点 ${index + 1} 转换后坐标:`, gcjCoords)
+        
+        // 创建航点标记
+        const marker = new amapApiRef.value.Marker({
+          position: [gcjCoords.longitude, gcjCoords.latitude],
+          icon: new amapApiRef.value.Icon({
+            size: new amapApiRef.value.Size(20, 20),
+            image: 'data:image/svg+xml;base64,' + btoa(`
+              <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="10" cy="10" r="8" fill="#67d5fd" stroke="#fff" stroke-width="2"/>
+                <text x="10" y="13" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">${index + 1}</text>
+              </svg>
+            `),
+            imageSize: new amapApiRef.value.Size(20, 20)
+          }),
+          title: `航点 ${index + 1}`
+        })
+        
+        markers.push(marker)
+        amapInstance.value.add(marker)
+        path.push([gcjCoords.longitude, gcjCoords.latitude])
+        console.log(`航点 ${index + 1} 已添加到地图`)
+      } else {
+        console.log(`航点 ${index + 1} 坐标无效，跳过`)
+      }
+    })
+    
+    waylineMarkers.value = markers
+    console.log('航点标记创建完成，共', markers.length, '个标记')
+    
+    // 创建航线
+    console.log('准备创建航线，路径点数:', path.length)
+    if (path.length > 1) {
+      waylinePolyline.value = new amapApiRef.value.Polyline({
+        path: path,
+        strokeColor: '#67d5fd',
+        strokeWeight: 3,
+        strokeOpacity: 0.8,
+        strokeStyle: 'solid'
+      })
+      amapInstance.value.add(waylinePolyline.value)
+      console.log('航线已添加到地图')
+    } else {
+      console.log('路径点数不足，无法创建航线')
+    }
+    
+    // 显示当前航点
+    updateCurrentWaypoint()
+    
+  } catch (error) {
+    console.error('显示航线失败:', error)
+  }
+}
+
+// 更新当前航点显示
+const updateCurrentWaypoint = () => {
+  if (!amapInstance.value || !amapApiRef.value || !waylineJobDetail.value || !waylineProgress.value) {
+    return
+  }
+  
+  // 清除之前的当前航点标记
+  if (currentWaypointMarker.value) {
+    amapInstance.value.remove(currentWaypointMarker.value)
+    currentWaypointMarker.value = null
+  }
+  
+  const currentWaypointIndex = waylineProgress.value.ext?.current_waypoint_index || 0
+  const waylines = waylineJobDetail.value.waylines
+  
+  if (!waylines || waylines.length === 0) {
+    return
+  }
+  
+  const wayline = waylines[0]
+  const waypoints = wayline.waypoints || []
+  
+  if (currentWaypointIndex >= 0 && currentWaypointIndex < waypoints.length) {
+    const waypoint = waypoints[currentWaypointIndex]
+    const [wgsLng, wgsLat] = waypoint.coordinates || [0, 0]
+    
+    if (wgsLng && wgsLat) {
+      const gcjCoords = transformWGS84ToGCJ02(wgsLng, wgsLat)
+      
+      // 创建当前航点标记
+      currentWaypointMarker.value = new amapApiRef.value.Marker({
+        position: [gcjCoords.longitude, gcjCoords.latitude],
+        icon: new amapApiRef.value.Icon({
+          size: new amapApiRef.value.Size(24, 24),
+          image: 'data:image/svg+xml;base64,' + btoa(`
+            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" fill="#ff4d4f" stroke="#fff" stroke-width="2"/>
+              <text x="12" y="16" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">${currentWaypointIndex + 1}</text>
+            </svg>
+          `),
+          imageSize: new amapApiRef.value.Size(24, 24)
+        }),
+        title: `当前航点 ${currentWaypointIndex + 1}`
+      })
+      
+      amapInstance.value.add(currentWaypointMarker.value)
+      console.log(`当前航点 ${currentWaypointIndex + 1} 已添加到地图`)
+    }
   }
 }
 
@@ -909,6 +1196,9 @@ onMounted(async () => {
   // 加载无人机状态数据
   await fetchDroneStatus()
   
+  // 加载航线任务进度
+  await loadWaylineProgress()
+  
   // 初始化视频播放器
   await initVideoPlayer()
   
@@ -962,6 +1252,11 @@ onMounted(async () => {
       updateMapMarkers()
     }
   }, 2000)
+  
+  // 设置航线任务进度自动刷新（每3秒）
+  waylineProgressTimer.value = setInterval(async () => {
+    await loadWaylineProgress()
+  }, 3000)
 })
 onBeforeUnmount(() => {
   // 清理设备状态刷新定时器
@@ -976,9 +1271,18 @@ onBeforeUnmount(() => {
     droneStatusRefreshTimer.value = null
   }
   
+  // 清理航线任务进度刷新定时器
+  if (waylineProgressTimer.value) {
+    clearInterval(waylineProgressTimer.value)
+    waylineProgressTimer.value = null
+  }
+  
   // 清理地图标记
   clearDockMarkers()
   clearDroneMarkers()
+  
+  // 清理航点和轨迹
+  clearWaylineDisplay()
   
   // 清理地图实例
   if (amapInstance.value) {
@@ -2191,6 +2495,43 @@ const updateProgress = (percent: number) => {
 .right-controls.active .el-icon.dropdown-icon svg {
   transform: rotate(180deg);
   fill: #16bbf2 !important;
+}
+
+/* 无人机追踪按钮样式 */
+.drone-track-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(22, 34, 51, 0.9);
+  border: 1px solid #164159;
+  border-radius: 50%;
+  color: #b8c7d9;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(4px);
+}
+
+.drone-track-btn:hover {
+  background: rgba(103, 213, 253, 0.1);
+  border-color: #67d5fd;
+  color: #67d5fd;
+}
+
+.drone-track-btn.active {
+  background: rgba(103, 213, 253, 0.2);
+  border-color: #67d5fd;
+  color: #67d5fd;
+}
+
+.drone-track-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* 地图类型控件样式 */

@@ -5,7 +5,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/dashboard/home'
+      redirect: '/login'
     },
     {
       path: '/login',
@@ -109,15 +109,31 @@ const router = createRouter({
   ]
 })
 
-// 简化的路由守卫
+// 路由守卫
 router.beforeEach((to, from, next) => {
   console.log('路由跳转:', to.path)
   
   // 检查是否需要认证
   if (to.meta.requiresAuth) {
-    const isLoggedIn = true // 临时设置为true
+    const token = localStorage.getItem('token')
+    const user = localStorage.getItem('user')
     
-    if (!isLoggedIn) {
+    if (!token || !user) {
+      console.log('未找到认证信息，跳转到登录页')
+      next('/login')
+      return
+    }
+    
+    // 验证token是否有效（可选：可以在这里添加token过期检查）
+    try {
+      const userData = JSON.parse(user)
+      if (!userData || !userData.workspace_id) {
+        console.log('用户数据无效，跳转到登录页')
+        next('/login')
+        return
+      }
+    } catch (error) {
+      console.log('用户数据解析失败，跳转到登录页')
       next('/login')
       return
     }

@@ -1,5 +1,5 @@
 import { apiClient, API_BASE_URL, type ApiResponse, type PaginatedResponse } from './config'
-import type { User, Dock, Drone, Mission, MissionRecord, Alert, Role, Device, HmsAlert } from '../types'
+import type { User, Dock, Drone, Mission, MissionRecord, Alert, Role, Device, HmsAlert, VisionAlert, VisionAlertsResponse } from '../types'
 
 // 认证相关接口
 export const authApi = {
@@ -99,15 +99,13 @@ export const dockApi = {
   updateDock: (id: string, dockData: Partial<Dock>) => {
     return apiClient.put<ApiResponse<Dock>>(`/docks/${id}`, dockData)
   },
-
   // 删除机巢
   deleteDock: (id: string) => {
     return apiClient.delete<ApiResponse>(`/docks/${id}`)
   },
-
-  // 获取机巢状态
-  getDockStatus: (id: string) => {
-    return apiClient.get<ApiResponse<{ status: string; battery?: number }>>(`/docks/${id}/status`)
+  // 急停控制
+  emergencyStop: (deviceSn: string) => {
+    return apiClient.post<ApiResponse<any>>(`/control/devices/${deviceSn}/emergency-stop`)
   }
 }
 
@@ -458,18 +456,29 @@ export const controlApi = {
       message: string
       code: number
       data: {
+        device_sn: string
         flight_authority: {
+          device_sn: string
+          user_id: number
           username: string
-          user_id: string
           obtained_at: number
+          session_id: string
+          authority_type: string
+          previous_owner: any
         } | null
         payload_authorities: {
           [payloadIndex: string]: {
+            device_sn: string
+            user_id: number
             username: string
-            user_id: string
+            payload_index: string
             obtained_at: number
+            bid: string
+            authority_type: string
+            previous_owner: any
           }
         }
+        timestamp: number
       }
     }>(`/control/devices/${deviceSn}/authority`)
   },
@@ -795,6 +804,10 @@ export const waylineApi = {
     wayline_precision_type: number
     begin_time?: string | null
     end_time?: string | null
+    // 算法相关字段（移动到flight-tasks接口）
+    enable_vision?: boolean
+    vision_algorithms?: number[]
+    vision_threshold?: number
   }) => {
     return apiClient.post<{
       code: number
@@ -924,11 +937,15 @@ export const waylineApi = {
   },
 
   // 执行任务
-  executeJob: (workspaceId: string, jobId: string) => {
+  executeJob: (workspaceId: string, jobId: string, algorithmData?: {
+    enable_vision?: boolean
+    vision_algorithms?: number[]
+    vision_threshold?: number
+  }) => {
     return apiClient.post<{
       code: number
       message: string
-    }>(`/wayline/workspaces/${workspaceId}/jobs/${jobId}/execute`)
+    }>(`/wayline/workspaces/${workspaceId}/jobs/${jobId}/execute`, algorithmData)
   },
 
   // 获取飞行统计报表
@@ -970,5 +987,33 @@ export const waylineApi = {
         }
       }
     }>(`/wayline/workspaces/${workspaceId}/reports/flight-statistics`, days ? { days } : {})
+  }
+} 
+
+// Vision报警接口
+export const visionApi = {
+  // 获取报警列表
+  getAlerts: (workspaceId: string, params?: {
+    device_sn?: string
+    job_id?: string
+    alert_level?: string
+    status?: string
+    limit?: number
+    offset?: number
+  }) => {
+    return apiClient.get<VisionAlertsResponse>(`/workspaces/${workspaceId}/vision/alerts`, params)
+  },
+
+  // 获取单个报警详情
+  getAlert: (workspaceId: string, alertId: string) => {
+    return apiClient.get<VisionAlert>(`/workspaces/${workspaceId}/vision/alerts/${alertId}`)
+  },
+
+  // 处理报警
+  handleAlert: (workspaceId: string, alertId: string, data: {
+    status: 'HANDLED' | 'IGNORED'
+    handle_note?: string
+  }) => {
+    return apiClient.put<VisionAlert>(`/workspaces/${workspaceId}/vision/alerts/${alertId}`, data)
   }
 } 

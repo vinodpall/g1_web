@@ -7,6 +7,7 @@ export interface DeviceStatus {
   height?: number
   connect_status?: boolean
   online?: boolean
+  emergency_stop_state?: boolean
   osd?: {
     data: {
       environment_temperature?: number

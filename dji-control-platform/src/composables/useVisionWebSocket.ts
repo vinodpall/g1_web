@@ -146,8 +146,11 @@ export function useVisionWebSocket(serverHost: string = visionConfig.serverHost)
       }
 
       ws.value.onerror = (error) => {
-        console.error('Vision WebSocket error:', error)
-        console.error('连接地址:', wsUrl)
+        // 只在非网络错误时显示错误信息
+        if (!(error instanceof Event && error.type === 'error')) {
+          console.error('Vision WebSocket error:', error)
+          console.error('连接地址:', wsUrl)
+        }
         connectionError.value = `WebSocket连接错误: ${wsUrl}`
         isConnecting.value = false
         
@@ -158,7 +161,10 @@ export function useVisionWebSocket(serverHost: string = visionConfig.serverHost)
       }
 
     } catch (error) {
-      console.error('创建WebSocket连接失败:', error)
+      // 只在非网络错误时显示错误信息
+      if (!(error instanceof TypeError && error.message.includes('Failed to fetch'))) {
+        console.error('创建WebSocket连接失败:', error)
+      }
       connectionError.value = '创建WebSocket连接失败'
       isConnecting.value = false
     }

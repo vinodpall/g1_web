@@ -230,13 +230,17 @@ export function useAuth() {
       
       console.log('localStorage中的token:', localStorage.getItem('token'))
       
-      // 获取设备列表并缓存SN
+      // 获取设备列表并缓存
       try {
         console.log('登录后开始获取设备列表...')
         const deviceResponse = await deviceApi.getDevices({ skip: 0, limit: 100 })
         console.log('设备列表获取成功:', deviceResponse)
         
-        // 缓存设备SN到本地
+        // 使用新的缓存函数，同时缓存设备SN和完整设备信息
+        const { cacheDeviceSns } = useDevices()
+        cacheDeviceSns(deviceResponse)
+        
+        // 分离机场和无人机SN用于后续处理
         const dockSns = deviceResponse.filter(device => {
           return device.device_type_info?.device_type === 3
         }).map(device => device.device_sn)
@@ -245,10 +249,22 @@ export function useAuth() {
           return device.device_type_info?.device_type === 100
         }).map(device => device.device_sn)
         
-        localStorage.setItem('cached_dock_sns', JSON.stringify(dockSns))
-        localStorage.setItem('cached_drone_sns', JSON.stringify(droneSns))
+        // 初始化无人机的 zoom_factor
+        const { updateDroneZoomFactor } = useDevices()
+        const currentZoomFactor = localStorage.getItem('camera_zoom_factor')
+        const zoomFactor = currentZoomFactor ? parseInt(currentZoomFactor, 10) : 1
         
-        console.log('登录时设备SN已缓存到本地:', { dockSns, droneSns })
+        // 为所有无人机设置初始 zoom_factor
+        droneSns.forEach((droneSn: string) => {
+          updateDroneZoomFactor(droneSn, zoomFactor)
+        })
+        
+        console.log('登录时设备信息已缓存到本地:', { 
+          dockSns, 
+          droneSns, 
+          totalDevices: deviceResponse.length,
+          initialZoomFactor: zoomFactor
+        })
         
         // 如果有机场，设置第一个为默认选中
         const deviceStore = useDeviceStore()
@@ -745,7 +761,7 @@ export function useDevices() {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  // 缓存设备SN到本地
+  // 缓存设备信息到本地
   const cacheDeviceSns = (deviceList: Device[]) => {
     // 根据device_type区分机场和无人机
     // device_type=3 是机场，device_type=100 是无人机
@@ -757,10 +773,95 @@ export function useDevices() {
       return device.device_type_info?.device_type === 100
     }).map(device => device.device_sn)
     
+    // 为无人机设备添加 zoom_factor 字段
+    const enhancedDeviceList = deviceList.map(device => {
+      if (device.device_type_info?.device_type === 100) {
+        // 无人机设备，添加 zoom_factor 字段
+        return {
+          ...device,
+          zoom_factor: device.zoom_factor || 1 // 默认值为1
+        }
+      }
+      return device
+    })
+    
     localStorage.setItem('cached_dock_sns', JSON.stringify(dockSns))
     localStorage.setItem('cached_drone_sns', JSON.stringify(droneSns))
     
-    console.log('设备SN已缓存到本地:', { dockSns, droneSns })
+    // 缓存完整的设备信息（包含 zoom_factor）
+    localStorage.setItem('cached_devices', JSON.stringify(enhancedDeviceList))
+    
+    console.log('设备信息已缓存到本地:', { 
+      dockSns, 
+      droneSns, 
+      totalDevices: enhancedDeviceList.length 
+    })
+  }
+
+  // 更新无人机的 zoom_factor 并同步 camera_zoom_factor
+  const updateDroneZoomFactor = (deviceSn: string, zoomFactor: number) => {
+    const devices = getCachedDevices()
+    const deviceIndex = devices.findIndex((device: Device) => device.device_sn === deviceSn)
+    
+    if (deviceIndex !== -1) {
+      // 更新设备缓存中的 zoom_factor
+      devices[deviceIndex] = {
+        ...devices[deviceIndex],
+        zoom_factor: zoomFactor
+      }
+      
+      // 重新缓存设备信息
+      localStorage.setItem('cached_devices', JSON.stringify(devices))
+      
+      // 同步更新 camera_zoom_factor
+      localStorage.setItem('camera_zoom_factor', zoomFactor.toString())
+      
+      console.log(`无人机 ${deviceSn} 的 zoom_factor 已更新为: ${zoomFactor}`)
+      return true
+    }
+    
+    console.warn(`未找到设备 ${deviceSn}`)
+    return false
+  }
+
+  // 获取无人机的 zoom_factor
+  const getDroneZoomFactor = (deviceSn: string): number => {
+    const devices = getCachedDevices()
+    const device = devices.find((device: Device) => device.device_sn === deviceSn)
+    
+    if (device && (device as any).zoom_factor) {
+      return (device as any).zoom_factor
+    }
+    
+    // 如果没有找到，从 camera_zoom_factor 获取
+    const cachedZoomFactor = localStorage.getItem('camera_zoom_factor')
+    if (cachedZoomFactor) {
+      const factor = parseInt(cachedZoomFactor, 10)
+      return isNaN(factor) ? 1 : Math.max(1, Math.min(200, factor))
+    }
+    
+    return 1 // 默认值
+  }
+
+  // 测试函数：验证 zoom_factor 同步功能
+  const testZoomFactorSync = () => {
+    const devices = getCachedDevices()
+    const droneDevices = devices.filter((device: Device) => 
+      device.device_type_info?.device_type === 100
+    )
+    
+    console.log('=== Zoom Factor 同步测试 ===')
+    console.log('无人机设备数量:', droneDevices.length)
+    
+    droneDevices.forEach((device: Device) => {
+      const cachedZoomFactor = localStorage.getItem('camera_zoom_factor')
+      const deviceZoomFactor = (device as any).zoom_factor || 1
+      
+      console.log(`设备 ${device.device_sn}:`)
+      console.log(`  - cached_devices zoom_factor: ${deviceZoomFactor}`)
+      console.log(`  - camera_zoom_factor: ${cachedZoomFactor}`)
+      console.log(`  - 同步状态: ${deviceZoomFactor === parseInt(cachedZoomFactor || '1', 10) ? '✅ 同步' : '❌ 不同步'}`)
+    })
   }
 
   // 从本地缓存获取设备SN
@@ -768,6 +869,18 @@ export function useDevices() {
     const dockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
     const droneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
     return { dockSns, droneSns }
+  }
+
+  // 从本地缓存获取完整设备信息
+  const getCachedDevices = () => {
+    const devices = JSON.parse(localStorage.getItem('cached_devices') || '[]')
+    return devices
+  }
+
+  // 根据设备SN从缓存获取设备信息
+  const getCachedDeviceBySn = (deviceSn: string) => {
+    const devices = getCachedDevices()
+    return devices.find((device: Device) => device.device_sn === deviceSn)
   }
 
   const getCachedWorkspaceId = () => {
@@ -798,7 +911,10 @@ export function useDevices() {
       
       return response
     } catch (err: any) {
-      console.error('useDevices - 获取设备列表失败:', err)
+      // 只在非网络错误时显示错误信息
+      if (!(err instanceof TypeError && err.message.includes('Failed to fetch'))) {
+        console.error('useDevices - 获取设备列表失败:', err)
+      }
       error.value = err.message || '获取设备列表失败'
       throw err
     } finally {
@@ -837,7 +953,12 @@ export function useDevices() {
     setDevices,
     cacheDeviceSns,
     getCachedDeviceSns,
-    getCachedWorkspaceId
+    getCachedDevices,
+    getCachedDeviceBySn,
+    getCachedWorkspaceId,
+    updateDroneZoomFactor,
+    getDroneZoomFactor,
+    testZoomFactorSync
   }
 } 
 
@@ -1184,6 +1305,10 @@ export function useWaylineJobs() {
     wayline_precision_type: number
     begin_time?: string | null
     end_time?: string | null
+    // 算法相关字段（移动到flight-tasks接口）
+    enable_vision?: boolean
+    vision_algorithms?: number[]
+    vision_threshold?: number
   }) => {
     loading.value = true
     error.value = null
@@ -1310,12 +1435,16 @@ export function useWaylineJobs() {
   }
 
   // 执行任务
-  const executeJob = async (workspaceId: string, jobId: string) => {
+  const executeJob = async (workspaceId: string, jobId: string, algorithmData?: {
+    enable_vision?: boolean
+    vision_algorithms?: number[]
+    vision_threshold?: number
+  }) => {
     loading.value = true
     error.value = null
     
     try {
-      const response = await waylineApi.executeJob(workspaceId, jobId)
+      const response = await waylineApi.executeJob(workspaceId, jobId, algorithmData)
       console.log('执行任务成功:', response)
       return response
     } catch (err) {

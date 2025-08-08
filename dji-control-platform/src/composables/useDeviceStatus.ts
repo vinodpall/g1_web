@@ -31,7 +31,10 @@ export function useDeviceStatus() {
       return deviceStatus.value
     } catch (err: any) {
       error.value = err.message || '获取设备状态失败'
-      console.error('获取设备状态失败:', err)
+      // 只在非网络错误时显示错误信息
+      if (!(err instanceof TypeError && err.message.includes('Failed to fetch'))) {
+        console.error('获取设备状态失败:', err)
+      }
       return null
     } finally {
       loading.value = false
@@ -76,7 +79,10 @@ export function useDeviceStatus() {
       return droneDeviceStatus.value
     } catch (err: any) {
       error.value = err.message || '获取无人机状态失败'
-      console.error('获取无人机状态失败:', err)
+      // 只在非网络错误时显示错误信息
+      if (!(err instanceof TypeError && err.message.includes('Failed to fetch'))) {
+        console.error('获取无人机状态失败:', err)
+      }
       return null
     } finally {
       loading.value = false

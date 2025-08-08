@@ -98,7 +98,6 @@ export interface Device {
   device_name: string
   nickname: string
   workspace_id: string
-  device_type: number
   sub_type: number
   domain: number
   firmware_version: string
@@ -124,6 +123,10 @@ export interface Device {
     full_type: string
   }
   full_device_type: string
+  status?: {
+    emergency_stop_state?: boolean
+  }
+  zoom_factor?: number // 无人机变焦倍率字段
 }
 
 export interface HmsAlert {
@@ -150,4 +153,47 @@ export interface HmsAlert {
   raw_data: string
   is_read: boolean
   read_time: number
+}
+
+export interface VisionAlert {
+  id: string
+  device_sn: string
+  cam_key: string
+  job_id: string
+  workspace_id: string
+  mission_name: string
+  wayline_name: string
+  alert_level: 'LOW' | 'MEDIUM' | 'HIGH'
+  target_type: string
+  target_count: number
+  max_confidence: number
+  threat_summary: string
+  threat_analysis: Array<{
+    type: number
+    count: number
+    algorithm: string
+    confidence: number
+    description: string
+  }>
+  detection_boxes: Array<Array<{
+    bbox: [number, number, number, number]
+    label: string
+    confidence: number
+  }>>
+  has_images: boolean
+  original_image_url: string
+  marked_image_url: string
+  status: 'PENDING' | 'HANDLED' | 'IGNORED'
+  handler_id: string | null
+  handle_time: string | null
+  handle_note: string | null
+  detection_time: number
+  create_time: number
+  update_time: number | null
+}
+
+export interface VisionAlertsResponse {
+  alerts: VisionAlert[]
+  total: number
+  has_more: boolean
 }

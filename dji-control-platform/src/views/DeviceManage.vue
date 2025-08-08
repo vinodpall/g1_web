@@ -413,7 +413,8 @@ const formatBatterySn = (device: any) => {
   gap: 16px;
   align-items: center;
   margin-bottom: 4px;
-  /* 默认靠左排列 */
+  flex-wrap: wrap; /* 支持自动换行 */
+  overflow-x: visible; /* 避免横向滚动条 */
 }
 .device-input {
   height: 32px;
@@ -425,6 +426,9 @@ const formatBatterySn = (device: any) => {
   font-size: 14px;
   box-shadow: 0 0 0 1px #164159 inset;
   transition: border 0.2s, box-shadow 0.2s;
+  min-width: 120px;
+  max-width: 180px; /* 限制最大宽度 */
+  flex-shrink: 0;
 }
 .device-input:focus {
   outline: none;
@@ -435,6 +439,11 @@ const formatBatterySn = (device: any) => {
 .custom-select-wrapper {
   position: relative;
   display: inline-block;
+  min-width: 140px;
+  max-width: 180px;
+  width: 100%;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 .custom-select-arrow {
   position: absolute;
@@ -450,9 +459,9 @@ const formatBatterySn = (device: any) => {
   z-index: 2;
 }
 .mission-select {
-  width: 140px;
+  width: 100%;
   min-width: 140px;
-  max-width: 190px;
+  max-width: 180px;
   height: 32px;
   background: none !important;
   background-color: transparent !important;
@@ -489,6 +498,11 @@ const formatBatterySn = (device: any) => {
   transition: background 0.2s, color 0.2s, border 0.2s;
   height: 32px;
   margin-left: 4px;
+  max-width: 120px; /* 限制最大宽度 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 .device-btn {
   background: #0c3c56;

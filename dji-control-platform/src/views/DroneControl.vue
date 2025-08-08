@@ -103,8 +103,8 @@
                 <div class="on1-lt-border-horizontal"></div>
               </div>
               <div class="robot-status-footer">
-                <span>飞行速度：{{ formatSpeed(gpsStatus?.totalSpeed) }}</span>
-                <span>，风向：东南风</span>
+                <span>飞行速度：{{ formatSpeed((droneStatus?.horizontalSpeed ?? gpsStatus?.totalSpeed) as number) }}</span>
+                <span>，风速：{{ formatWindSpeed(environment?.windSpeed) }}</span>
                 <span>，降水：{{ formatRainfall(environment?.rainfall) }}</span>
                 <span>，温度：{{ formatTemperature(environment?.environmentTemperature) }}</span>
                 <span>，湿度：{{ formatHumidity(environment?.humidity) }}</span>
@@ -708,12 +708,19 @@ const {
 } = useDeviceStatus()
 
 // 使用航线任务API
-const { fetchWaylineProgress, fetchWaylineJobDetail, stopJob, pauseJob, resumeJob } = useWaylineJobs()
+const { fetchWaylineProgress, fetchWaylineJobDetail, fetchWaylineDetail, stopJob, pauseJob, resumeJob } = useWaylineJobs()
 const { getCachedWorkspaceId, getCachedDeviceSns } = useDevices()
 
 // 航线任务相关数据
 const waylineProgress = ref<any>(null)
 const waylineJobDetail = ref<any>(null)
+
+// 航线显示状态跟踪
+const waylineDisplayState = ref({
+  isDisplayed: false,
+  lastJobId: null as string | null,
+  lastTaskStatus: null as string | null
+})
 
 const sidebarTabs = [
   {
@@ -836,7 +843,10 @@ const handleCancelTask = async () => {
       loadWaylineProgress()
     }, 1000)
   } catch (err) {
-    console.error('取消任务失败:', err)
+    // 只在非网络错误时显示错误信息
+    if (!(err instanceof TypeError && err.message.includes('Failed to fetch'))) {
+      console.error('取消任务失败:', err)
+    }
     alert('取消任务失败')
   }
 }
@@ -862,7 +872,10 @@ const handlePauseRoute = async () => {
       loadWaylineProgress()
     }, 1000)
   } catch (err) {
-    console.error('航线暂停失败:', err)
+    // 只在非网络错误时显示错误信息
+    if (!(err instanceof TypeError && err.message.includes('Failed to fetch'))) {
+      console.error('航线暂停失败:', err)
+    }
     alert('航线暂停失败')
   }
 }
@@ -888,7 +901,10 @@ const handleResumeRoute = async () => {
       loadWaylineProgress()
     }, 1000)
   } catch (err) {
-    console.error('航线恢复失败:', err)
+    // 只在非网络错误时显示错误信息
+    if (!(err instanceof TypeError && err.message.includes('Failed to fetch'))) {
+      console.error('航线恢复失败:', err)
+    }
     alert('航线恢复失败')
   }
 }
@@ -1181,7 +1197,7 @@ const addDockMarker = (longitude: number, latitude: number, dockInfo: any) => {
         style="
           width: 32px;
           height: 32px;
-          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+          filter: brightness(0) saturate(100%) invert(40%) sepia(100%) saturate(10000%) hue-rotate(200deg) brightness(100%) contrast(100%);
         "
         alt="机场"
       />
@@ -1218,7 +1234,7 @@ const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => 
         style="
           width: 32px;
           height: 32px;
-          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+          filter: brightness(0) saturate(100%) invert(15%) sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%);
         "
         alt="无人机"
       />
@@ -1263,7 +1279,7 @@ const clearDroneMarkers = () => {
 
 // 更新地图标记（机场和无人机）
 const updateMapMarkers = (shouldCenter = false) => {
-  // 清除现有标记
+  // 清除现有标记（保留航线标记）
   clearDockMarkers()
   clearDroneMarkers()
   
@@ -1655,6 +1671,10 @@ const startVideoPlayback = () => {
   // 开始播放视频
   videoLoading.value = true
   videoStatus.value = '正在连接视频流...'
+  
+  // 添加重试机制
+  let retryCount = 0
+  const maxRetries = 3
 
   try {
     // 销毁之前的播放器实例
@@ -1777,6 +1797,20 @@ const startVideoPlayback = () => {
       })
     }
   } catch (error: any) {
+    console.error('视频播放初始化失败:', error)
+    videoLoading.value = false
+    videoStatus.value = '视频加载失败'
+    
+    // 重试机制
+    if (retryCount < maxRetries) {
+      retryCount++
+      console.log(`视频播放失败，${retryCount}/${maxRetries} 次重试...`)
+      setTimeout(() => {
+        startVideoPlayback()
+      }, 2000) // 2秒后重试
+    } else {
+      console.error('视频播放重试次数已达上限')
+    }
   }
 }
 
@@ -2622,7 +2656,10 @@ const handleLensChange = async (videoType: string) => {
     }
     
   } catch (error: any) {
-    console.error('接口异常', error);
+    // 只在非网络错误时显示错误信息
+    if (!(error instanceof TypeError && error.message.includes('Failed to fetch'))) {
+      console.error('接口异常', error);
+    }
     let msg = (error && error.response && error.response.data && error.response.data.detail)
       || error?.detail
       || error?.message
@@ -2697,6 +2734,8 @@ const toggleDroneTracking = () => {
   }
 }
 
+
+
 // 更新无人机追踪位置
 const updateDroneTracking = () => {
   if (isDroneTracking.value) {
@@ -2728,8 +2767,14 @@ const clearWaylineDisplay = () => {
 }
 
 // 显示航点和航线
-const displayWayline = () => {
-  if (!amapInstance.value || !waylineJobDetail.value) {
+const displayWayline = async () => {
+  console.log('displayWayline 开始执行')
+  console.log('amapInstance:', !!amapInstance.value)
+  console.log('amapApiRef:', !!amapApiRef.value)
+  console.log('waylineJobDetail:', waylineJobDetail.value)
+  
+  if (!amapInstance.value || !amapApiRef.value || !waylineJobDetail.value) {
+    console.log('displayWayline 条件不满足，退出')
     return
   }
   
@@ -2737,15 +2782,46 @@ const displayWayline = () => {
   clearWaylineDisplay()
   
   try {
-    const waylines = waylineJobDetail.value.waylines
+    console.log('waylineJobDetail完整数据:', waylineJobDetail.value)
+    
+    // 检查是否有waylines数据
+    let waylines = waylineJobDetail.value.waylines
+    console.log('waylines:', waylines)
+    
+    // 如果没有waylines数据，尝试通过file_id获取航线文件详情
     if (!waylines || waylines.length === 0) {
+      console.log('没有找到waylines数据，尝试通过file_id获取航线文件详情')
+      const workspaceId = getCachedWorkspaceId()
+      const fileId = waylineJobDetail.value.file_id
+      
+      if (workspaceId && fileId) {
+        console.log('获取航线文件详情 - workspaceId:', workspaceId, 'fileId:', fileId)
+        try {
+          const waylineDetail = await fetchWaylineDetail(workspaceId, fileId)
+          console.log('航线文件详情:', waylineDetail)
+          waylines = waylineDetail.waylines
+          console.log('从文件详情获取的waylines:', waylines)
+        } catch (error) {
+          console.error('获取航线文件详情失败:', error)
+          return
+        }
+      } else {
+        console.log('缺少workspaceId或fileId，无法获取航线文件详情')
+        return
+      }
+    }
+    
+    if (!waylines || waylines.length === 0) {
+      console.log('仍然没有找到waylines数据')
       return
     }
     
     const wayline = waylines[0] // 取第一个航线
     const waypoints = wayline.waypoints || []
+    console.log('waypoints:', waypoints)
     
     if (waypoints.length === 0) {
+      console.log('没有找到waypoints数据')
       return
     }
     
@@ -2753,12 +2829,16 @@ const displayWayline = () => {
     const markers: any[] = []
     const path: [number, number][] = []
     
+    console.log('开始创建航点标记，共', waypoints.length, '个航点')
+    
     waypoints.forEach((waypoint: any, index: number) => {
       const [wgsLng, wgsLat] = waypoint.coordinates || [0, 0]
+      console.log(`航点 ${index + 1}:`, { wgsLng, wgsLat })
       
       if (wgsLng && wgsLat) {
         // 将WGS84坐标转换为GCJ-02坐标
         const gcjCoords = transformWGS84ToGCJ02(wgsLng, wgsLat)
+        console.log(`航点 ${index + 1} 转换后坐标:`, gcjCoords)
         
         // 创建航点标记
         const marker = new amapApiRef.value.Marker({
@@ -2779,12 +2859,17 @@ const displayWayline = () => {
         markers.push(marker)
         amapInstance.value.add(marker)
         path.push([gcjCoords.longitude, gcjCoords.latitude])
+        console.log(`航点 ${index + 1} 已添加到地图`)
+      } else {
+        console.log(`航点 ${index + 1} 坐标无效，跳过`)
       }
     })
     
     waylineMarkers.value = markers
+    console.log('航点标记创建完成，共', markers.length, '个标记')
     
     // 创建航线
+    console.log('准备创建航线，路径点数:', path.length)
     if (path.length > 1) {
       waylinePolyline.value = new amapApiRef.value.Polyline({
         path: path,
@@ -2794,6 +2879,9 @@ const displayWayline = () => {
         strokeStyle: 'solid'
       })
       amapInstance.value.add(waylinePolyline.value)
+      console.log('航线已添加到地图')
+    } else {
+      console.log('路径点数不足，无法创建航线')
     }
     
     // 显示当前航点
@@ -2806,7 +2894,7 @@ const displayWayline = () => {
 
 // 更新当前航点显示
 const updateCurrentWaypoint = () => {
-  if (!amapInstance.value || !waylineJobDetail.value || !waylineProgress.value) {
+  if (!amapInstance.value || !amapApiRef.value || !waylineJobDetail.value || !waylineProgress.value) {
     return
   }
   
@@ -2893,7 +2981,10 @@ const handleScreenSplit = async (enable: boolean) => {
       alert(msg)
     }
   } catch (error: any) {
-    console.error('接口异常', error);
+    // 只在非网络错误时显示错误信息
+    if (!(error instanceof TypeError && error.message.includes('Failed to fetch'))) {
+      console.error('接口异常', error);
+    }
     let msg = (error && error.response && error.response.data && error.response.data.detail)
       || error?.detail
       || error?.message
@@ -2941,7 +3032,10 @@ const handleQualityChange = async (quality: number) => {
       alert(msg)
     }
   } catch (error: any) {
-    console.error('接口异常', error);
+    // 只在非网络错误时显示错误信息
+    if (!(error instanceof TypeError && error.message.includes('Failed to fetch'))) {
+      console.error('接口异常', error);
+    }
     let msg = (error && error.response && error.response.data && error.response.data.detail)
       || error?.detail
       || error?.message
@@ -3003,8 +3097,8 @@ onMounted(async () => {
     // 检查控制权限状态
     checkAuthorityStatus()
     
-    // 启动权限状态轮询，每10秒检查一次
-    const authorityInterval = setInterval(checkAuthorityStatus, 10000)
+    // 启动权限状态轮询，每2秒检查一次
+const authorityInterval = setInterval(checkAuthorityStatus, 2000)
     
     // 在组件销毁时清理定时器
     onBeforeUnmount(() => {
@@ -3020,6 +3114,8 @@ onMounted(async () => {
     
     // 初始化无人机视频播放器（优先从缓存读取，没有则刷新获取）
     try {
+      // 确保DOM完全渲染后再初始化视频
+      await nextTick()
       await initVideoPlayer()
     } catch (error) {
       console.error('无人机控制页面 - 视频播放器初始化失败，但不影响其他功能:', error)
@@ -3069,11 +3165,32 @@ onMounted(async () => {
         updateMapMarkers()
         // 更新无人机追踪位置
         updateDroneTracking()
-        // 更新航线显示
-        if (waylineTaskStatus.value === 'running') {
-          displayWayline()
-        } else {
+        // 更新航线显示（只在状态变化时重新绘制）
+        const currentTaskStatus = waylineTaskStatus.value
+        const currentJobId = waylineProgress.value?.job_id
+        const shouldShowWayline = currentTaskStatus === 'running' || currentTaskStatus === 'paused'
+        
+        // 检查是否需要重新绘制航线
+        const hasWaylineDisplay = waylineMarkers.value.length > 0 || waylinePolyline.value
+        const stateChanged = waylineDisplayState.value.lastJobId !== currentJobId || 
+                           waylineDisplayState.value.lastTaskStatus !== currentTaskStatus
+        
+        if (shouldShowWayline && (!hasWaylineDisplay || stateChanged)) {
+          console.log('航线显示检查 - 任务状态:', currentTaskStatus, '原始状态:', waylineProgress.value?.status)
+          console.log('航线显示检查 - 任务详情:', waylineJobDetail.value)
+          console.log('开始显示航线')
+          await displayWayline()
+          // 更新状态跟踪
+          waylineDisplayState.value.isDisplayed = true
+          waylineDisplayState.value.lastJobId = currentJobId
+          waylineDisplayState.value.lastTaskStatus = currentTaskStatus
+        } else if (!shouldShowWayline && hasWaylineDisplay) {
+          console.log('清除航线显示')
           clearWaylineDisplay()
+          // 更新状态跟踪
+          waylineDisplayState.value.isDisplayed = false
+          waylineDisplayState.value.lastJobId = null
+          waylineDisplayState.value.lastTaskStatus = null
         }
       }
     }, 3000)
@@ -3108,16 +3225,19 @@ const loadWaylineProgress = async () => {
     
     // 如果有job_id，获取详细信息
     if (progressData?.job_id) {
-      // console.log('loadWaylineProgress - 获取任务详情，job_id:', progressData.job_id)
+      console.log('loadWaylineProgress - 获取任务详情，job_id:', progressData.job_id)
       const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
-      // console.log('loadWaylineProgress - jobDetail:', jobDetail)
+      console.log('loadWaylineProgress - jobDetail:', jobDetail)
       waylineJobDetail.value = jobDetail
     } else {
-      // console.log('loadWaylineProgress - 没有job_id，清空任务详情')
+      console.log('loadWaylineProgress - 没有job_id，清空任务详情')
       waylineJobDetail.value = null
     }
   } catch (err) {
-    console.error('loadWaylineProgress - 错误:', err)
+    // 只在非网络错误时显示错误信息
+    if (!(err instanceof TypeError && err.message.includes('Failed to fetch'))) {
+      console.error('loadWaylineProgress - 错误:', err)
+    }
   }
 }
 
@@ -3369,7 +3489,19 @@ const showAuthorityTooltip = () => {
   authorityTooltip.value.message = `设备正在被 ${controllerName.value} 控制，是否抢夺控制权？`
   authorityTooltip.value.visible = true
   
-  // 3秒后自动隐藏
+  // 动态定位弹窗到按钮附近
+  nextTick(() => {
+    const button = document.querySelector('.authority-btn-wrapper > button')
+    const tooltip = document.querySelector('.authority-tooltip')
+    if (button && tooltip) {
+      const rect = button.getBoundingClientRect()
+      tooltip.style.left = `${rect.left + rect.width / 2}px`
+      tooltip.style.top = `${rect.top - 10}px`
+      tooltip.style.transform = 'translateX(-50%) translateY(-100%)'
+    }
+  })
+  
+  // 5秒后自动隐藏
   setTimeout(() => {
     authorityTooltip.value.visible = false
   }, 5000)
@@ -3532,20 +3664,28 @@ const checkAuthorityStatus = async () => {
       
       // 检查飞行控制权：是否存在且属于当前用户
       const hasFlightAuthority = !!(data.flight_authority && data.flight_authority.user_id === currentUserId)
+      if (data.flight_authority) {
+        console.log(`检查飞行权限 - 拥有者: ${data.flight_authority.username}, 是否属于当前用户: ${hasFlightAuthority}`)
+      } else {
+        // console.log('飞行权限未被占用')
+      }
       
-      // 检查载荷控制权：是否有载荷权限且至少一个属于当前用户
+      // 获取我们实际使用的payload_index
+      const targetPayloadIndex = getBestPayloadIndex()
+      
+      // 检查载荷控制权：只检查我们实际使用的payload_index是否属于当前用户
       let hasPayloadAuthority = false
       let payloadAuthorityOwner = null
-      if (data.payload_authorities) {
-        const authorities = Object.values(data.payload_authorities) as any[]
-        hasPayloadAuthority = authorities.some((auth: any) => auth.user_id === currentUserId)
-        // 获取第一个载荷权限的拥有者信息
-        if (authorities.length > 0) {
-          payloadAuthorityOwner = {
-            username: authorities[0].username,
-            user_id: authorities[0].user_id
-          }
+      if (data.payload_authorities && targetPayloadIndex && data.payload_authorities[targetPayloadIndex]) {
+        const payloadAuth = data.payload_authorities[targetPayloadIndex]
+        hasPayloadAuthority = payloadAuth.user_id === currentUserId
+        payloadAuthorityOwner = {
+          username: payloadAuth.username,
+          user_id: payloadAuth.user_id
         }
+        console.log(`检查载荷权限 - payload_index: ${targetPayloadIndex}, 拥有者: ${payloadAuth.username}, 是否属于当前用户: ${hasPayloadAuthority}`)
+      } else {
+        // console.log(`载荷权限 - payload_index: ${targetPayloadIndex} 未被占用`)
       }
       
       // 更新状态
@@ -3553,12 +3693,18 @@ const checkAuthorityStatus = async () => {
       controlAuthorityStatus.value.hasPayloadAuthority = hasPayloadAuthority
       controlAuthorityStatus.value.flightAuthorityOwner = data.flight_authority ? {
         username: data.flight_authority.username,
-        user_id: parseInt(data.flight_authority.user_id) || 0
+        user_id: data.flight_authority.user_id
       } : null
       controlAuthorityStatus.value.payloadAuthorityOwner = payloadAuthorityOwner
       
       // 更新云台控制状态
       isGimbalControlEnabled.value = hasControlAuthority.value
+      
+      // 调试信息：显示最终控制权状态
+      // console.log(`控制权状态 - 飞行: ${hasFlightAuthority}, 载荷: ${hasPayloadAuthority}, 云台控制: ${isGimbalControlEnabled.value}`)
+      if (isControlledByOthers.value) {
+        console.log(`设备被其他用户控制 - 飞行: ${controlAuthorityStatus.value.flightAuthorityOwner?.username || '无'}, 载荷: ${controlAuthorityStatus.value.payloadAuthorityOwner?.username || '无'}`)
+      }
       
     }
   } catch (error: any) {
@@ -3801,7 +3947,6 @@ const handleZoom = async (direction: 'in' | 'out') => {
       return
     }
     
-    
     // 调用变焦API
     const result = await controlApi.cameraZoom(dockSn, payloadIndex, newFactor)
     
@@ -3809,6 +3954,16 @@ const handleZoom = async (direction: 'in' | 'out') => {
     if (result.code === 0) {
       // 成功后更新缓存
       setZoomFactor(newFactor)
+      
+      // 同步更新 cached_devices 中无人机的 zoom_factor
+      const { updateDroneZoomFactor } = useDevices()
+      const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
+      
+      // 更新所有无人机的 zoom_factor
+      cachedDroneSns.forEach((droneSn: string) => {
+        updateDroneZoomFactor(droneSn, newFactor)
+      })
+      
       // 可选：显示当前倍率提示
       // alert(`${action}成功，当前倍率: ${newFactor}x`)
     } else {
@@ -4065,6 +4220,24 @@ const centerToDroneMarker = () => {
     amapInstance.value.setCenter(markerPos);
   }
 }
+
+// 监听视频流地址变化
+watch(() => videoStreamUrl.value, (newUrl) => {
+  if (newUrl) {
+    nextTick(() => {
+      startVideoPlayback()
+    })
+  }
+})
+
+// 监听视频元素变化
+watch(() => videoElement.value, (newElement) => {
+  if (newElement && videoStreamUrl.value) {
+    nextTick(() => {
+      startVideoPlayback()
+    })
+  }
+})
 </script>
 
 <style scoped>
@@ -5468,7 +5641,7 @@ const centerToDroneMarker = () => {
   gap: 20px; /* 增加按钮间距从8px到16px */
   width: auto;
   align-items: flex-end;
-  justify-content: center;
+  justify-content: space-between; /* 改为space-between，避免恢复按钮出现时的顶部空白 */
   flex-shrink: 0; /* 防止按钮组被压缩 */
   margin-top: -5px; /* 往上移动，与任务进度平齐 */
   height: 100%; /* 让按钮组占满高度 */
@@ -6326,13 +6499,9 @@ const centerToDroneMarker = () => {
 
 /* 抢夺控制权气泡弹窗 */
 .authority-tooltip {
-  position: absolute;
-  left: 50%;
-  top: 110%;
-  transform: translateX(-50%);
-  z-index: 1000;
+  position: fixed;
+  z-index: 99999;
   animation: fadeInUp 0.3s ease-out;
-  /* pointer-events: none; */
   pointer-events: auto;
 }
 
@@ -6679,6 +6848,8 @@ const centerToDroneMarker = () => {
   border-color: #67d5fd;
   color: #67d5fd;
 }
+
+
 
 .drone-track-btn svg {
   width: 16px;

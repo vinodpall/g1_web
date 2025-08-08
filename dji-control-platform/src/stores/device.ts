@@ -4,7 +4,7 @@ import type { Device } from '../types'
 
 export const useDeviceStore = defineStore('device', () => {
   const devices = ref<Device[]>([])
-  const selectedDockSn = ref<string>('')
+  const selectedDockSn = ref<string>(localStorage.getItem('selected_dock_sn') || '')
 
   // 计算属性：机场列表
   const docks = computed(() => {
@@ -29,6 +29,19 @@ export const useDeviceStore = defineStore('device', () => {
   // 设置选中的机场
   const setSelectedDock = (dockSn: string) => {
     selectedDockSn.value = dockSn
+    localStorage.setItem('selected_dock_sn', dockSn)
+  }
+
+  // 从本地缓存恢复设备列表
+  const hydrateFromCache = () => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('cached_devices') || '[]')
+      if (Array.isArray(cached) && cached.length > 0) {
+        devices.value = cached as Device[]
+      }
+    } catch (_e) {
+      // ignore
+    }
   }
 
   // 根据SN获取设备
@@ -54,6 +67,7 @@ export const useDeviceStore = defineStore('device', () => {
     selectedDock,
     setDevices,
     setSelectedDock,
+    hydrateFromCache,
     getDeviceBySn,
     getDockSns,
     getDroneSns

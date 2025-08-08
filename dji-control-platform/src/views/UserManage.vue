@@ -508,8 +508,8 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   margin-top: 8px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  flex-wrap: wrap; /* 支持自动换行 */
+  overflow-x: visible; /* 避免横向滚动条 */
   padding-bottom: 8px;
 }
 .user-label {
@@ -528,6 +528,7 @@ onMounted(async () => {
   font-size: 14px;
   outline: none;
   min-width: 120px;
+  max-width: 180px; /* 限制最大宽度 */
   margin-right: 0;
   height: 32px;
   line-height: 32px;
@@ -558,6 +559,10 @@ onMounted(async () => {
   position: relative;
   display: inline-block;
   flex-shrink: 0;
+  min-width: 140px;
+  max-width: 180px;
+  width: 100%;
+  vertical-align: middle;
 }
 .custom-select-arrow {
   position: absolute;
@@ -575,6 +580,15 @@ onMounted(async () => {
 .custom-select-wrapper .user-select {
   padding-right: 32px !important;
   background-image: none !important;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.mission-btn {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .user-action-btns {
   display: flex;

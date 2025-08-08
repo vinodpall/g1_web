@@ -1,5 +1,6 @@
 // API配置文件
 export const API_BASE_URL = '/api/v1'
+export const API_DOMAIN = 'http://10.10.1.3:8000'
 
 // HTTP请求工具类
 export class ApiClient {
@@ -67,7 +68,10 @@ export class ApiClient {
       }
       return data;
     } catch (error) {
-      console.error('API请求失败:', error)
+      // 只在非网络错误时显示错误信息
+      if (!(error instanceof TypeError && error.message.includes('Failed to fetch'))) {
+        console.error('API请求失败:', error)
+      }
       throw error
     }
   }

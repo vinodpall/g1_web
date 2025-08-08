@@ -24,8 +24,8 @@
               <span class="mission-top-title">报警日志</span>
             </div>
             <div class="mission-top-row">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="color:#b8c7d9;min-width:64px;">设备选择：</span>
+              <div class="filter-item">
+                <span class="filter-label">设备选择：</span>
                 <div class="custom-select-wrapper">
                   <select v-model="selectedDeviceType" class="mission-select" @change="handleDeviceTypeChange">
                     <option v-for="option in getDeviceTypeOptions()" :key="option.value" :value="option.value">
@@ -39,8 +39,8 @@
                   </span>
                 </div>
               </div>
-              <div style="display:flex;align-items:center;gap:8px;position:relative;">
-                <span style="color:#b8c7d9;min-width:64px;">报警等级：</span>
+              <div class="filter-item">
+                <span class="filter-label">报警等级：</span>
                 <div class="custom-select-wrapper">
                   <select v-model="filter.level" class="mission-select">
                     <option value="">全部等级</option>
@@ -54,8 +54,8 @@
                   </span>
                 </div>
               </div>
-              <button class="mission-btn mission-btn-pause" @click="handleSearch" style="min-width:72px;">查询</button>
-              <button class="mission-btn mission-btn-reset" @click="handleReset" style="min-width:72px;">重置</button>
+              <button class="mission-btn mission-btn-pause" @click="handleSearch">查询</button>
+              <button class="mission-btn mission-btn-reset" @click="handleReset">重置</button>
             </div>
           </div>
           <!-- 列表区 -->
@@ -470,10 +470,15 @@ onMounted(() => {
 .custom-select-wrapper {
   position: relative;
   display: inline-block;
+  min-width: 140px;
+  max-width: 180px;
+  width: 100%;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 .custom-select-arrow {
   position: absolute;
-  right: 12px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   width: 16px;
@@ -487,11 +492,92 @@ onMounted(() => {
 .mission-select {
   background: transparent !important;
   background-color: transparent !important;
+  width: 100%;
+  min-width: 140px;
+  max-width: 180px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid #164159;
+  color: #fff;
+  font-size: 14px;
+  padding: 0 12px;
+  padding-right: 30px;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px #164159 inset;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+.mission-select:focus {
+  outline: none;
+  border: 1.5px solid #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+/* 隐藏所有浏览器的默认下拉箭头 */
+.mission-select::-ms-expand {
+  display: none;
+}
+.mission-select::-webkit-select-placeholder {
+  display: none;
+}
+.mission-select::-moz-select-placeholder {
+  display: none;
+}
+/* 针对不同浏览器的额外隐藏规则 */
+.mission-select::-webkit-inner-spin-button,
+.mission-select::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.mission-select::-webkit-calendar-picker-indicator {
+  display: none;
+}
+/* 确保在Safari中也不显示默认箭头 */
+.mission-select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+/* 覆盖mission-common.css中的::after伪元素，移除重复箭头 */
+.custom-select-wrapper::after {
+  display: none !important;
 }
 /* 保证下拉菜单（option）背景色不变 */
 .mission-select option {
   background: #172233;
   color: #fff;
+}
+/* 筛选项布局 */
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 24px; /* 增加右侧间距，从16px改为24px */
+}
+.filter-label {
+  color: #b8c7d9;
+  font-size: 14px;
+  min-width: 64px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* 按钮样式优化 */
+.mission-btn {
+  min-width: 72px;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  margin-left: 12px; /* 增加左侧间距，从8px改为12px */
+}
+/* 调整mission-top-row的间距 */
+.mission-top-row {
+  gap: 24px; /* 增加整体间距，从20px改为24px */
 }
 /* 其余 alarm-xxx 样式已移除，统一复用 mission-common.css */
 .mission-th:last-child,

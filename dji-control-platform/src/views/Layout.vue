@@ -94,16 +94,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { useDeviceStore } from '../stores/device'
+import { useDevices } from '../composables/useApi'
+import { dockApi } from '../api/services'
+import { useDeviceStatus } from '../composables/useDeviceStatus'
 // 导入背景图片
 import titleBg from '/src/assets/source_data/bg_data/title.png'
 
 const router = useRouter()
 const userStore = useUserStore()
 const deviceStore = useDeviceStore()
+
+// 设备状态管理
+const { fetchDeviceStatus, deviceStatus } = useDeviceStatus()
 
 const user = computed(() => userStore.user)
 const docks = computed(() => deviceStore.docks)
@@ -173,11 +179,57 @@ const closeUserMenu = () => {
 // 监听点击事件
 document.addEventListener('click', closeUserMenu)
 
-const isStopActive = ref(false)
+// 急停状态计算
+const isStopActive = computed(() => {
+  return deviceStatus.value?.emergency_stop_state || false
+})
 
-const toggleStop = () => {
-  isStopActive.value = !isStopActive.value
+// 急停按钮点击处理
+const toggleStop = async () => {
+  if (!selectedDockSn.value) {
+    console.warn('未选择机场')
+    return
+  }
+
+  try {
+    await dockApi.emergencyStop(selectedDockSn.value)
+    console.log('急停操作成功')
+    // 操作成功后刷新设备状态
+    await fetchDeviceStatus(selectedDockSn.value)
+  } catch (error) {
+    console.error('急停操作失败:', error)
+    // 可以在这里添加错误提示
+  }
 }
+
+// 监听选中的机场变化，自动获取设备状态
+watch(selectedDockSn, async (newDockSn) => {
+  if (newDockSn) {
+    await fetchDeviceStatus(newDockSn)
+  }
+})
+
+// 页面加载时恢复设备列表和状态
+onMounted(async () => {
+  // 先尝试从本地缓存恢复设备列表
+  deviceStore.hydrateFromCache()
+
+  // 如果没有设备，调用接口获取并缓存
+  if (!deviceStore.devices || deviceStore.devices.length === 0) {
+    try {
+      const { fetchDevices } = useDevices()
+      const list = await fetchDevices()
+      deviceStore.setDevices(list)
+    } catch (e) {
+      // 忽略网络错误，保持静默
+    }
+  }
+
+  // 恢复并拉取选中机场的状态
+  if (selectedDockSn.value) {
+    await fetchDeviceStatus(selectedDockSn.value)
+  }
+})
 </script>
 
 <style scoped>

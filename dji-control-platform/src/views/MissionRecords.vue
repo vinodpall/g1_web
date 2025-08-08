@@ -38,7 +38,7 @@
                     @change="onRecordTrackSelectChange"
                     :disabled="waylineFileLoading"
                   >
-                    <option value="">全部</option>
+                    <option value="">全部航线</option>
                     <option v-for="file in waylineFiles" :key="file.wayline_id" :value="file.wayline_id">
                       {{ file.name }}
                     </option>
@@ -54,7 +54,49 @@
                     </svg>
                   </span>
                 </div>
-                <button class="mission-btn mission-btn-pause">搜索</button>
+                <!-- 任务状态筛选 -->
+                <div style="position: relative; display: inline-block;">
+                  <select
+                    v-model="selectedStatus"
+                    class="mission-select treeselect-track"
+                    style="width: 120px;"
+                    @change="onFilterChange"
+                  >
+                    <option value="">全部状态</option>
+                    <option value="0">待执行</option>
+                    <option value="1">已发送</option>
+                    <option value="2">执行中</option>
+                    <option value="3">已暂停</option>
+                    <option value="4">已取消</option>
+                    <option value="5">执行成功</option>
+                    <option value="6">执行失败</option>
+                  </select>
+                  <span class="custom-select-arrow" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2;">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    </svg>
+                  </span>
+                </div>
+                <!-- 任务类型筛选 -->
+                <div style="position: relative; display: inline-block;">
+                  <select
+                    v-model="selectedTaskType"
+                    class="mission-select treeselect-track"
+                    style="width: 120px;"
+                    @change="onFilterChange"
+                  >
+                    <option value="">全部类型</option>
+                    <option value="0">立即任务</option>
+                    <option value="1">定时任务</option>
+                    <option value="2">条件任务</option>
+                  </select>
+                  <span class="custom-select-arrow" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2;">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    </svg>
+                  </span>
+                </div>
+                <button class="mission-btn mission-btn-pause" @click="onFilterChange">搜索</button>
               </div>
             </div>
           </div>
@@ -80,7 +122,7 @@
                 暂无任务记录
               </div>
               <div v-else class="mission-tr" v-for="(job, idx) in jobs" :key="job.job_id">
-                <div class="mission-td">{{ idx + 1 }}</div>
+                <div class="mission-td">{{ (currentPage - 1) * pageSize + idx + 1 }}</div>
                 <div class="mission-td">{{ job.name }}</div>
                 <div class="mission-td">{{ job.file_name || job.name }}</div>
                 <div class="mission-td">{{ getTaskTypeText(job.task_type) }}</div>
@@ -92,6 +134,55 @@
                 <div class="mission-td">{{ formatTimestamp(job.begin_time) }}</div>
                 <div class="mission-td">{{ formatTimestamp(job.completed_time) }}</div>
                 <div class="mission-td">{{ job.username }}</div>
+              </div>
+            </div>
+            <!-- 分页组件 -->
+            <div class="pagination-wrapper" v-if="total > 0">
+              <div class="pagination-info">
+                共 {{ total }} 条记录，当前第 {{ currentPage }} 页
+              </div>
+              <div class="pagination-controls">
+                <button 
+                  class="pagination-btn pagination-btn-icon" 
+                  :disabled="currentPage <= 1"
+                  @click="changePage(currentPage - 1)"
+                  title="上一页"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#67d5fd" stroke-width="2">
+                    <path d="M15 18l-6-6 6-6"/>
+                  </svg>
+                </button>
+                
+                <div class="pagination-page-input">
+                  <input 
+                    v-model="pageInput" 
+                    type="text" 
+                    class="page-input"
+                    @keyup.enter="jumpToPage"
+                    @blur="jumpToPage"
+                  />
+                  <span class="page-separator">/</span>
+                  <span class="total-pages">{{ totalPages }}</span>
+                </div>
+                
+                <button 
+                  class="pagination-btn pagination-btn-icon" 
+                  :disabled="currentPage >= totalPages"
+                  @click="changePage(currentPage + 1)"
+                  title="下一页"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#67d5fd" stroke-width="2">
+                    <path d="M9 18l6-6-6-6"/>
+                  </svg>
+                </button>
+                
+                <button 
+                  class="pagination-btn pagination-btn-jump" 
+                  @click="jumpToPage"
+                  title="跳转到指定页码"
+                >
+                  跳转
+                </button>
               </div>
             </div>
           </div>
@@ -119,6 +210,16 @@ const { getCachedWorkspaceId } = useDevices()
 // 航线文件相关
 const selectedWaylineFile = ref('')
 const waylineFileLoading = ref(false)
+// 筛选：任务状态与任务类型
+const selectedStatus = ref<string | number>('')
+const selectedTaskType = ref<string | number>('')
+
+// 分页参数
+const currentPage = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
+const pageInput = ref('')
 
 // 加载航线文件列表
 const loadWaylineFiles = async () => {
@@ -229,10 +330,14 @@ const loadJobRecords = async () => {
         if (userData.workspace_id) {
           console.log('从用户数据中找到workspace_id:', userData.workspace_id)
           await fetchJobs(userData.workspace_id, {
-            page: 1,
-            page_size: 10,
+            page: currentPage.value,
+            page_size: pageSize.value,
             file_id: selectedWaylineFile.value || undefined
           })
+          // 更新总数
+          if (pagination.value) {
+            total.value = pagination.value.total || 0
+          }
           return
         }
       } catch (err) {
@@ -243,19 +348,58 @@ const loadJobRecords = async () => {
   }
   
   await fetchJobs(workspaceId, {
-    page: 1,
-    page_size: 10,
-    file_id: selectedWaylineFile.value || undefined
+    page: currentPage.value,
+    page_size: pageSize.value,
+    file_id: selectedWaylineFile.value || undefined,
+    status: selectedStatus.value === '' ? undefined : Number(selectedStatus.value),
+    task_type: selectedTaskType.value === '' ? undefined : Number(selectedTaskType.value)
   })
+  
+  // 更新总数
+  if (pagination.value) {
+    total.value = pagination.value.total || 0
+  }
+  
+  // 同步分页输入框
+  pageInput.value = currentPage.value.toString()
 }
 
 // 页面加载时获取数据
 onMounted(async () => {
+  // 初始化分页输入框
+  pageInput.value = currentPage.value.toString()
+  
   await Promise.all([
     loadWaylineFiles(),
     loadJobRecords()
   ])
 })
+
+// 切换页面
+const changePage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page
+    pageInput.value = page.toString()
+    loadJobRecords()
+  }
+}
+
+// 跳转到指定页面
+const jumpToPage = () => {
+  const page = parseInt(pageInput.value)
+  if (page && page >= 1 && page <= totalPages.value) {
+    currentPage.value = page
+    loadJobRecords()
+  } else {
+    pageInput.value = currentPage.value.toString()
+  }
+}
+
+// 筛选条件变化
+const onFilterChange = () => {
+  currentPage.value = 1
+  loadJobRecords()
+}
 
 const recordTrackSelectRef = ref<HTMLSelectElement | null>(null)
 const isRecordTrackSelectOpen = ref(false)
@@ -276,7 +420,7 @@ function onRecordTrackSelectChange() {
   isRecordTrackSelectOpen.value = false
   // 航线切换时清空当前数据并刷新任务列表
   console.log('航线切换，当前选中:', selectedWaylineFile.value)
-  loadJobRecords()
+  onFilterChange()
 }
 function onRecordTrackSelectMousedown() {
   isRecordTrackSelectOpen.value = true
@@ -369,5 +513,124 @@ function onRecordTrackSelectKeydown(e: KeyboardEvent) {
 
 .mission-error {
   color: #f56c6c;
+}
+
+/* 分页组件样式 */
+.pagination-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-top: none;
+  background: transparent;
+}
+
+.pagination-info {
+  color: #67d5fd;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination-btn {
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 6px 12px;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s, color 0.2s, border 0.2s;
+}
+
+.pagination-btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: #0c3c56;
+  color: #67d5fd;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+}
+
+.pagination-btn-icon:hover:not(:disabled) {
+  background: #0c4666;
+  color: #67d5fd;
+}
+
+.pagination-btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-page-input {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #0a2a3a;
+  border-radius: 4px;
+  padding: 0;
+  border: 1px solid #164159;
+  min-width: 80px;
+  height: 36px;
+}
+
+.page-input {
+  width: 35px;
+  height: 36px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 12px;
+  color: #fff;
+  font-weight: 400;
+}
+
+.page-input:focus {
+  outline: none;
+  background: #0c3c56;
+  border-radius: 2px;
+}
+
+.page-input::placeholder {
+  color: #67d5fd;
+}
+
+.page-separator {
+  color: #67d5fd;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 36px;
+}
+
+.total-pages {
+  color: #67d5fd;
+  font-size: 12px;
+  font-weight: 400;
+  min-width: 16px;
+  line-height: 36px;
+}
+
+.pagination-btn-jump {
+  background: #0c3c56;
+  color: #67d5fd;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+  padding: 6px 12px;
+  height: 36px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.pagination-btn-jump:hover {
+  background: #0c4666;
+  color: #67d5fd;
 }
 </style>

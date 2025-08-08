@@ -69,10 +69,10 @@
               </div>
               <div class="status-item">
                 <div class="top-row">
-                  <img src="@/assets/source_data/svg_data/speed.svg" alt="速度" />
-                  <span class="label">速度</span>
+                  <img src="@/assets/source_data/svg_data/drone_battery.svg" alt="电量" />
+                  <span class="label">电量</span>
                 </div>
-                <span class="value">{{ formatSpeed(droneStatus?.horizontalSpeed) }}</span>
+                <span class="value">{{ formatBattery(droneStatus?.batteryPercent) }}</span>
               </div>
               <div class="status-item">
                 <div class="top-row">
@@ -464,12 +464,20 @@
               <div class="chart-box">
                 <div class="progress-circle-container">
                   <div class="progress-circle">
-                    <div class="progress-circle-outer-ring" v-if="waylineProgressPercent === 0"></div>
-                    <div class="progress-circle-left">
-                      <div class="progress-circle-bar blue" :style="{ transform: `rotate(${waylineProgressPercent * 1.8}deg)`, opacity: waylineProgressPercent === 0 ? 0 : 1 }"></div>
-                    </div>
-                    <div class="progress-circle-right">
-                      <div class="progress-circle-bar orange" :style="{ transform: `rotate(${Math.max(0, (waylineProgressPercent - 50) * 3.6)}deg)`, opacity: waylineProgressPercent === 0 ? 0 : 1 }"></div>
+                    <!-- 外环：进度显示环（按实际进度渲染蓝色已巡检比例） -->
+                    <!-- 独立的外部光晕层，避免被mask裁剪导致的阴影不可见问题 -->
+                    <div 
+                      class="progress-circle-outer-glow" 
+                      :class="{ 'completed': waylineProgressPercent >= 100 }"
+                      :style="{ '--glow-color': waylineProgressPercent > 0 ? '#00e1ff' : '#FF8000' }"
+                    ></div>
+                    <div 
+                      class="progress-circle-outer-ring" 
+                      :class="{ 'completed': waylineProgressPercent >= 100 }"
+                      :style="{
+                        background: `conic-gradient(from -90deg, #00e1ff ${waylineProgressPercent}%, #FF8000 ${waylineProgressPercent}% 100%)`
+                      }"
+                    >
                     </div>
                     <div class="progress-circle-center">
                       <div class="progress-text">
@@ -494,14 +502,8 @@
               <div class="chart-box">
                 <div class="progress-circle-container">
                   <div class="progress-circle">
-                    <div class="circle-status">
-                      <div :class="['status-circle', {
-                        'error': waylineTaskStatus === 'failed',
-                        'completed': waylineTaskStatus === 'completed',
-                        'running': waylineTaskStatus === 'running',
-                        'waiting': waylineTaskStatus === 'waiting'
-                      }]"></div>
-                    </div>
+                    <!-- 外环：任务状态显示环 -->
+                    <div class="task-status-outer-ring" :class="{ 'error': waylineTaskStatus === 'failed' }"></div>
                     <div class="progress-circle-center">
                       <div class="progress-text">
                         <span>任务</span>
@@ -533,6 +535,12 @@
           地图信息
         </div>
         <div class="map-container" ref="mapContainer">
+          <!-- 无人机追踪按钮 -->
+          <div class="drone-track-btn" @click="toggleDroneTracking" :class="{ 'active': isDroneTracking }" :title="isDroneTracking ? '取消追踪' : '追踪无人机'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
         </div>
       </div>
     </div>
@@ -602,60 +610,31 @@
             <span class="unit-label">米</span>
           </div>
           <div class="dispatch-task-row">
-            <label>返航模式：</label>
-            <div class="custom-select-wrapper">
-              <select v-model="dispatchTaskDialog.form.rth_mode" class="mission-select">
-                <option :value="0">自动模式</option>
-                <option :value="1">设定高度模式</option>
-              </select>
-              <span class="custom-select-arrow">
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                </svg>
-              </span>
+            <label>算法开关：</label>
+            <div class="dispatch-switch-wrapper">
+              <div
+                class="switch-container"
+                :class="{ active: dispatchTaskDialog.form.enable_vision }"
+                @click="dispatchTaskDialog.form.enable_vision = !dispatchTaskDialog.form.enable_vision"
+              >
+                <div class="switch-toggle"></div>
+              </div>
+              <span class="dispatch-switch-label">{{ dispatchTaskDialog.form.enable_vision ? '开启' : '关闭' }}</span>
             </div>
           </div>
           <div class="dispatch-task-row">
-            <label>失控动作：</label>
-            <div class="custom-select-wrapper">
-              <select v-model="dispatchTaskDialog.form.out_of_control_action" class="mission-select">
-                <option :value="0">返航</option>
-                <option :value="1">悬停</option>
-                <option :value="2">降落</option>
-              </select>
-              <span class="custom-select-arrow">
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                </svg>
-              </span>
-            </div>
-          </div>
-          <div class="dispatch-task-row">
-            <label>失控处理：</label>
-            <div class="custom-select-wrapper">
-              <select v-model="dispatchTaskDialog.form.exit_wayline_when_rc_lost" class="mission-select">
-                <option :value="0">继续执行航线</option>
-                <option :value="1">退出航线</option>
-              </select>
-              <span class="custom-select-arrow">
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                </svg>
-              </span>
-            </div>
-          </div>
-          <div class="dispatch-task-row">
-            <label>精度类型：</label>
-            <div class="custom-select-wrapper">
-              <select v-model="dispatchTaskDialog.form.wayline_precision_type" class="mission-select">
-                <option :value="0">标准精度</option>
-                <option :value="1">高精度RTK任务</option>
-              </select>
-              <span class="custom-select-arrow">
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                </svg>
-              </span>
+            <label>算法选择：</label>
+            <div class="dispatch-algorithm-options">
+              <label v-for="(name, id) in algorithmOptions" :key="id" class="dispatch-algorithm-option">
+                <input 
+                  type="checkbox" 
+                  :value="id" 
+                  v-model="dispatchTaskDialog.form.vision_algorithms"
+                  class="dispatch-algorithm-checkbox"
+                  :disabled="!dispatchTaskDialog.form.enable_vision"
+                />
+                <span class="dispatch-algorithm-label" :class="{ 'disabled': !dispatchTaskDialog.form.enable_vision }">{{ name }}</span>
+              </label>
             </div>
           </div>
         </div>
@@ -689,7 +668,7 @@ const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
 
 
 // 使用航线任务API
-const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineProgress, fetchWaylineJobDetail, cancelReturnHome, stopJob, pauseJob, resumeJob, executeJob } = useWaylineJobs()
+const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineProgress, fetchWaylineJobDetail, fetchWaylineDetail, cancelReturnHome, stopJob, pauseJob, resumeJob } = useWaylineJobs()
 
 // 使用设备状态API
 const { 
@@ -881,41 +860,27 @@ const loadLatestAlarmData = async () => {
 
 // 云台切换函数
 const switchGimbal = async (videoType: 'dock' | 'drone_visible' | 'drone_infrared') => {
+  videoLoading.value = true
+  
   try {
-    videoLoading.value = true
-    gimbalMenuVisible.value = false
-    
-    // 从缓存获取视频流地址
     const videoStreamsCache = localStorage.getItem('video_streams')
     if (!videoStreamsCache) {
-      alert('没有找到缓存的视频流数据')
+      alert('没有找到视频流信息，请先完成视频能力缓存')
       return
     }
     
     const videoStreams = JSON.parse(videoStreamsCache)
     const targetStream = videoStreams.find((stream: any) => stream.type === videoType)
-    
-    if (!targetStream || !targetStream.url) {
+    if (!targetStream) {
       alert(`没有找到${getVideoTypeName(videoType)}视频流`)
       return
     }
     
-    console.log('切换到视频流:', targetStream)
-    
-    // 直接使用缓存的视频流地址
+    // 仅更新流地址和类型，播放由watch统一触发
     videoStreamUrl.value = targetStream.url
     currentVideoType.value = videoType
     localStorage.setItem('video_stream_url', targetStream.url)
     localStorage.setItem('current_video_type', videoType)
-    
-    // 重新启动视频播放
-    setTimeout(() => {
-      startVideoPlayback()
-    }, 500)
-    
-  } catch (err) {
-    console.error('切换云台失败:', err)
-    alert('切换云台失败，请重试')
   } finally {
     videoLoading.value = false
   }
@@ -950,6 +915,12 @@ const loadWaylineProgress = async () => {
     if (progressData.job_id) {
       const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
       waylineJobDetail.value = jobDetail
+      
+      // 显示航点和轨迹
+      await displayWayline()
+    } else {
+      // 如果没有任务，清除航点和轨迹显示
+      clearWaylineDisplay()
     }
   } catch (err) {
     // 静默处理错误
@@ -1238,7 +1209,7 @@ const addDockMarker = (longitude: number, latitude: number, dockInfo: any) => {
         style="
           width: 32px;
           height: 32px;
-          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+          filter: brightness(0) saturate(100%) invert(40%) sepia(100%) saturate(10000%) hue-rotate(200deg) brightness(100%) contrast(100%);
         "
         alt="机场"
       />
@@ -1283,7 +1254,7 @@ const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => 
         style="
           width: 32px;
           height: 32px;
-          filter: brightness(0) saturate(100%) invert(35%) sepia(92%) saturate(1945%) hue-rotate(200deg) brightness(97%) contrast(103%);
+          filter: brightness(0) saturate(100%) invert(15%) sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%);
         "
         alt="无人机"
       />
@@ -1375,6 +1346,12 @@ const updateMapMarkers = (shouldCenter = false) => {
     // 添加无人机标记
     addDroneMarker(droneLongitude, droneLatitude, droneInfo)
     
+    // 更新无人机追踪
+    updateDroneTracking()
+    
+    // 更新当前航点显示
+    updateCurrentWaypoint()
+    
     // 只在初始加载或明确要求时才设置地图中心
     if (shouldCenter && amapInstance) {
       amapInstance.setCenter([longitude, latitude])
@@ -1409,10 +1386,7 @@ const initVideoPlayer = () => {
     currentVideoType.value = savedVideoType as 'dock' | 'drone_visible' | 'drone_infrared'
   }
   
-  // 延迟初始化播放器，确保DOM已经渲染
-  nextTick(() => {
-    startVideoPlayback()
-  })
+  // 由watch(videoStreamUrl)统一触发播放，避免重复拉流
 }
 
 // 开始视频播放
@@ -1661,6 +1635,15 @@ const reloadVideo = () => {
 const selectedWayline = ref('')
 const showWaylineDropdown = ref(false)
 
+// 算法选项
+const algorithmOptions = {
+  49: "常熟1号线路灯",
+  50: "常熟2号线路灯", 
+  51: "常熟3号线路灯",
+  52: "常熟楼宇亮化",
+  9: "人车检测"
+}
+
 // 下发任务弹窗
 const dispatchTaskDialog = ref({
   visible: false,
@@ -1675,7 +1658,10 @@ const dispatchTaskDialog = ref({
     exit_wayline_when_rc_lost: 0,
     wayline_precision_type: 1,
     begin_time: null as string | null,
-    end_time: null as string | null
+    end_time: null as string | null,
+    enable_vision: false,
+    vision_algorithms: [] as number[],
+    vision_threshold: 0.5
   }
 })
 
@@ -1732,7 +1718,10 @@ const handleDispatchTask = () => {
     exit_wayline_when_rc_lost: 0,
     wayline_precision_type: 1,
     begin_time: null,
-    end_time: null
+    end_time: null,
+    enable_vision: false,
+    vision_algorithms: [],
+    vision_threshold: 0.5
   }
   
   dispatchTaskDialog.value.visible = true
@@ -1760,20 +1749,25 @@ const onDispatchTaskConfirm = async () => {
       return
     }
     
+    // 构建任务数据（包含算法相关字段，提交到 flight-tasks 接口）
+    const taskData = {
+      ...form,
+      // 保留隐藏的字段（使用默认值）
+      rth_mode: form.rth_mode || 1,
+      out_of_control_action: form.out_of_control_action || 0,
+      exit_wayline_when_rc_lost: form.exit_wayline_when_rc_lost || 0,
+      wayline_precision_type: form.wayline_precision_type || 1,
+      // 只在定时任务时传递 begin_time
+      ...(form.task_type === 1 && form.begin_time ? { begin_time: form.begin_time } : {})
+    }
+    
     // 创建任务
-    const response = await createJob(workspaceId, form)
+    const response = await createJob(workspaceId, taskData)
     console.log('任务创建成功:', response)
     
-    // 获取job_id并执行任务
+    // flight-tasks接口已包含算法字段，创建即执行
     if (response && response.job_id) {
-      try {
-        await executeJob(workspaceId, response.job_id)
-        console.log('任务执行指令已发送')
-        alert('任务下发并执行成功')
-      } catch (executeErr) {
-        console.error('任务执行失败:', executeErr)
-        alert('任务下发成功，但执行失败')
-      }
+      alert('任务下发并执行成功')
     } else {
       alert('任务下发成功，但未获取到任务ID')
     }
@@ -2565,6 +2559,9 @@ onUnmounted(() => {
   clearDockMarkers()
   clearDroneMarkers()
   
+  // 清理航点和轨迹
+  clearWaylineDisplay()
+  
   // 清理地图实例
   if (amapInstance) {
     amapInstance.destroy()
@@ -2672,6 +2669,235 @@ const toggleFullscreen = () => {
     }
   } catch (error) {
     alert('全屏功能暂时不可用，请检查浏览器设置')
+  }
+}
+
+// 追踪无人机
+const isDroneTracking = ref(false)
+const toggleDroneTracking = () => {
+  isDroneTracking.value = !isDroneTracking.value
+  if (isDroneTracking.value) {
+    centerToDroneMarker();
+  }
+}
+
+// 航点和轨迹相关变量
+const waylineMarkers = ref<any[]>([])
+const waylinePolyline = ref<any>(null)
+const currentWaypointMarker = ref<any>(null)
+
+// 更新无人机追踪位置
+const updateDroneTracking = () => {
+  if (isDroneTracking.value) {
+    centerToDroneMarker();
+  }
+}
+
+// 清除航线显示
+const clearWaylineDisplay = () => {
+  if (amapInstance) {
+    // 清除航点标记
+    waylineMarkers.value.forEach(marker => {
+      amapInstance.remove(marker)
+    })
+    waylineMarkers.value = []
+    
+    // 清除航线
+    if (waylinePolyline.value) {
+      amapInstance.remove(waylinePolyline.value)
+      waylinePolyline.value = null
+    }
+    
+    // 清除当前航点标记
+    if (currentWaypointMarker.value) {
+      amapInstance.remove(currentWaypointMarker.value)
+      currentWaypointMarker.value = null
+    }
+  }
+}
+
+// 显示航点和航线
+const displayWayline = async () => {
+  console.log('displayWayline 开始执行')
+  console.log('amapInstance:', !!amapInstance)
+  console.log('amapApiRef:', !!amapApiRef)
+  console.log('waylineJobDetail:', waylineJobDetail.value)
+  
+  if (!amapInstance || !amapApiRef || !waylineJobDetail.value) {
+    console.log('displayWayline 条件不满足，退出')
+    return
+  }
+  
+  // 先清除之前的显示
+  clearWaylineDisplay()
+  
+  try {
+    console.log('waylineJobDetail完整数据:', waylineJobDetail.value)
+    
+    // 检查是否有waylines数据
+    let waylines = waylineJobDetail.value.waylines
+    console.log('waylines:', waylines)
+    
+    // 如果没有waylines数据，尝试通过file_id获取航线文件详情
+    if (!waylines || waylines.length === 0) {
+      console.log('没有找到waylines数据，尝试通过file_id获取航线文件详情')
+      const workspaceId = getCachedWorkspaceId()
+      const fileId = waylineJobDetail.value.file_id
+      
+      if (workspaceId && fileId) {
+        console.log('获取航线文件详情 - workspaceId:', workspaceId, 'fileId:', fileId)
+        try {
+          const waylineDetail = await fetchWaylineDetail(workspaceId, fileId)
+          console.log('航线文件详情:', waylineDetail)
+          waylines = waylineDetail.waylines
+          console.log('从文件详情获取的waylines:', waylines)
+        } catch (error) {
+          console.error('获取航线文件详情失败:', error)
+          return
+        }
+      } else {
+        console.log('缺少workspaceId或fileId，无法获取航线文件详情')
+        return
+      }
+    }
+    
+    if (!waylines || waylines.length === 0) {
+      console.log('仍然没有找到waylines数据')
+      return
+    }
+    
+    const wayline = waylines[0] // 取第一个航线
+    const waypoints = wayline.waypoints || []
+    console.log('waypoints:', waypoints)
+    
+    if (waypoints.length === 0) {
+      console.log('没有找到waypoints数据')
+      return
+    }
+    
+    // 创建航点标记
+    const markers: any[] = []
+    const path: [number, number][] = []
+    
+    console.log('开始创建航点标记，共', waypoints.length, '个航点')
+    
+    waypoints.forEach((waypoint: any, index: number) => {
+      const [wgsLng, wgsLat] = waypoint.coordinates || [0, 0]
+      console.log(`航点 ${index + 1}:`, { wgsLng, wgsLat })
+      
+      if (wgsLng && wgsLat) {
+        // 将WGS84坐标转换为GCJ-02坐标
+        const gcjCoords = transformWGS84ToGCJ02(wgsLng, wgsLat)
+        console.log(`航点 ${index + 1} 转换后坐标:`, gcjCoords)
+        
+        // 创建航点标记
+        const marker = new amapApiRef.Marker({
+          position: [gcjCoords.longitude, gcjCoords.latitude],
+          icon: new amapApiRef.Icon({
+            size: new amapApiRef.Size(20, 20),
+            image: 'data:image/svg+xml;base64,' + btoa(`
+              <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="10" cy="10" r="8" fill="#67d5fd" stroke="#fff" stroke-width="2"/>
+                <text x="10" y="13" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">${index + 1}</text>
+              </svg>
+            `),
+            imageSize: new amapApiRef.Size(20, 20)
+          }),
+          title: `航点 ${index + 1}`
+        })
+        
+        markers.push(marker)
+        amapInstance.add(marker)
+        path.push([gcjCoords.longitude, gcjCoords.latitude])
+        console.log(`航点 ${index + 1} 已添加到地图`)
+      } else {
+        console.log(`航点 ${index + 1} 坐标无效，跳过`)
+      }
+    })
+    
+    waylineMarkers.value = markers
+    console.log('航点标记创建完成，共', markers.length, '个标记')
+    
+    // 创建航线
+    console.log('准备创建航线，路径点数:', path.length)
+    if (path.length > 1) {
+      waylinePolyline.value = new amapApiRef.Polyline({
+        path: path,
+        strokeColor: '#67d5fd',
+        strokeWeight: 3,
+        strokeOpacity: 0.8,
+        strokeStyle: 'solid'
+      })
+      amapInstance.add(waylinePolyline.value)
+      console.log('航线已添加到地图')
+    } else {
+      console.log('路径点数不足，无法创建航线')
+    }
+    
+    // 显示当前航点
+    updateCurrentWaypoint()
+    
+  } catch (error) {
+    console.error('显示航线失败:', error)
+  }
+}
+
+// 更新当前航点显示
+const updateCurrentWaypoint = () => {
+  if (!amapInstance || !amapApiRef || !waylineJobDetail.value || !waylineProgress.value) {
+    return
+  }
+  
+  // 清除之前的当前航点标记
+  if (currentWaypointMarker.value) {
+    amapInstance.remove(currentWaypointMarker.value)
+    currentWaypointMarker.value = null
+  }
+  
+  const currentWaypointIndex = waylineProgress.value.ext?.current_waypoint_index || 0
+  const waylines = waylineJobDetail.value.waylines
+  
+  if (!waylines || waylines.length === 0) {
+    return
+  }
+  
+  const wayline = waylines[0]
+  const waypoints = wayline.waypoints || []
+  
+  if (currentWaypointIndex >= 0 && currentWaypointIndex < waypoints.length) {
+    const waypoint = waypoints[currentWaypointIndex]
+    const [wgsLng, wgsLat] = waypoint.coordinates || [0, 0]
+    
+    if (wgsLng && wgsLat) {
+      const gcjCoords = transformWGS84ToGCJ02(wgsLng, wgsLat)
+      
+      // 创建当前航点标记
+      currentWaypointMarker.value = new amapApiRef.Marker({
+        position: [gcjCoords.longitude, gcjCoords.latitude],
+        icon: new amapApiRef.Icon({
+          size: new amapApiRef.Size(24, 24),
+          image: 'data:image/svg+xml;base64,' + btoa(`
+            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" fill="#ff4d4f" stroke="#fff" stroke-width="2"/>
+              <text x="12" y="16" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">${currentWaypointIndex + 1}</text>
+            </svg>
+          `),
+          imageSize: new amapApiRef.Size(24, 24)
+        }),
+        title: `当前航点 ${currentWaypointIndex + 1}`
+      })
+      
+      amapInstance.add(currentWaypointMarker.value)
+      console.log(`当前航点 ${currentWaypointIndex + 1} 已添加到地图`)
+    }
+  }
+}
+
+// 地图定位到无人机标记实际位置
+const centerToDroneMarker = () => {
+  if (amapInstance && droneMarkers.value.length > 0) {
+    const markerPos = droneMarkers.value[0].getPosition();
+    amapInstance.setCenter(markerPos);
   }
 }
 </script>
@@ -2828,12 +3054,104 @@ const toggleFullscreen = () => {
   cursor: pointer;
   box-shadow: 0 0 0 1px #164159 inset;
   transition: border 0.2s, box-shadow 0.2s;
+  /* Firefox特定样式 */
+  text-indent: 0.01px;
+  text-overflow: '';
+  /* 完全隐藏默认箭头 */
+  background-image: none;
+  -webkit-background-image: none;
+  -moz-background-image: none;
+}
+
+/* 下拉选项样式 - 参考mission-common.css */
+.mission-select,
+.mission-select option {
+  background: #16213a !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* 下拉选项悬停和选中状态 */
+.mission-select option:hover {
+  background: #223a5e !important;
+  color: #67d5fd !important;
+}
+
+.mission-select option:checked {
+  background: #164159 !important;
+  color: #67d5fd !important;
+}
+
+/* Webkit浏览器的下拉选项样式 */
+.mission-select::-webkit-listbox {
+  background: #16213a !important;
+}
+
+.mission-select::-webkit-option {
+  background: #16213a !important;
+  color: #fff !important;
+}
+
+.mission-select::-webkit-option:hover {
+  background: #223a5e !important;
+  color: #67d5fd !important;
+}
+
+.mission-select::-webkit-option:checked {
+  background: #164159 !important;
+  color: #67d5fd !important;
+}
+
+/* Firefox浏览器的下拉选项样式 */
+.mission-select:-moz-focusring {
+  color: transparent;
+  text-shadow: 0 0 0 #fff;
+}
+
+.mission-select:-moz-listbox {
+  background: #16213a !important;
 }
 
 .mission-select:focus {
   outline: none;
   border: 1.5px solid #67d5fd;
   box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+/* 隐藏所有浏览器的默认下拉箭头 */
+.mission-select::-ms-expand {
+  display: none;
+}
+
+.mission-select::-webkit-select-placeholder {
+  display: none;
+}
+
+.mission-select::-moz-select-placeholder {
+  display: none;
+}
+
+/* 针对不同浏览器的额外隐藏规则 */
+.mission-select::-webkit-inner-spin-button,
+.mission-select::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.mission-select::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+/* 确保在Safari中也不显示默认箭头 */
+.mission-select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* 覆盖mission-common.css中的::after伪元素，移除重复箭头 */
+.custom-select-wrapper::after {
+  display: none !important;
 }
 
 .custom-select-arrow {
@@ -4205,11 +4523,12 @@ const toggleFullscreen = () => {
   padding-bottom: 20px;
 }
 
-/* 新的圆环进度条样式 */
+/* 双环进度条样式 */
 .progress-circle-container {
   position: relative;
   width: 80px;
   height: 80px;
+  overflow: visible;
 }
 
 .progress-circle {
@@ -4218,123 +4537,85 @@ const toggleFullscreen = () => {
   height: 100%;
 }
 
-.progress-circle-left,
-.progress-circle-right {
+/* 外环：进度显示环 */
+.progress-circle-outer-ring {
   position: absolute;
-  width: 40px;
-  height: 80px;
-  top: 0;
-  overflow: hidden;
-}
-
-.progress-circle-left {
-  left: 0;
-}
-
-.progress-circle-right {
-  right: 0;
-}
-
-.progress-circle-bar {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  border: 4px solid transparent;
+  width: 100%;
+  height: 100%;
+  /* 使用遮罩形成8px厚度的圆环，颜色用背景的conic-gradient控制 */
+  border: none;
   border-radius: 50%;
   box-sizing: border-box;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
+  z-index: 2;
 }
 
-.progress-circle-left .progress-circle-bar {
-  left: 0;
-  border-top: 4px solid;
-  border-left: 4px solid;
-  border-bottom: 4px solid;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  transform-origin: right center;
-  transform: rotate(0deg);
+.progress-circle-outer-ring.completed { filter: brightness(1.1); }
+/* 独立的外部光晕层，避免mask裁剪阴影 */
+.progress-circle-outer-glow {
+  position: absolute;
+  inset: -8px; /* 外扩，避免环边缘出现暗圈 */
+  border-radius: 50%;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: screen; /* 在深色背景上避免发暗/黑圈 */
+  filter: blur(8px);
+  opacity: 0.6;
+  will-change: filter, transform, opacity;
+  animation: glow-pulse 4s infinite alternate ease-in-out;
+  background: radial-gradient(circle, var(--glow-color, #00e1ff) 40%, transparent 70%);
 }
 
-.progress-circle-right .progress-circle-bar {
-  right: 0;
-  border-top: 4px solid;
-  border-right: 4px solid;
-  border-bottom: 4px solid;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  transform-origin: left center;
-  transform: rotate(0deg);
+.progress-circle-outer-glow.completed {
+  animation: pulse-completed 4s infinite alternate;
 }
 
-.progress-circle-bar.blue {
-  border-color: #00e1ff;
-  box-shadow: 0 0 15px rgba(0, 225, 255, 0.9), inset 0 0 8px rgba(0, 225, 255, 0.7);
-  transform: rotate(180deg);
+@keyframes glow-pulse {
+  0% { filter: blur(6px); opacity: 0.45; transform: scale(0.98); }
+  100% { filter: blur(12px); opacity: 0.9; transform: scale(1.04); }
 }
 
-.progress-circle-bar.orange {
-  border-color: #ff8000;
-  box-shadow: 0 0 15px rgba(255, 128, 0, 0.9), inset 0 0 8px rgba(255, 128, 0, 0.7);
-  transform: rotate(180deg);
+@keyframes pulse-completed {
+  0% { 
+    filter: blur(8px); 
+    opacity: 0.6; 
+    transform: scale(1); 
+    background: radial-gradient(circle, #00e1ff 40%, transparent 70%);
+  }
+  50% { 
+    filter: blur(12px); 
+    opacity: 0.9; 
+    transform: scale(1.05); 
+    background: radial-gradient(circle, #00e1ff 50%, transparent 60%);
+  }
+  100% { 
+    filter: blur(8px); 
+    opacity: 0.6; 
+    transform: scale(1); 
+    background: radial-gradient(circle, #00e1ff 40%, transparent 70%);
+  }
 }
 
-.progress-circle-bar.green {
-  border-color: #00ff7f;
-  box-shadow: 0 0 10px rgba(0, 255, 127, 0.7), inset 0 0 5px rgba(0, 255, 127, 0.5);
-  transform: rotate(180deg);
-}
-
-.progress-circle-bar.red {
-  border-color: #ff4d4f;
-  box-shadow: 0 0 10px rgba(255, 77, 79, 0.7), inset 0 0 5px rgba(255, 77, 79, 0.5);
-  transform: rotate(0deg);
+@keyframes ring-brightness {
+  0% { filter: brightness(1); }
+  100% { filter: brightness(1.3); }
 }
 
 .progress-circle-center {
   position: absolute;
-  width: 64px;
-  height: 64px;
-  top: 8px;
-  left: 8px;
+  width: 56px;
+  height: 56px;
+  top: 12px;
+  left: 12px;
   border-radius: 50%;
   background-color: rgba(0, 12, 23, 0.9);
   display: flex;
   justify-content: center;
   align-items: center;
   box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.8);
-}
-
-/* 修改为环形进度线 */
-.progress-circle-center::before {
-  content: '';
-  position: absolute;
-  width: 52px;
-  height: 52px;
-  top: 6px;
-  left: 6px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  border-top: 2px solid #00e1ff;
-  border-left: 2px solid #00e1ff;
-  border-bottom: 2px solid #ff8000;
-  border-right: 2px solid #ff8000;
-  box-sizing: border-box;
-  transform: rotate(45deg);
-  box-shadow: 0 0 10px rgba(0, 225, 255, 0.5);
-}
-
-.progress-circle-center::after {
-  content: '';
-  position: absolute;
-  width: 72px;
-  height: 72px;
-  top: -4px;
-  left: -4px;
-  border-radius: 50%;
-  background: rgba(0, 12, 23, 0.9);
-  clip-path: inset(35px 4px 35px 4px);
-  z-index: -1;
+  z-index: 3;
 }
 
 .progress-text {
@@ -4431,192 +4712,11 @@ const toggleFullscreen = () => {
   text-shadow: 0 0 3px rgba(255, 77, 79, 0.5);
 }
 
-/* 响应式调整 */
-@media (max-width: 1400px) {
-  .progress-circle-container {
-    width: 75px;
-    height: 75px;
-  }
-  
-  .progress-circle-left,
-  .progress-circle-right {
-    width: 37.5px;
-    height: 75px;
-  }
-  
-  .progress-circle-bar {
-    width: 75px;
-    height: 75px;
-  }
-  
-  .progress-circle-center {
-    width: 59px;
-    height: 59px;
-    top: 8px;
-    left: 8px;
-  }
-  
-  .progress-text span {
-    font-size: 13px;
-  }
-  
-  .progress-text .percentage {
-    font-size: 22px;
-  }
-  
-  .status-circle {
-    width: 75px;
-    height: 75px;
-  }
-  
-  .progress-circle-outer-ring {
-    width: 85px;
-    height: 85px;
-  }
-}
 
-@media (max-width: 1200px) {
-  .progress-circle-container {
-    width: 70px;
-    height: 70px;
-  }
-  
-  .progress-circle-left,
-  .progress-circle-right {
-    width: 35px;
-    height: 70px;
-  }
-  
-  .progress-circle-bar {
-    width: 70px;
-    height: 70px;
-    border-width: 3px;
-  }
-  
-  .progress-circle-left .progress-circle-bar {
-    border-width: 3px;
-  }
-  
-  .progress-circle-right .progress-circle-bar {
-    border-width: 3px;
-  }
-  
-  .progress-circle-center {
-    width: 56px;
-    height: 56px;
-    top: 7px;
-    left: 7px;
-  }
-  
-  .progress-text span {
-    font-size: 13px;
-  }
-  
-  .progress-text .percentage {
-    font-size: 20px;
-  }
-  
-  .status-circle {
-    width: 70px;
-    height: 70px;
-    border-width: 3px;
-  }
-  
-  .progress-circle-outer-ring {
-    width: 80px;
-    height: 80px;
-  }
-}
 
-@media (max-width: 992px) {
-  .progress-circle-container {
-    width: 65px;
-    height: 65px;
-  }
-  
-  .progress-circle-left,
-  .progress-circle-right {
-    width: 32.5px;
-    height: 65px;
-  }
-  
-  .progress-circle-bar {
-    width: 65px;
-    height: 65px;
-    border-width: 3px;
-  }
-  
-  .progress-circle-center {
-    width: 51px;
-    height: 51px;
-    top: 7px;
-    left: 7px;
-  }
-  
-  .status-circle {
-    width: 65px;
-    height: 65px;
-    border-width: 3px;
-  }
-  
-  .progress-circle-outer-ring {
-    width: 75px;
-    height: 75px;
-  }
-}
 
-@media (max-width: 768px) {
-  .progress-circle-container {
-    width: 60px;
-    height: 60px;
-  }
-  
-  .progress-circle-left,
-  .progress-circle-right {
-    width: 30px;
-    height: 60px;
-  }
-  
-  .progress-circle-bar {
-    width: 60px;
-    height: 60px;
-    border-width: 3px;
-  }
-  
-  .progress-circle-left .progress-circle-bar {
-    border-width: 3px;
-  }
-  
-  .progress-circle-right .progress-circle-bar {
-    border-width: 3px;
-  }
-  
-  .progress-circle-center {
-    width: 48px;
-    height: 48px;
-    top: 6px;
-    left: 6px;
-  }
-  
-  .progress-text span {
-    font-size: 11px;
-  }
-  
-  .progress-text .percentage {
-    font-size: 16px;
-  }
-  
-  .status-circle {
-    width: 60px;
-    height: 60px;
-    border-width: 3px;
-  }
-  
-  .progress-circle-outer-ring {
-    width: 70px;
-    height: 70px;
-  }
-}
+
+
 
 /* 地图容器样式 */
 .map-container {
@@ -4654,15 +4754,7 @@ const toggleFullscreen = () => {
     gap: clamp(15px, 1.5vw, 20px);
   }
   
-  .progress-circle-left .progress-circle-bar {
-    border-top-left-radius: 55px;
-    border-bottom-left-radius: 55px;
-  }
-  
-  .progress-circle-right .progress-circle-bar {
-    border-top-right-radius: 55px;
-    border-bottom-right-radius: 55px;
-  }
+
 }
 
 @media (max-width: 1200px) {
@@ -4706,15 +4798,7 @@ const toggleFullscreen = () => {
     height: auto;
   }
   
-  .progress-circle-left .progress-circle-bar {
-    border-top-left-radius: 45px;
-    border-bottom-left-radius: 45px;
-  }
-  
-  .progress-circle-right .progress-circle-bar {
-    border-top-right-radius: 45px;
-    border-bottom-right-radius: 45px;
-  }
+
 }
 
 @media (max-width: 768px) {
@@ -4744,344 +4828,98 @@ const toggleFullscreen = () => {
     height: 120px;
   }
   
-  .progress-circle-left .progress-circle-bar {
-    border-top-left-radius: 40px;
-    border-bottom-left-radius: 40px;
-  }
-  
-  .progress-circle-right .progress-circle-bar {
-    border-top-right-radius: 40px;
-    border-bottom-right-radius: 40px;
-  }
-  
-  .progress-circle-value span:first-child {
-    font-size: 12px;
-  }
-  
-  .progress-circle-value span:last-child {
-    font-size: 16px;
-  }
+
 }
 
-.progress-circle-right.status {
-  width: 100%;
-  height: 100%;
-  right: 0;
-  overflow: visible;
-}
 
-.progress-circle-right.status .progress-circle-bar {
-  width: 120px;
-  height: 120px;
-  border: 4px solid transparent;
-  border-radius: 50%;
-  border-left: 0;
-  transform: rotate(0);
-  right: 0;
-  border-color: #ff4d4f;
-  box-shadow: 0 0 10px rgba(255, 77, 79, 0.7), inset 0 0 5px rgba(255, 77, 79, 0.5);
-  clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%);
-}
 
-.progress-circle-status {
+/* 任务状态外环样式 */
+.task-status-outer-ring {
   position: absolute;
   width: 100%;
   height: 100%;
-  top: 0;
-  left: 0;
-}
-
-.progress-circle-bar.green-circle {
-  position: absolute;
-  width: 120px;
-  height: 120px;
-  border: 4px solid #00ff7f;
+  border: 8px solid #52c41a; /* 默认绿色（正常状态） */
   border-radius: 50%;
   box-sizing: border-box;
-  box-shadow: 0 0 10px rgba(0, 255, 127, 0.7), inset 0 0 5px rgba(0, 255, 127, 0.5);
-}
-
-/* 新增状态圆环样式 */
-.circle-status {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  top: 0;
-  left: 0;
-}
-
-.status-circle {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  border: 4px solid #00ff7f;
-  border-radius: 50%;
-  box-sizing: border-box;
-  box-shadow: 0 0 10px rgba(0, 255, 127, 0.7), inset 0 0 5px rgba(0, 255, 127, 0.5);
+  box-shadow: 0 0 10px rgba(82, 196, 26, 0.5);
   transition: all 0.3s ease;
+  animation: pulse-status 4s infinite alternate;
 }
 
-.status-circle.error {
-  border-color: #ff4d4f;
-  box-shadow: 0 0 10px rgba(255, 77, 79, 0.7), inset 0 0 5px rgba(255, 77, 79, 0.5);
-}
-
-.status-circle.completed {
-  border-color: #52c41a;
-  box-shadow: 0 0 10px rgba(82, 196, 26, 0.7), inset 0 0 5px rgba(82, 196, 26, 0.5);
-}
-
-.status-circle.running {
-  border-color: #1890ff;
-  box-shadow: 0 0 10px rgba(24, 144, 255, 0.7), inset 0 0 5px rgba(24, 144, 255, 0.5);
-  animation: pulse-running 2s infinite;
-}
-
-.status-circle.waiting {
-  border-color: #faad14;
-  box-shadow: 0 0 10px rgba(250, 173, 20, 0.7), inset 0 0 5px rgba(250, 173, 20, 0.5);
-}
-
-@keyframes pulse-running {
+@keyframes pulse-status {
   0% {
-    box-shadow: 0 0 10px rgba(24, 144, 255, 0.7), inset 0 0 5px rgba(24, 144, 255, 0.5);
+    box-shadow: 0 0 20px rgba(82, 196, 26, 0.8), inset 0 0 10px rgba(82, 196, 26, 0.5);
+    transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 20px rgba(24, 144, 255, 0.9), inset 0 0 8px rgba(24, 144, 255, 0.7);
+    box-shadow: 0 0 35px rgba(82, 196, 26, 1), inset 0 0 15px rgba(82, 196, 26, 0.7);
+    transform: scale(1.02);
   }
   100% {
-    box-shadow: 0 0 10px rgba(24, 144, 255, 0.7), inset 0 0 5px rgba(24, 144, 255, 0.5);
+    box-shadow: 0 0 25px rgba(82, 196, 26, 0.9), inset 0 0 12px rgba(82, 196, 26, 0.6);
+    transform: scale(1);
   }
 }
 
-@media (max-width: 1400px) {
-  .status-circle {
-    width: 110px;
-    height: 110px;
-  }
+.task-status-outer-ring.error {
+  border-color: #ff4d4f; /* 异常状态为红色 */
+  box-shadow: 0 0 10px rgba(255, 77, 79, 0.5);
+  animation: pulse-error 4s infinite alternate;
 }
 
-@media (max-width: 1200px) {
-  .status-circle {
-    width: 100px;
-    height: 100px;
-    border-width: 3px;
-  }
-}
-
-@media (max-width: 992px) {
-  .status-circle {
-    width: 90px;
-    height: 90px;
-    border-width: 3px;
-  }
-}
-
-@media (max-width: 768px) {
-  .status-circle {
-    width: 80px;
-    height: 80px;
-    border-width: 3px;
-  }
-}
-
-.progress-circle-outer-ring {
-  position: absolute;
-  width: 90px;
-  height: 90px;
-  top: -5px;
-  left: -5px;
-  border-radius: 50%;
-  border: 2px solid rgba(0, 225, 255, 0.5);
-  box-sizing: border-box;
-  box-shadow: 0 0 20px rgba(0, 225, 255, 0.5), inset 0 0 10px rgba(0, 225, 255, 0.3);
-  pointer-events: none;
-  z-index: 1;
-  animation: pulse 2s infinite alternate;
-}
-
-@keyframes pulse {
+@keyframes pulse-error {
   0% {
-    box-shadow: 0 0 15px rgba(0, 225, 255, 0.4), inset 0 0 8px rgba(0, 225, 255, 0.2);
+    box-shadow: 0 0 20px rgba(255, 77, 79, 0.8), inset 0 0 10px rgba(255, 77, 79, 0.5);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(255, 77, 79, 1), inset 0 0 15px rgba(255, 77, 79, 0.7);
+    transform: scale(1.02);
   }
   100% {
-    box-shadow: 0 0 25px rgba(0, 225, 255, 0.6), inset 0 0 12px rgba(0, 225, 255, 0.4);
+    box-shadow: 0 0 25px rgba(255, 77, 79, 0.9), inset 0 0 12px rgba(255, 77, 79, 0.6);
+    transform: scale(1);
   }
 }
+
+
 
 @media (max-width: 1400px) {
-  .progress-circle-outer-ring {
-    width: 120px;
-    height: 120px;
-    top: -5px;
-    left: -5px;
-  }
-}
-
-@media (max-width: 1200px) {
-  .progress-circle-outer-ring {
+  .status-circle {
     width: 110px;
     height: 110px;
-    top: -5px;
-    left: -5px;
   }
 }
 
-@media (max-width: 992px) {
-  .progress-circle-outer-ring {
+@media (max-width: 1200px) {
+  .status-circle {
     width: 100px;
     height: 100px;
-    top: -5px;
-    left: -5px;
+    border-width: 3px;
   }
 }
 
-@media (max-width: 768px) {
-  .progress-circle-outer-ring {
+@media (max-width: 992px) {
+  .status-circle {
     width: 90px;
     height: 90px;
-    top: -5px;
-    left: -5px;
+    border-width: 3px;
   }
 }
 
-/* 响应式调整内部进度线 */
-@media (max-width: 1400px) {
-  .progress-circle-center::before,
-  .progress-circle-center::after {
-    width: 67px;
-    height: 67px;
-    top: -4px;
-    left: -4px;
-  }
+
+
+
+
+
   
-  .progress-circle-center::before {
-    clip-path: inset(31px 0 31px 0);
-  }
-  
-  .progress-circle-center::after {
-    clip-path: inset(32px 4px 32px 4px);
-  }
-}
 
-@media (max-width: 1200px) {
-  .progress-circle-center::before,
-  .progress-circle-center::after {
-    width: 64px;
-    height: 64px;
-    top: -4px;
-    left: -4px;
-  }
-  
-  .progress-circle-center::before {
-    clip-path: inset(29px 0 29px 0);
-  }
-  
-  .progress-circle-center::after {
-    clip-path: inset(30px 4px 30px 4px);
-  }
-}
 
-@media (max-width: 992px) {
-  .progress-circle-center::before,
-  .progress-circle-center::after {
-    width: 59px;
-    height: 59px;
-    top: -4px;
-    left: -4px;
-  }
-  
-  .progress-circle-center::before {
-    clip-path: inset(27px 0 27px 0);
-  }
-  
-  .progress-circle-center::after {
-    clip-path: inset(28px 4px 28px 4px);
-  }
-}
 
-@media (max-width: 768px) {
-  .progress-circle-center::before,
-  .progress-circle-center::after {
-    width: 56px;
-    height: 56px;
-    top: -4px;
-    left: -4px;
-  }
-  
-  .progress-circle-center::before {
-    clip-path: inset(25px 0 25px 0);
-  }
-  
-  .progress-circle-center::after {
-    clip-path: inset(26px 4px 26px 4px);
-  }
-}
 
-/* 修改为环形进度线 - 只应用于左边的环形图 */
-.chart-box:first-child .progress-circle-center::before {
-  content: '';
-  position: absolute;
-  width: 60px;
-  height: 60px;
-  top: 2px;
-  left: 2px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  border-top: 2px solid #00e1ff;
-  border-left: 2px solid #00e1ff;
-  border-bottom: 2px solid #ff8000;
-  border-right: 2px solid #ff8000;
-  box-sizing: border-box;
-  transform: rotate(45deg);
-  box-shadow: 0 0 10px rgba(0, 225, 255, 0.5);
-}
 
-/* 去掉第二个环形图内的颜色环线 */
-.chart-box:last-child .progress-circle-center::before {
-  display: none;
-}
 
-.chart-box:last-child .progress-circle-center::after {
-  display: none;
-}
 
-/* 响应式调整内部进度线 - 只应用于左边的环形图 */
-@media (max-width: 1400px) {
-  .chart-box:first-child .progress-circle-center::before {
-    width: 56px;
-    height: 56px;
-    top: 1.5px;
-    left: 1.5px;
-  }
-}
-
-@media (max-width: 1200px) {
-  .chart-box:first-child .progress-circle-center::before {
-    width: 52px;
-    height: 52px;
-    top: 2px;
-    left: 2px;
-  }
-}
-
-@media (max-width: 992px) {
-  .chart-box:first-child .progress-circle-center::before {
-    width: 48px;
-    height: 48px;
-    top: 1.5px;
-    left: 1.5px;
-  }
-}
-
-@media (max-width: 768px) {
-  .chart-box:first-child .progress-circle-center::before {
-    width: 44px;
-    height: 44px;
-    top: 2px;
-    left: 2px;
-  }
-}
 
 /* 第一个环形图的字体缩小 */
 .chart-box:first-child .progress-text span {
@@ -5457,5 +5295,167 @@ const toggleFullscreen = () => {
   border-radius: 6px;
   padding: 12px 16px;
   max-width: 100%;
+}
+
+/* 算法开关和选择样式 */
+.dispatch-switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.dispatch-switch-label {
+  color: #b8c7d9;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dispatch-algorithm-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  border: 1px solid rgba(103, 213, 253, 0.2);
+  flex: 1;
+  min-width: 200px;
+}
+
+.dispatch-algorithm-options::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dispatch-algorithm-options::-webkit-scrollbar-track {
+  background: rgba(103, 213, 253, 0.1);
+  border-radius: 3px;
+}
+
+.dispatch-algorithm-options::-webkit-scrollbar-thumb {
+  background: rgba(103, 213, 253, 0.3);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.dispatch-algorithm-options::-webkit-scrollbar-thumb:hover {
+  background: rgba(103, 213, 253, 0.5);
+}
+
+.dispatch-algorithm-options {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(103, 213, 253, 0.3) rgba(103, 213, 253, 0.1);
+}
+
+.dispatch-algorithm-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: all 0.2s;
+}
+
+.dispatch-algorithm-option:hover {
+  background: rgba(103, 213, 253, 0.1);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 0 -8px;
+}
+
+.dispatch-algorithm-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #67D5FD;
+  cursor: pointer;
+}
+
+.dispatch-algorithm-label {
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dispatch-algorithm-label.disabled {
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+}
+
+.dispatch-algorithm-checkbox:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Switch开关样式 */
+.switch-container {
+  width: 40px;
+  height: 20px;
+  background: #B0B0B0;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  border: 1px solid #888;
+  transition: background 0.3s, border 0.3s;
+}
+
+.switch-container.active {
+  background: #16bbf2;
+  border: 1px solid #16bbf2;
+}
+
+.switch-toggle {
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  transition: left 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.switch-container.active .switch-toggle {
+  left: 21px;
+}
+
+.drone-track-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(22, 34, 51, 0.9);
+  border: 1px solid #164159;
+  border-radius: 50%;
+  color: #b8c7d9;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(4px);
+}
+
+.drone-track-btn:hover {
+  background: rgba(103, 213, 253, 0.1);
+  border-color: #67d5fd;
+  color: #67d5fd;
+}
+
+.drone-track-btn.active {
+  background: rgba(103, 213, 253, 0.2);
+  border-color: #67d5fd;
+  color: #67d5fd;
+}
+
+.drone-track-btn svg {
+  width: 16px;
+  height: 16px;
 }
 </style>
