@@ -284,7 +284,7 @@ const router = useRouter()
 const route = useRoute()
 
 // 使用航线文件API
-const { waylineFiles, waylineDetail, fetchWaylineFiles, fetchWaylineDetail, createJob } = useWaylineJobs()
+const { waylineFiles, waylineDetail, fetchWaylineFiles, fetchWaylineDetail, createJob, executeJob } = useWaylineJobs()
 const { getCachedWorkspaceId, getCachedDeviceSns, getCachedDeviceBySn } = useDevices()
 
 // 航线文件相关
@@ -481,8 +481,10 @@ const dispatchTaskDialog = ref({
     wayline_precision_type: 1,
     begin_time: null as string | null,
     end_time: null as string | null,
+    execute_time: null as string | null,
     enable_vision: false, // 新增算法开关
-    vision_algorithms: [] as number[] // 新增算法选择
+    vision_algorithms: [] as number[], // 新增算法选择
+    vision_threshold: 0.5 // 新增算法阈值
   }
 })
 
@@ -640,8 +642,10 @@ function handleDispatchTask() {
     wayline_precision_type: 1,
     begin_time: null,
     end_time: null,
+    execute_time: null,
     enable_vision: false, // 新增算法开关
-    vision_algorithms: [] as number[] // 新增算法选择
+    vision_algorithms: [] as number[], // 新增算法选择
+    vision_threshold: 0.5 // 新增算法阈值
   }
   
   dispatchTaskDialog.value.visible = true
@@ -671,8 +675,8 @@ async function onDispatchTaskConfirm() {
       return
     }
     
-    // 构建任务数据（包含算法相关字段，提交到 flight-tasks 接口）
-    const taskData = {
+    // 构建任务数据
+    const taskData: any = {
       ...form,
       // 保留隐藏的字段（使用默认值）
       rth_mode: form.rth_mode || 1,
@@ -681,15 +685,39 @@ async function onDispatchTaskConfirm() {
       wayline_precision_type: form.wayline_precision_type || 1
     }
     
-    // 创建任务（flight-tasks接口已包含算法字段）
+    // 根据任务类型设置execute_time
+    if (form.task_type === 0) {
+      // 立即任务：设置当前时间作为execute_time
+      taskData.execute_time = new Date().toISOString()
+    } else if (form.task_type === 1 && form.begin_time) {
+      // 定时任务：使用begin_time作为execute_time
+      taskData.execute_time = new Date(form.begin_time).toISOString()
+    }
+    
+    // 创建任务
     const response = await createJob(workspaceId, taskData)
     console.log('任务创建成功:', response)
     
-    // flight-tasks接口已包含算法字段，创建即执行
     if (response && response.job_id) {
-      alert('任务下发并执行成功')
+      // 立即任务需要调用execute接口
+      if (form.task_type === 0) {
+        try {
+          await executeJob(workspaceId, response.job_id, {
+            enable_vision: form.enable_vision,
+            vision_algorithms: form.vision_algorithms,
+            vision_threshold: form.vision_threshold
+          })
+          alert('立即任务创建并执行成功')
+        } catch (executeErr) {
+          console.error('任务执行失败:', executeErr)
+          alert('立即任务创建成功，但执行失败')
+        }
+      } else {
+        // 定时任务不调用execute接口
+        alert('定时任务创建成功')
+      }
     } else {
-      alert('任务下发成功，但未获取到任务ID')
+      alert('任务创建成功，但未获取到任务ID')
     }
     
     dispatchTaskDialog.value.visible = false

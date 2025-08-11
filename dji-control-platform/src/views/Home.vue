@@ -668,7 +668,7 @@ const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
 
 
 // 使用航线任务API
-const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineProgress, fetchWaylineJobDetail, fetchWaylineDetail, cancelReturnHome, stopJob, pauseJob, resumeJob } = useWaylineJobs()
+const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineProgress, fetchWaylineJobDetail, fetchWaylineDetail, cancelReturnHome, stopJob, pauseJob, resumeJob, executeJob } = useWaylineJobs()
 
 // 使用设备状态API
 const { 
@@ -1130,6 +1130,91 @@ let amapInstance: any = null
 let amapApiRef: any = null
 const dockMarkers = ref<any[]>([])
 const droneMarkers = ref<any[]>([])
+
+// 无人机动画相关状态
+const droneAnimationState = ref({
+  currentPosition: { longitude: 0, latitude: 0, height: 0 },
+  targetPosition: { longitude: 0, latitude: 0, height: 0 },
+  isAnimating: false,
+  animationStartTime: 0,
+  animationDuration: 2000, // 2秒动画时长
+  lastUpdateTime: 0
+})
+
+// 无人机位置插值函数
+const interpolatePosition = (start: any, end: any, progress: number) => {
+  return {
+    longitude: start.longitude + (end.longitude - start.longitude) * progress,
+    latitude: start.latitude + (end.latitude - start.latitude) * progress,
+    height: start.height + (end.height - start.height) * progress
+  }
+}
+
+// 更新无人机位置动画
+const updateDronePositionAnimation = () => {
+  if (!droneAnimationState.value.isAnimating || !droneMarkers.value.length) {
+    return
+  }
+
+  const now = Date.now()
+  const elapsed = now - droneAnimationState.value.animationStartTime
+  const progress = Math.min(elapsed / droneAnimationState.value.animationDuration, 1)
+
+  // 使用缓动函数使动画更自然
+  const easeProgress = 1 - Math.pow(1 - progress, 3) // 缓出效果
+
+  const currentPos = droneAnimationState.value.currentPosition
+  const targetPos = droneAnimationState.value.targetPosition
+  const interpolatedPos = interpolatePosition(currentPos, targetPos, easeProgress)
+
+  // 更新无人机标记位置
+  const droneMarker = droneMarkers.value[0]
+  if (droneMarker) {
+    droneMarker.setPosition([interpolatedPos.longitude, interpolatedPos.latitude])
+  }
+
+  // 如果动画完成，停止动画
+  if (progress >= 1) {
+    droneAnimationState.value.isAnimating = false
+    droneAnimationState.value.currentPosition = { ...targetPos }
+  } else {
+    // 继续动画
+    requestAnimationFrame(updateDronePositionAnimation)
+  }
+}
+
+// 开始无人机位置动画
+const startDronePositionAnimation = (newPosition: any) => {
+  const currentPos = droneAnimationState.value.currentPosition
+  const targetPos = {
+    longitude: newPosition.longitude,
+    latitude: newPosition.latitude,
+    height: newPosition.height || 0
+  }
+
+  // 计算两点间距离，根据距离调整动画时长
+  const distance = Math.sqrt(
+    Math.pow(targetPos.longitude - currentPos.longitude, 2) +
+    Math.pow(targetPos.latitude - currentPos.latitude, 2)
+  )
+
+  // 根据距离调整动画时长，距离越远动画时间越长，但不超过3秒
+  const baseDuration = 1000 // 基础1秒
+  const distanceFactor = Math.min(distance * 10000, 2) // 距离因子，最大2秒
+  const animationDuration = Math.min(baseDuration + distanceFactor * 1000, 3000)
+
+  droneAnimationState.value = {
+    currentPosition: { ...currentPos },
+    targetPosition: targetPos,
+    isAnimating: true,
+    animationStartTime: Date.now(),
+    animationDuration: animationDuration,
+    lastUpdateTime: Date.now()
+  }
+
+  // 开始动画
+  requestAnimationFrame(updateDronePositionAnimation)
+}
 const isInitialLoad = ref(true)
 
 // 视频播放器相关
@@ -1284,7 +1369,6 @@ const clearDroneMarkers = () => {
 const updateMapMarkers = (shouldCenter = false) => {
   // 清除现有标记
   clearDockMarkers()
-  clearDroneMarkers()
   
   // 检查是否有位置数据
   if (position.value && position.value.longitude && position.value.latitude) {
@@ -1343,8 +1427,29 @@ const updateMapMarkers = (shouldCenter = false) => {
       height: droneHeight
     }
     
-    // 添加无人机标记
-    addDroneMarker(droneLongitude, droneLatitude, droneInfo)
+    // 处理无人机标记的平滑动画
+    if (droneMarkers.value.length === 0) {
+      // 第一次创建无人机标记
+      addDroneMarker(droneLongitude, droneLatitude, droneInfo)
+      // 初始化动画状态
+      droneAnimationState.value.currentPosition = {
+        longitude: droneLongitude,
+        latitude: droneLatitude,
+        height: droneHeight
+      }
+    } else {
+      // 检查位置是否有变化
+      const currentPos = droneAnimationState.value.currentPosition
+      const newPos = { longitude: droneLongitude, latitude: droneLatitude, height: droneHeight }
+      
+      const positionChanged = Math.abs(currentPos.longitude - newPos.longitude) > 0.000001 ||
+                             Math.abs(currentPos.latitude - newPos.latitude) > 0.000001
+      
+      if (positionChanged && !droneAnimationState.value.isAnimating) {
+        // 位置有变化且当前没有动画，开始新的动画
+        startDronePositionAnimation(newPos)
+      }
+    }
     
     // 更新无人机追踪
     updateDroneTracking()
@@ -1749,27 +1854,49 @@ const onDispatchTaskConfirm = async () => {
       return
     }
     
-    // 构建任务数据（包含算法相关字段，提交到 flight-tasks 接口）
-    const taskData = {
+    // 构建任务数据
+    const taskData: any = {
       ...form,
       // 保留隐藏的字段（使用默认值）
       rth_mode: form.rth_mode || 1,
       out_of_control_action: form.out_of_control_action || 0,
       exit_wayline_when_rc_lost: form.exit_wayline_when_rc_lost || 0,
-      wayline_precision_type: form.wayline_precision_type || 1,
-      // 只在定时任务时传递 begin_time
-      ...(form.task_type === 1 && form.begin_time ? { begin_time: form.begin_time } : {})
+      wayline_precision_type: form.wayline_precision_type || 1
+    }
+    
+    // 根据任务类型设置execute_time
+    if (form.task_type === 0) {
+      // 立即任务：设置当前时间作为execute_time
+      taskData.execute_time = new Date().toISOString()
+    } else if (form.task_type === 1 && form.begin_time) {
+      // 定时任务：使用begin_time作为execute_time
+      taskData.execute_time = new Date(form.begin_time).toISOString()
     }
     
     // 创建任务
     const response = await createJob(workspaceId, taskData)
     console.log('任务创建成功:', response)
     
-    // flight-tasks接口已包含算法字段，创建即执行
     if (response && response.job_id) {
-      alert('任务下发并执行成功')
+      // 立即任务需要调用execute接口
+      if (form.task_type === 0) {
+        try {
+          await executeJob(workspaceId, response.job_id, {
+            enable_vision: form.enable_vision,
+            vision_algorithms: form.vision_algorithms,
+            vision_threshold: form.vision_threshold
+          })
+          alert('立即任务创建并执行成功')
+        } catch (executeErr) {
+          console.error('任务执行失败:', executeErr)
+          alert('立即任务创建成功，但执行失败')
+        }
+      } else {
+        // 定时任务不调用execute接口
+        alert('定时任务创建成功')
+      }
     } else {
-      alert('任务下发成功，但未获取到任务ID')
+      alert('任务创建成功，但未获取到任务ID')
     }
     
     dispatchTaskDialog.value.visible = false
@@ -2716,8 +2843,8 @@ const clearWaylineDisplay = () => {
   }
 }
 
-// 显示航点和航线
-const displayWayline = async () => {
+    // 显示航点和航线（仅在需要时重绘，避免每次都清空重画）
+    const displayWayline = async () => {
   console.log('displayWayline 开始执行')
   console.log('amapInstance:', !!amapInstance)
   console.log('amapApiRef:', !!amapApiRef)
@@ -2728,8 +2855,20 @@ const displayWayline = async () => {
     return
   }
   
-  // 先清除之前的显示
-  clearWaylineDisplay()
+      // 判断是否需要重绘：
+      // 若已存在航线或航点且任务未发生变化，不重复清空与重绘
+      const hasWaylineDisplay = waylineMarkers.value.length > 0 || waylinePolyline.value
+      const currentJobId = waylineProgress.value?.job_id
+      const currentTaskStatus = waylineProgress.value?.status
+      // 在 Home 页简化：当没有任何显示或任务ID/状态变化时才重绘
+      const shouldRedraw = !hasWaylineDisplay || displayWayline._lastJobId !== currentJobId || displayWayline._lastTaskStatus !== currentTaskStatus
+      if (!shouldRedraw) {
+        // 仅更新当前航点高亮
+        updateCurrentWaypoint()
+        return
+      }
+      // 需要重绘时清理旧图层
+      clearWaylineDisplay()
   
   try {
     console.log('waylineJobDetail完整数据:', waylineJobDetail.value)
@@ -2830,9 +2969,12 @@ const displayWayline = async () => {
       })
       amapInstance.add(waylinePolyline.value)
       console.log('航线已添加到地图')
-    } else {
-      console.log('路径点数不足，无法创建航线')
-    }
+      } else {
+        console.log('路径点数不足，无法创建航线')
+      }
+      // 记录本次渲染对应的任务ID与状态
+      displayWayline._lastJobId = currentJobId
+      displayWayline._lastTaskStatus = currentTaskStatus
     
     // 显示当前航点
     updateCurrentWaypoint()
@@ -4499,6 +4641,20 @@ const centerToDroneMarker = () => {
   padding: 0;
 }
 
+.status-btn.paused {
+  width: 60px;
+  height: 20px;
+  text-align: center;
+  color: #faad14;
+  background: linear-gradient(#faad1454, #faad1400);
+  box-shadow: inset 0 0 6px #faad14;
+  border-radius: 3px;
+  font-size: 12px;
+  border: 1px solid #faad14;
+  line-height: 20px;
+  padding: 0;
+}
+
 /* 任务进度图表样式调整 */
 .task-progress {
   width: 100%;
@@ -4766,7 +4922,8 @@ const centerToDroneMarker = () => {
     width: 35%;
   }
 
-  .status-btn.waiting {
+  .status-btn.waiting,
+  .status-btn.paused {
     width: clamp(50px, 5vw, 60px);
     font-size: clamp(11px, 0.9vw, 12px);
   }

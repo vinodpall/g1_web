@@ -496,6 +496,47 @@ export const controlApi = {
     })
   },
 
+  // 云台复位控制
+  gimbalReset: (deviceSn: string, payloadIndex: string, resetMode: number) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/gimbal/reset`, {
+      payload_index: payloadIndex,
+      reset_mode: resetMode
+    })
+  },
+
+  // 拍照
+  cameraPhoto: (deviceSn: string, payloadIndex: string) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/camera/photo`, {
+      payload_index: payloadIndex
+    })
+  },
+
+  // 开始录像
+  cameraRecordingStart: (deviceSn: string, payloadIndex: string) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/camera/recording/start`, {
+      payload_index: payloadIndex
+    })
+  },
+
+  // 停止录像
+  cameraRecordingStop: (deviceSn: string, payloadIndex: string) => {
+    return apiClient.post<{
+      message: string
+      code: number
+    }>(`/control/devices/${deviceSn}/camera/recording/stop`, {
+      payload_index: payloadIndex
+    })
+  },
+
   // 一键返航
   returnHome: (deviceSn: string) => {
     return apiClient.post<{
@@ -804,6 +845,7 @@ export const waylineApi = {
     wayline_precision_type: number
     begin_time?: string | null
     end_time?: string | null
+    execute_time?: string
     // 算法相关字段（移动到flight-tasks接口）
     enable_vision?: boolean
     vision_algorithms?: number[]

@@ -70,6 +70,7 @@
                     <option value="4">已取消</option>
                     <option value="5">执行成功</option>
                     <option value="6">执行失败</option>
+                    <option value="7">准备执行</option>
                   </select>
                   <span class="custom-select-arrow" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2;">
                     <svg width="12" height="12" viewBox="0 0 12 12">
@@ -278,7 +279,8 @@ const getStatusText = (status: number) => {
     [3]: '已暂停',
     [4]: '已取消',
     [5]: '执行成功',
-    [6]: '执行失败'
+    [6]: '执行失败',
+    [7]: '准备执行'
   }
   return statusMap[status] || '未知'
 }
@@ -293,7 +295,8 @@ const getStatusClass = (status: number) => {
     [3]: 'status-paused',
     [4]: 'status-cancelled',
     [5]: 'status-success',
-    [6]: 'status-failed'
+    [6]: 'status-failed',
+    [7]: 'status-pending'
   }
   return statusClassMap[status] || 'status-unknown'
 }
@@ -332,7 +335,9 @@ const loadJobRecords = async () => {
           await fetchJobs(userData.workspace_id, {
             page: currentPage.value,
             page_size: pageSize.value,
-            file_id: selectedWaylineFile.value || undefined
+            file_id: selectedWaylineFile.value || undefined,
+            status: selectedStatus.value === '' ? undefined : Number(selectedStatus.value),
+            task_type: selectedTaskType.value === '' ? undefined : Number(selectedTaskType.value)
           })
           // 更新总数
           if (pagination.value) {

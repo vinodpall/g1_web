@@ -64,6 +64,7 @@
                         class="span" 
                         :class="{ disabled: !canPauseRoute }"
                         @click="canPauseRoute ? handlePauseRoute() : null"
+                        v-if="waylineTaskStatus !== 'paused'"
                       >
                         暂停
                       </span>
@@ -104,6 +105,7 @@
               </div>
               <div class="robot-status-footer">
                 <span>飞行速度：{{ formatSpeed((droneStatus?.horizontalSpeed ?? gpsStatus?.totalSpeed) as number) }}</span>
+                <span>，高度：{{ formatHeight(droneStatus?.height ?? position?.height) }}</span>
                 <span>，风速：{{ formatWindSpeed(environment?.windSpeed) }}</span>
                 <span>，降水：{{ formatRainfall(environment?.rainfall) }}</span>
                 <span>，温度：{{ formatTemperature(environment?.environmentTemperature) }}</span>
@@ -292,15 +294,14 @@
                           }"
                           :title="visionError ? `连接错误: ${visionError}` : visionConnected ? '视觉数据已连接' : visionConnecting ? '正在连接视觉数据...' : '视觉数据未连接'"
                         ></div>
-                        <span class="vision-label">AI</span>
-                        <button 
-                          class="vision-reconnect-btn" 
-                          @click="reconnectVision"
-                          :disabled="visionConnecting"
-                          title="重连视觉数据"
+                        <span 
+                          class="vision-label" 
+                          :class="{ 'ai-enabled': currentVideoAiStatus }"
+                          :title="currentVideoAiStatus ? '当前为AI画框，点击切换为原始视频' : '当前为原始视频，点击切换为AI画框'"
+                          @click="toggleVideoAiMode"
                         >
-                          ↻
-                        </button>
+                          {{ currentVideoAiStatus ? 'AI画框' : '原始' }}
+                        </span>
                         <!-- <button 
                           class="vision-fps-btn" 
                           @click="showFpsSettings = !showFpsSettings"
@@ -544,21 +545,21 @@
                   </div>
                   <div class="gimbal-separator"></div>
                   <div class="gimbal-func-row">
-                    <button :disabled="!isGimbalControlEnabled">云台回中</button>
-                    <button :disabled="!isGimbalControlEnabled">云台向下</button>
-                    <button :disabled="!isGimbalControlEnabled">偏航回中</button>
-                    <button :disabled="!isGimbalControlEnabled">俯仰向下</button>
+                    <button :disabled="!isGimbalControlEnabled" @click="handleGimbalReset(0)">云台回中</button>
+                    <button :disabled="!isGimbalControlEnabled" @click="handleGimbalReset(1)">云台向下</button>
+                    <button :disabled="!isGimbalControlEnabled" @click="handleGimbalReset(2)">偏航回中</button>
+                    <button :disabled="!isGimbalControlEnabled" @click="handleGimbalReset(3)">俯仰向下</button>
                   </div>
                   <div class="gimbal-func-row">
-                    <button :disabled="!isGimbalControlEnabled">开启分屏</button>
+                    <button :disabled="!isGimbalControlEnabled || !canUseScreenSplit" @click="handleScreenSplit(true)">开启分屏</button>
                     <button :disabled="!isGimbalControlEnabled" @click="handleZoom('in')">放大</button>
-                    <button :disabled="!isGimbalControlEnabled">开始录像</button>
-                    <button :disabled="!isGimbalControlEnabled">拍照</button>
+                    <button :disabled="!isGimbalControlEnabled" @click="handleCameraRecordingStart">开始录像</button>
+                    <button :disabled="!isGimbalControlEnabled" @click="handleCameraPhoto">拍照</button>
                   </div>
                   <div class="gimbal-func-row">
-                    <button :disabled="!isGimbalControlEnabled">关闭分屏</button>
+                    <button :disabled="!isGimbalControlEnabled || !canUseScreenSplit" @click="handleScreenSplit(false)">关闭分屏</button>
                     <button :disabled="!isGimbalControlEnabled" @click="handleZoom('out')">缩小</button>
-                    <button :disabled="!isGimbalControlEnabled">停止录像</button>
+                    <button :disabled="!isGimbalControlEnabled" @click="handleCameraRecordingStop">停止录像</button>
                     <button :disabled="!isGimbalControlEnabled">夜景模式</button>
                   </div>
                 </div>
@@ -701,6 +702,7 @@ const {
   osdData,
   formatBattery,
   formatSpeed,
+  formatHeight,
   formatTemperature,
   formatHumidity,
   formatWindSpeed,
@@ -781,7 +783,6 @@ const waylineTaskStatus = computed(() => {
   
   return statusMap[status] || 'waiting'
 })
-
 const waylineTaskStatusText = computed(() => {
   const status = waylineProgress.value?.status
   if (!status) return '未知'
@@ -916,6 +917,91 @@ const remoteEnabled = ref(false);
 const dockMarkers = ref<any[]>([])
 const droneMarkers = ref<any[]>([])
 
+// 无人机动画相关状态
+const droneAnimationState = ref({
+  currentPosition: { longitude: 0, latitude: 0, height: 0 },
+  targetPosition: { longitude: 0, latitude: 0, height: 0 },
+  isAnimating: false,
+  animationStartTime: 0,
+  animationDuration: 2000, // 2秒动画时长
+  lastUpdateTime: 0
+})
+
+// 无人机位置插值函数
+const interpolatePosition = (start: any, end: any, progress: number) => {
+  return {
+    longitude: start.longitude + (end.longitude - start.longitude) * progress,
+    latitude: start.latitude + (end.latitude - start.latitude) * progress,
+    height: start.height + (end.height - start.height) * progress
+  }
+}
+
+// 更新无人机位置动画
+const updateDronePositionAnimation = () => {
+  if (!droneAnimationState.value.isAnimating || !droneMarkers.value.length) {
+    return
+  }
+
+  const now = Date.now()
+  const elapsed = now - droneAnimationState.value.animationStartTime
+  const progress = Math.min(elapsed / droneAnimationState.value.animationDuration, 1)
+
+  // 使用缓动函数使动画更自然
+  const easeProgress = 1 - Math.pow(1 - progress, 3) // 缓出效果
+
+  const currentPos = droneAnimationState.value.currentPosition
+  const targetPos = droneAnimationState.value.targetPosition
+  const interpolatedPos = interpolatePosition(currentPos, targetPos, easeProgress)
+
+  // 更新无人机标记位置
+  const droneMarker = droneMarkers.value[0]
+  if (droneMarker) {
+    droneMarker.setPosition([interpolatedPos.longitude, interpolatedPos.latitude])
+  }
+
+  // 如果动画完成，停止动画
+  if (progress >= 1) {
+    droneAnimationState.value.isAnimating = false
+    droneAnimationState.value.currentPosition = { ...targetPos }
+  } else {
+    // 继续动画
+    requestAnimationFrame(updateDronePositionAnimation)
+  }
+}
+
+// 开始无人机位置动画
+const startDronePositionAnimation = (newPosition: any) => {
+  const currentPos = droneAnimationState.value.currentPosition
+  const targetPos = {
+    longitude: newPosition.longitude,
+    latitude: newPosition.latitude,
+    height: newPosition.height || 0
+  }
+
+  // 计算两点间距离，根据距离调整动画时长
+  const distance = Math.sqrt(
+    Math.pow(targetPos.longitude - currentPos.longitude, 2) +
+    Math.pow(targetPos.latitude - currentPos.latitude, 2)
+  )
+
+  // 根据距离调整动画时长，距离越远动画时间越长，但不超过3秒
+  const baseDuration = 1000 // 基础1秒
+  const distanceFactor = Math.min(distance * 10000, 2) // 距离因子，最大2秒
+  const animationDuration = Math.min(baseDuration + distanceFactor * 1000, 3000)
+
+  droneAnimationState.value = {
+    currentPosition: { ...currentPos },
+    targetPosition: targetPos,
+    isAnimating: true,
+    animationStartTime: Date.now(),
+    animationDuration: animationDuration,
+    lastUpdateTime: Date.now()
+  }
+
+  // 开始动画
+  requestAnimationFrame(updateDronePositionAnimation)
+}
+
 // DRC状态管理
 const drcStatus = ref({
   ready: false,
@@ -972,6 +1058,10 @@ const videoLoading = ref(false)
 const videoStatus = ref('正在检查视频流状态...')
 const videoBid = ref<string | null>(null)
 const refreshingVideo = ref(false)
+
+// 视频流轮询相关
+const videoPollingTimer = ref<number | null>(null)
+const VIDEO_POLLING_INTERVAL = 10000 // 每10秒检查一次是否有无人机视频流
 
 // 视觉WebSocket相关状态
 const {
@@ -1054,6 +1144,74 @@ const qualityMenuStyle = computed(() => {
     right: `${window.innerWidth - rect.right}px`
   }
 })
+
+// 当前视频AI状态（使用响应式ref，避免localStorage变更不触发更新）
+const aiMode = ref(false)
+const loadAiModeFromCache = () => {
+  try {
+    const videoStreamsStr = localStorage.getItem('video_streams')
+    if (!videoStreamsStr) {
+      aiMode.value = false
+      return
+    }
+    const streams = JSON.parse(videoStreamsStr)
+    const item = streams.find((s: any) => s.type === 'drone_visible')
+    aiMode.value = !!(item && item.ai_enabled)
+  } catch {
+    aiMode.value = false
+  }
+}
+const currentVideoAiStatus = computed(() => aiMode.value)
+
+// 切换视频AI模式（原始 <-> AI画框）并同步URL与缓存
+const toggleVideoAiMode = async () => {
+  const streamsStr = localStorage.getItem('video_streams')
+  let streams: any[] = []
+  try { streams = streamsStr ? JSON.parse(streamsStr) : [] } catch {}
+  const idx = streams.findIndex(s => s.type === 'drone_visible')
+  const currentAi = idx >= 0 ? !!streams[idx].ai_enabled : false
+  const toAi = !currentAi
+
+  if (toAi) {
+    // 切到AI：使用重连规则生成AI地址并应用
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      console.error('切换到AI失败：未找到缓存的机场SN')
+      return
+    }
+    const dockSn = cachedDockSns[0]
+    const newUrl = `webrtc://10.10.1.3:8000/live/cam_rtsp_${dockSn}`
+
+    if (idx >= 0) {
+      streams[idx] = { ...streams[idx], url: newUrl, ai_enabled: true }
+    } else {
+      streams.push({ type: 'drone_visible', url: newUrl, ai_enabled: true })
+    }
+    localStorage.setItem('video_streams', JSON.stringify(streams))
+
+    // 更新当前播放
+    videoStreamUrl.value = newUrl
+    await nextTick()
+    startVideoPlayback()
+    aiMode.value = true
+  } else {
+    // 切回原始：调用一次刷新逻辑以拉取原始流地址，并更新缓存
+    await reloadVideo()
+    // 将 ai_enabled 置为 false，并确保缓存中的 drone_visible.url 为最新播放地址
+    const latestUrl = videoStreamUrl.value || ''
+    const streamsStr2 = localStorage.getItem('video_streams')
+    let streams2: any[] = []
+    try { streams2 = streamsStr2 ? JSON.parse(streamsStr2) : [] } catch {}
+    const idx2 = streams2.findIndex(s => s.type === 'drone_visible')
+    if (idx2 >= 0) {
+      streams2[idx2] = { ...streams2[idx2], url: latestUrl, ai_enabled: false }
+    } else {
+      streams2.push({ type: 'drone_visible', url: latestUrl, ai_enabled: false })
+    }
+    localStorage.setItem('video_streams', JSON.stringify(streams2))
+    aiMode.value = false
+  }
+}
 
 // 起飞相关状态
 const takeoffLoading = ref(false)
@@ -1277,11 +1435,12 @@ const clearDroneMarkers = () => {
   }
 }
 
+
+
 // 更新地图标记（机场和无人机）
 const updateMapMarkers = (shouldCenter = false) => {
   // 清除现有标记（保留航线标记）
   clearDockMarkers()
-  clearDroneMarkers()
   
   // 检查是否有位置数据
   if (position.value && position.value.longitude && position.value.latitude) {
@@ -1339,8 +1498,29 @@ const updateMapMarkers = (shouldCenter = false) => {
       height: droneHeight
     }
     
-    // 添加无人机标记
-    addDroneMarker(droneLongitude, droneLatitude, droneInfo)
+    // 处理无人机标记的平滑动画
+    if (droneMarkers.value.length === 0) {
+      // 第一次创建无人机标记
+      addDroneMarker(droneLongitude, droneLatitude, droneInfo)
+      // 初始化动画状态
+      droneAnimationState.value.currentPosition = {
+        longitude: droneLongitude,
+        latitude: droneLatitude,
+        height: droneHeight
+      }
+    } else {
+      // 检查位置是否有变化
+      const currentPos = droneAnimationState.value.currentPosition
+      const newPos = { longitude: droneLongitude, latitude: droneLatitude, height: droneHeight }
+      
+      const positionChanged = Math.abs(currentPos.longitude - newPos.longitude) > 0.000001 ||
+                             Math.abs(currentPos.latitude - newPos.latitude) > 0.000001
+      
+      if (positionChanged && !droneAnimationState.value.isAnimating) {
+        // 位置有变化且当前没有动画，开始新的动画
+        startDronePositionAnimation(newPos)
+      }
+    }
     
     // 只在初始加载或明确要求时才设置地图中心
     if (shouldCenter && amapInstance.value) {
@@ -1400,7 +1580,6 @@ const toggleFullscreen = () => {
     alert('全屏功能暂时不可用，请检查浏览器设置')
   }
 }
-
 // 视频缓存管理
 const videoCache = ref({
   dock: null as any,
@@ -1653,18 +1832,16 @@ const initVideoPlayer = async () => {
     await nextTick()
     startVideoPlayback()
   } else {
-    // 如果缓存中没有无人机视频，立即获取
-    // 使用nextTick确保DOM已渲染
-    await nextTick()
-    await reloadVideo()
+    // 如果缓存中没有无人机视频，启动轮询等待无人机视频流
+    console.log('无人机控制页面：未找到无人机视频流，启动轮询等待...')
+    startVideoPolling()
   }
 }
 
 // 开始视频播放
 const startVideoPlayback = () => {
   if (!videoElement.value || !videoStreamUrl.value) {
-    // 视频元素或URL不存在，无法播放
-    videoStatus.value = '视频未就绪'
+    // 视频元素或URL不存在，直接返回，不显示任何状态
     return
   }
 
@@ -1983,7 +2160,8 @@ const stopVideoPlayback = () => {
 }
 
 // 重新获取capacity并更新所有视频流缓存
-const refreshVideoCapacityAndCache = async () => {
+// forceRestart: 为true时，无论已有缓存与否都重新启动可见光/红外流并更新缓存
+const refreshVideoCapacityAndCache = async (forceRestart: boolean = false) => {
   try {
     
     // 获取最新的capacity信息
@@ -2006,7 +2184,7 @@ const refreshVideoCapacityAndCache = async () => {
       lastUpdated: new Date().toISOString()
     }
     
-    // 获取现有的video_streams缓存，保留机场数据
+    // 获取现有的video_streams缓存，按需保留现有数据
     const existingVideoStreamsStr = localStorage.getItem('video_streams')
     let existingVideoStreams: any[] = []
     if (existingVideoStreamsStr) {
@@ -2017,16 +2195,18 @@ const refreshVideoCapacityAndCache = async () => {
       }
     }
     
-    // 保留现有的机场视频流数据
+    // 读取现有的视频流数据
     const existingDockStream = existingVideoStreams.find(stream => stream.type === 'dock')
+    const existingDroneVisibleStream = existingVideoStreams.find(stream => stream.type === 'drone_visible')
+    const existingDroneInfraredStream = existingVideoStreams.find(stream => stream.type === 'drone_infrared')
     
-    // 存储所有视频流地址
-    const videoStreams = []
-    
-    // 如果有现有的机场视频流，先添加进去
-    if (existingDockStream) {
-      videoStreams.push(existingDockStream)
-  
+    // 构建将要写回的 video_streams
+    const videoStreams: any[] = []
+    // 非强制刷新时，先保留现有
+    if (!forceRestart) {
+      if (existingDockStream) videoStreams.push(existingDockStream)
+      if (existingDroneVisibleStream) videoStreams.push(existingDroneVisibleStream)
+      if (existingDroneInfraredStream) videoStreams.push(existingDroneInfraredStream)
     }
     
     // 分析所有可用设备并获取视频流
@@ -2036,8 +2216,8 @@ const refreshVideoCapacityAndCache = async () => {
       
       // 根据设备类型归类并启动视频流
       if (cachedDockSns.includes(device.sn)) {
-        // 机场设备 - 只在没有现有机场数据时才更新
-        if (analysis.dock && !newCache.dock && !existingDockStream) {
+        // 机场设备 - 强制或缺失时更新
+        if (analysis.dock && !newCache.dock && (forceRestart || !existingDockStream)) {
           newCache.dock = analysis.dock
           
           // 启动机场视频流
@@ -2062,8 +2242,8 @@ const refreshVideoCapacityAndCache = async () => {
           newCache.dock = analysis.dock
         }
       } else if (cachedDroneSns.includes(device.sn)) {
-        // 无人机设备 - 总是更新无人机数据
-        if (analysis.droneVisible && !newCache.droneVisible) {
+        // 无人机设备（可见光） - 强制或缺失时更新
+        if (analysis.droneVisible && !newCache.droneVisible && (forceRestart || !existingDroneVisibleStream)) {
           newCache.droneVisible = analysis.droneVisible
           
           // 启动无人机可见光视频流
@@ -2078,14 +2258,18 @@ const refreshVideoCapacityAndCache = async () => {
               switchable_video_types: analysis.droneVisible.switchable_video_types || [],
               device_sn: device.sn,
               camera_index: analysis.droneVisible.camera_index,
-              video_index: analysis.droneVisible.video_index
+              video_index: analysis.droneVisible.video_index,
+              ai_enabled: false // 新增：AI画框状态字段，默认为false（原始视频）
             })
           } catch (error: any) {
             // 获取无人机可见光视频流失败
           }
+        } else if (analysis.droneVisible && !newCache.droneVisible) {
+          // 如果有现有数据，直接使用
+          newCache.droneVisible = analysis.droneVisible
         }
         
-        if (analysis.droneInfrared && !newCache.droneInfrared) {
+        if (analysis.droneInfrared && !newCache.droneInfrared && (forceRestart || !existingDroneInfraredStream)) {
           newCache.droneInfrared = analysis.droneInfrared
           
           // 启动无人机红外视频流
@@ -2105,6 +2289,9 @@ const refreshVideoCapacityAndCache = async () => {
           } catch (error: any) {
             // 获取无人机红外视频流失败
           }
+        } else if (analysis.droneInfrared && !newCache.droneInfrared) {
+          // 如果有现有数据，直接使用
+          newCache.droneInfrared = analysis.droneInfrared
         }
       }
     }
@@ -2114,13 +2301,14 @@ const refreshVideoCapacityAndCache = async () => {
     localStorage.setItem('video_cache', JSON.stringify(newCache))
     localStorage.setItem('livestream_capacity', JSON.stringify(capacityResponse))
     
-    // 更新视频流地址缓存
-    localStorage.setItem('video_streams', JSON.stringify(videoStreams))
+    // 更新视频流地址缓存 - 只在有新的视频流数据时才更新
+    if (videoStreams.length > 0) {
+      localStorage.setItem('video_streams', JSON.stringify(videoStreams))
+    }
     
-    // 优先返回无人机可见光视频地址
+    // 只返回无人机视频地址，不fallback到机场视频
     const droneVisibleStream = videoStreams.find(stream => stream.type === 'drone_visible')
     const droneInfraredStream = videoStreams.find(stream => stream.type === 'drone_infrared')
-    const dockStream = videoStreams.find(stream => stream.type === 'dock')
     
     // 更新当前视频流信息
     if (droneVisibleStream) {
@@ -2131,12 +2319,9 @@ const refreshVideoCapacityAndCache = async () => {
       currentVideoStream.value = droneInfraredStream
       currentVideoType.value = droneInfraredStream.switchable_video_types?.[0] || 'ir'
       return droneInfraredStream.url
-    } else if (dockStream) {
-      currentVideoStream.value = dockStream
-      currentVideoType.value = dockStream.switchable_video_types?.[0] || 'normal'
-      return dockStream.url
     } else {
-      throw new Error('没有找到可用的视频流')
+      // 如果没有无人机视频，返回null而不是抛出错误
+      return null
     }
     
   } catch (error: any) {
@@ -2150,20 +2335,89 @@ const reloadVideo = async () => {
   stopVideoPlayback()
   
   // 重新获取capacity并更新缓存，返回无人机视频地址
-  const droneVideoUrl = await refreshVideoCapacityAndCache()
-  
-  if (!droneVideoUrl) {
-    throw new Error('无法获取视频流地址')
+  const droneVideoUrl = await refreshVideoCapacityAndCache(true)
+
+  if (droneVideoUrl) {
+    // 设置无人机视频地址
+    videoStreamUrl.value = droneVideoUrl
+    localStorage.setItem('drone_video_stream_url', droneVideoUrl)
+    localStorage.setItem('current_video_type', 'drone_visible')
+
+    // 同步更新 video_streams 中的 drone_visible.url
+    try {
+      const streamsStr = localStorage.getItem('video_streams')
+      const streams = streamsStr ? JSON.parse(streamsStr) : []
+      const idx = streams.findIndex((s: any) => s.type === 'drone_visible')
+      if (idx >= 0) {
+        streams[idx].url = droneVideoUrl
+        streams[idx].ai_enabled = false
+      } else {
+        streams.push({ type: 'drone_visible', url: droneVideoUrl, ai_enabled: false })
+      }
+      localStorage.setItem('video_streams', JSON.stringify(streams))
+    } catch {}
+
+    // 确保DOM更新后再开始播放
+    await nextTick()
+    startVideoPlayback()
+    
+    // 如果成功获取到视频流，停止轮询
+    stopVideoPolling()
+  } else {
+    // 没有无人机视频，直接不播放
+    console.log('无人机控制页面：无法获取无人机视频流，不播放任何视频')
   }
+}
+// 开始视频流轮询
+const startVideoPolling = () => {
+  // 如果已经有轮询定时器，先清除
+  stopVideoPolling()
   
-  // 设置无人机视频地址
-  videoStreamUrl.value = droneVideoUrl
-  localStorage.setItem('drone_video_stream_url', droneVideoUrl)
-  localStorage.setItem('current_video_type', 'drone_visible')
+  console.log('开始视频流轮询，每10秒检查一次无人机视频流')
   
-  // 确保DOM更新后再开始播放
-  await nextTick()
-  startVideoPlayback()
+  videoPollingTimer.value = setInterval(async () => {
+    // 检查当前是否已经有视频在播放
+    if (videoStreamUrl.value && videoElement.value && !videoElement.value.paused) {
+      console.log('当前已有视频在播放，跳过轮询检查')
+      return
+    }
+    
+    console.log('轮询检查：尝试获取无人机视频流...')
+    
+    try {
+      // 尝试重新获取视频流
+      const droneVideoUrl = await refreshVideoCapacityAndCache()
+      
+      if (droneVideoUrl && droneVideoUrl !== videoStreamUrl.value) {
+        console.log('轮询发现新的无人机视频流，开始播放')
+        
+        // 设置新的视频地址
+        videoStreamUrl.value = droneVideoUrl
+        localStorage.setItem('drone_video_stream_url', droneVideoUrl)
+        localStorage.setItem('current_video_type', 'drone_visible')
+        
+        // 开始播放
+        await nextTick()
+        startVideoPlayback()
+        
+        // 成功获取到视频流，停止轮询
+        stopVideoPolling()
+      } else {
+        console.log('轮询检查：仍未发现可用的无人机视频流')
+      }
+    } catch (error) {
+      console.log('轮询检查：获取视频流失败', error)
+    }
+  }, VIDEO_POLLING_INTERVAL)
+}
+
+// 停止视频流轮询
+const stopVideoPolling = () => {
+  if (videoPollingTimer.value) {
+    clearInterval(videoPollingTimer.value)
+    videoPollingTimer.value = null
+    console.log('停止视频流轮询')
+  }
 }
 
 // 视觉WebSocket初始化
@@ -2500,13 +2754,74 @@ const drawDeviceInfo = (ctx: CanvasRenderingContext2D, deviceProperties: any, ca
 
 // 重连视觉WebSocket
 const reconnectVision = () => {
-  // 先断开现有连接
-  disconnectVision()
+  // 获取缓存的设备SN
+  const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+  const cachedDroneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
   
-  // 等待一会儿后重新连接
-  setTimeout(() => {
-    initVisionWebSocket()
-  }, 500)
+  if (cachedDockSns.length === 0) {
+    console.error('重连失败：未找到缓存的机场SN')
+    return
+  }
+  
+  // 使用第一个机场SN
+  const dockSn = cachedDockSns[0]
+  
+  // 构建新的WebRTC URL
+  const newWebRtcUrl = `webrtc://10.10.1.3:8000/live/cam_rtsp_${dockSn}`
+  console.log('新的WebRTC URL:', newWebRtcUrl)
+  
+  // 获取现有的video_streams缓存
+  const existingVideoStreamsStr = localStorage.getItem('video_streams')
+  let existingVideoStreams: any[] = []
+  if (existingVideoStreamsStr) {
+    try {
+      existingVideoStreams = JSON.parse(existingVideoStreamsStr)
+    } catch (error) {
+      console.warn('解析现有video_streams缓存失败:', error)
+    }
+  }
+  
+  // 更新无人机可见光视频流的URL
+  const updatedVideoStreams = existingVideoStreams.map(stream => {
+    if (stream.type === 'drone_visible') {
+      return {
+        ...stream,
+        url: newWebRtcUrl
+      }
+    }
+    return stream
+  })
+  
+  // 如果没有无人机可见光视频流，添加一个
+  if (!updatedVideoStreams.find(stream => stream.type === 'drone_visible')) {
+    updatedVideoStreams.push({
+      type: 'drone_visible',
+      url: newWebRtcUrl,
+      switchable_video_types: ['wide', 'zoom'],
+      device_sn: cachedDroneSns[0] || dockSn,
+      camera_index: '0',
+      video_index: '0',
+      ai_enabled: true // 新增：AI画框状态字段
+    })
+  } else {
+    // 如果已存在，更新AI状态字段
+    const droneVisibleStream = updatedVideoStreams.find(stream => stream.type === 'drone_visible')
+    if (droneVisibleStream) {
+      droneVisibleStream.ai_enabled = true // 设置为AI画框模式
+    }
+  }
+  
+  // 更新缓存
+  localStorage.setItem('video_streams', JSON.stringify(updatedVideoStreams))
+  console.log('已更新video_streams缓存:', updatedVideoStreams)
+  
+  // 更新当前视频流地址
+  videoStreamUrl.value = newWebRtcUrl
+  
+  // 重新开始视频播放
+  nextTick(() => {
+    startVideoPlayback()
+  })
 }
 
 // 更新推送频率
@@ -2765,7 +3080,6 @@ const clearWaylineDisplay = () => {
     }
   }
 }
-
 // 显示航点和航线
 const displayWayline = async () => {
   console.log('displayWayline 开始执行')
@@ -3047,6 +3361,8 @@ const handleQualityChange = async (quality: number) => {
 }
 
 onMounted(async () => {
+  // 同步一次AI模式状态
+  loadAiModeFromCache()
   // 添加点击外部关闭菜单的监听器
   document.addEventListener('click', (event) => {
     const target = event.target as Element
@@ -3110,6 +3426,8 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
         clearInterval(gimbalControlInterval.value)
         gimbalControlInterval.value = null
       }
+      // 清理视频流轮询定时器
+      stopVideoPolling()
     })
     
     // 初始化无人机视频播放器（优先从缓存读取，没有则刷新获取）
@@ -3123,7 +3441,7 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
     }
     
     // 初始化视觉 WebSocket 连接
-    initVisionWebSocket()
+    // initVisionWebSocket()
     
     // 设置视频尺寸变化监听
     if (videoElement.value && typeof ResizeObserver !== 'undefined') {
@@ -3521,7 +3839,6 @@ const confirmSeizeAuthority = async () => {
 const cancelSeizeAuthority = () => {
   authorityTooltip.value.visible = false
 }
-
 // 获取控制权
 const acquireControlAuthority = async () => {
   controlAuthorityStatus.value.isLoading = true
@@ -4238,6 +4555,98 @@ watch(() => videoElement.value, (newElement) => {
     })
   }
 })
+
+// 云台复位处理函数
+const handleGimbalReset = async (resetMode: number) => {
+  try {
+    // 获取缓存的机场SN
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    const dockSn = cachedDockSns[0]
+    // 获取最佳的payload_index
+    const payloadIndex = getBestPayloadIndex()
+    if (!payloadIndex) {
+      alert('没有找到可用的载荷信息')
+      return
+    }
+    // 调用云台复位API
+    const result = await controlApi.gimbalReset(dockSn, payloadIndex, resetMode)
+    if (result.code !== 0) {
+      alert(`云台复位操作失败: ${result.message}`)
+    }
+  } catch (error: any) {
+    alert(`云台复位操作失败: ${error.message || error}`)
+  }
+}
+
+const handleCameraPhoto = async () => {
+  try {
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    const dockSn = cachedDockSns[0]
+    const payloadIndex = getBestPayloadIndex()
+    if (!payloadIndex) {
+      alert('没有找到可用的载荷信息')
+      return
+    }
+    const result = await controlApi.cameraPhoto(dockSn, payloadIndex)
+    if (result.code !== 0) {
+      alert(`拍照失败: ${result.message}`)
+    }
+  } catch (error: any) {
+    alert(`拍照失败: ${error.message || error}`)
+  }
+}
+
+const handleCameraRecordingStart = async () => {
+  try {
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    const dockSn = cachedDockSns[0]
+    const payloadIndex = getBestPayloadIndex()
+    if (!payloadIndex) {
+      alert('没有找到可用的载荷信息')
+      return
+    }
+    const result = await controlApi.cameraRecordingStart(dockSn, payloadIndex)
+    if (result.code !== 0) {
+      alert(`开始录像失败: ${result.message}`)
+    }
+  } catch (error: any) {
+    alert(`开始录像失败: ${error.message || error}`)
+  }
+}
+
+const handleCameraRecordingStop = async () => {
+  try {
+    const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+    if (cachedDockSns.length === 0) {
+      alert('没有找到可用的机场设备')
+      return
+    }
+    const dockSn = cachedDockSns[0]
+    const payloadIndex = getBestPayloadIndex()
+    if (!payloadIndex) {
+      alert('没有找到可用的载荷信息')
+      return
+    }
+    const result = await controlApi.cameraRecordingStop(dockSn, payloadIndex)
+    if (result.code !== 0) {
+      alert(`停止录像失败: ${result.message}`)
+    }
+  } catch (error: any) {
+    alert(`停止录像失败: ${error.message || error}`)
+  }
+}
 </script>
 
 <style scoped>
@@ -4709,6 +5118,14 @@ watch(() => videoElement.value, (newElement) => {
   font-size: 10px;
   color: #67d5fd;
   font-weight: 500;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.vision-label.ai-enabled {
+  color: #67c23a;
+  font-weight: 600;
+  text-shadow: 0 0 4px rgba(103, 194, 58, 0.5);
 }
 
 .vision-reconnect-btn {
@@ -5080,7 +5497,6 @@ watch(() => videoElement.value, (newElement) => {
     transform: scale(1.1);
   }
 }
-
 @keyframes pulse-green {
   0%, 100% {
     opacity: 1;
@@ -5110,7 +5526,6 @@ watch(() => videoElement.value, (newElement) => {
   flex-shrink: 0;
   transition: all 0.3s ease;
 }
-
 .drc-status-indicator.ready {
   background-color: #52c41a;
   box-shadow: 0 0 4px rgba(82, 196, 26, 0.5);
@@ -5315,7 +5730,7 @@ watch(() => videoElement.value, (newElement) => {
   border-radius: 1px;
   z-index: 1;
   display: block;
-  pointer-events: none;
+  pointer-events: none; /* 保留，但不影响内部控件 */
 }
 .on1-lt-border-vertical {
   position: absolute;
@@ -5638,12 +6053,12 @@ watch(() => videoElement.value, (newElement) => {
 .task-progress-actions-btns {
   display: flex;
   flex-direction: column;
-  gap: 20px; /* 增加按钮间距从8px到16px */
+  gap: 10px; /* 缩小间距，避免两按钮显示时顶部出现留白 */
   width: auto;
   align-items: flex-end;
-  justify-content: space-between; /* 改为space-between，避免恢复按钮出现时的顶部空白 */
+  justify-content: flex-start; /* 统一从上向下排列，避免出现分散导致空白 */
   flex-shrink: 0; /* 防止按钮组被压缩 */
-  margin-top: -5px; /* 往上移动，与任务进度平齐 */
+  margin-top: 0; /* 去掉负外边距，保持与内容对齐 */
   height: 100%; /* 让按钮组占满高度 */
 }
 .task-progress-actions-btns .span {
@@ -5659,7 +6074,7 @@ watch(() => videoElement.value, (newElement) => {
   font-size: 12px;
   white-space: nowrap;
   transition: all 0.3s;
-  margin-top: auto; /* 暂停按钮靠上 */
+  margin-top: 0;
 }
 .task-progress-actions-btns .span:hover {
   border-color: rgba(38, 131, 182, 0.8);
@@ -5678,7 +6093,7 @@ watch(() => videoElement.value, (newElement) => {
   font-size: 12px;
   white-space: nowrap;
   transition: all 0.3s;
-  margin-bottom: auto; /* 停止按钮靠下 */
+  margin-bottom: 0;
 }
 .task-progress-actions-btns .span1:hover {
   border-color: rgba(182, 38, 38, 0.8);
@@ -5867,7 +6282,7 @@ watch(() => videoElement.value, (newElement) => {
   min-width: 56px;
   height: 28px;         /* 按钮高度适配卡片 */
   margin-left: auto;    /* 靠右对齐 */
-  transition: border 0.2s, background 0.2s;
+  transition: border 0.2s, background 0.2s, color 0.2s, box-shadow 0.2s;
   align-self: center;   /* 垂直居中 */
 }
 .remote-card-btn:active,
@@ -5908,7 +6323,6 @@ watch(() => videoElement.value, (newElement) => {
   bottom: 110px !important; /* 确保深度选择器也生效 */
   right: 16px !important;
 }
-
 :deep(.amap-maptype-label) {
   color: #000 !important;
 }
@@ -6671,7 +7085,6 @@ watch(() => videoElement.value, (newElement) => {
   color: #67d5fd;
   border-color: rgba(103, 213, 253, 0.3);
 }
-
 .takeoff-algorithm-options {
   flex: 1;
   display: flex;
@@ -6705,7 +7118,6 @@ watch(() => videoElement.value, (newElement) => {
 .takeoff-algorithm-options::-webkit-scrollbar-thumb:hover {
   background: rgba(103, 213, 253, 0.5);
 }
-
 /* Firefox 滚动条样式 */
 .takeoff-algorithm-options {
   scrollbar-width: thin;

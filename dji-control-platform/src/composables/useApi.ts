@@ -399,7 +399,8 @@ export function useAuth() {
               switchable_video_types: switchableTypes,
               device_sn: droneVisibleDevice.deviceSn,
               camera_index: droneVisibleDevice.cameraIndex,
-              video_index: droneVisibleDevice.videoIndex
+              video_index: droneVisibleDevice.videoIndex,
+              ai_enabled: false // 新增：AI画框状态字段，登录时默认为false（原始视频）
             })
           }
           
@@ -1305,6 +1306,7 @@ export function useWaylineJobs() {
     wayline_precision_type: number
     begin_time?: string | null
     end_time?: string | null
+    execute_time?: string
     // 算法相关字段（移动到flight-tasks接口）
     enable_vision?: boolean
     vision_algorithms?: number[]

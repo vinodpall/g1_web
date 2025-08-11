@@ -51,7 +51,7 @@
               </div>
               <!-- 可选：底部状态栏 -->
               <div class="robot-status-footer">
-                <span>，风速：{{ formatWindSpeed(environment?.windSpeed) }}</span>
+                <span>风速：{{ formatWindSpeed(environment?.windSpeed) }}</span>
                 <span>，降水：{{ formatRainfall(environment?.rainfall) }}</span>
                 <span>，温度：{{ formatTemperature(environment?.environmentTemperature) }}</span>
                 <span>，湿度：{{ formatHumidity(environment?.humidity) }}</span>
@@ -313,6 +313,91 @@ const amapApiRef = ref<any>(null)
 const remoteEnabled = ref(false)
 const dockMarkers = ref<any[]>([])
 const droneMarkers = ref<any[]>([])
+
+// 无人机动画相关状态
+const droneAnimationState = ref({
+  currentPosition: { longitude: 0, latitude: 0, height: 0 },
+  targetPosition: { longitude: 0, latitude: 0, height: 0 },
+  isAnimating: false,
+  animationStartTime: 0,
+  animationDuration: 2000, // 2秒动画时长
+  lastUpdateTime: 0
+})
+
+// 无人机位置插值函数
+const interpolatePosition = (start: any, end: any, progress: number) => {
+  return {
+    longitude: start.longitude + (end.longitude - start.longitude) * progress,
+    latitude: start.latitude + (end.latitude - start.latitude) * progress,
+    height: start.height + (end.height - start.height) * progress
+  }
+}
+
+// 更新无人机位置动画
+const updateDronePositionAnimation = () => {
+  if (!droneAnimationState.value.isAnimating || !droneMarkers.value.length) {
+    return
+  }
+
+  const now = Date.now()
+  const elapsed = now - droneAnimationState.value.animationStartTime
+  const progress = Math.min(elapsed / droneAnimationState.value.animationDuration, 1)
+
+  // 使用缓动函数使动画更自然
+  const easeProgress = 1 - Math.pow(1 - progress, 3) // 缓出效果
+
+  const currentPos = droneAnimationState.value.currentPosition
+  const targetPos = droneAnimationState.value.targetPosition
+  const interpolatedPos = interpolatePosition(currentPos, targetPos, easeProgress)
+
+  // 更新无人机标记位置
+  const droneMarker = droneMarkers.value[0]
+  if (droneMarker) {
+    droneMarker.setPosition([interpolatedPos.longitude, interpolatedPos.latitude])
+  }
+
+  // 如果动画完成，停止动画
+  if (progress >= 1) {
+    droneAnimationState.value.isAnimating = false
+    droneAnimationState.value.currentPosition = { ...targetPos }
+  } else {
+    // 继续动画
+    requestAnimationFrame(updateDronePositionAnimation)
+  }
+}
+
+// 开始无人机位置动画
+const startDronePositionAnimation = (newPosition: any) => {
+  const currentPos = droneAnimationState.value.currentPosition
+  const targetPos = {
+    longitude: newPosition.longitude,
+    latitude: newPosition.latitude,
+    height: newPosition.height || 0
+  }
+
+  // 计算两点间距离，根据距离调整动画时长
+  const distance = Math.sqrt(
+    Math.pow(targetPos.longitude - currentPos.longitude, 2) +
+    Math.pow(targetPos.latitude - currentPos.latitude, 2)
+  )
+
+  // 根据距离调整动画时长，距离越远动画时间越长，但不超过3秒
+  const baseDuration = 1000 // 基础1秒
+  const distanceFactor = Math.min(distance * 10000, 2) // 距离因子，最大2秒
+  const animationDuration = Math.min(baseDuration + distanceFactor * 1000, 3000)
+
+  droneAnimationState.value = {
+    currentPosition: { ...currentPos },
+    targetPosition: targetPos,
+    isAnimating: true,
+    animationStartTime: Date.now(),
+    animationDuration: animationDuration,
+    lastUpdateTime: Date.now()
+  }
+
+  // 开始动画
+  requestAnimationFrame(updateDronePositionAnimation)
+}
 const isInitialLoad = ref(true)
 
 // 航点任务相关变量
@@ -547,7 +632,6 @@ const clearDroneMarkers = () => {
 const updateMapMarkers = (shouldCenter = false) => {
   // 清除现有标记
   clearDockMarkers()
-  clearDroneMarkers()
   
   // 检查是否有位置数据
   if (position.value && position.value.longitude && position.value.latitude) {
@@ -605,8 +689,29 @@ const updateMapMarkers = (shouldCenter = false) => {
       height: droneHeight
     }
     
-    // 添加无人机标记
-    addDroneMarker(droneLongitude, droneLatitude, droneInfo)
+    // 处理无人机标记的平滑动画
+    if (droneMarkers.value.length === 0) {
+      // 第一次创建无人机标记
+      addDroneMarker(droneLongitude, droneLatitude, droneInfo)
+      // 初始化动画状态
+      droneAnimationState.value.currentPosition = {
+        longitude: droneLongitude,
+        latitude: droneLatitude,
+        height: droneHeight
+      }
+    } else {
+      // 检查位置是否有变化
+      const currentPos = droneAnimationState.value.currentPosition
+      const newPos = { longitude: droneLongitude, latitude: droneLatitude, height: droneHeight }
+      
+      const positionChanged = Math.abs(currentPos.longitude - newPos.longitude) > 0.000001 ||
+                             Math.abs(currentPos.latitude - newPos.latitude) > 0.000001
+      
+      if (positionChanged && !droneAnimationState.value.isAnimating) {
+        // 位置有变化且当前没有动画，开始新的动画
+        startDronePositionAnimation(newPos)
+      }
+    }
     
     // 更新无人机追踪
     updateDroneTracking()
@@ -707,7 +812,7 @@ const clearWaylineDisplay = () => {
   }
 }
 
-// 显示航点和航线
+// 显示航点和航线（仅在需要时重绘，避免每次都清空重画）
 const displayWayline = async () => {
   console.log('displayWayline 开始执行')
   console.log('amapInstance:', !!amapInstance.value)
@@ -719,7 +824,17 @@ const displayWayline = async () => {
     return
   }
   
-  // 先清除之前的显示
+  // 判断是否需要重绘：当没有显示或任务ID/状态变化时才重绘
+  const hasWaylineDisplay = waylineMarkers.value.length > 0 || waylinePolyline.value
+  const currentJobId = waylineProgress.value?.job_id
+  const currentTaskStatus = waylineProgress.value?.status
+  const shouldRedraw = !hasWaylineDisplay || (displayWayline as any)._lastJobId !== currentJobId || (displayWayline as any)._lastTaskStatus !== currentTaskStatus
+  if (!shouldRedraw) {
+    // 仅更新当前航点高亮
+    updateCurrentWaypoint()
+    return
+  }
+  // 需要重绘时清理旧图层
   clearWaylineDisplay()
   
   try {
@@ -824,6 +939,9 @@ const displayWayline = async () => {
     } else {
       console.log('路径点数不足，无法创建航线')
     }
+    // 记录本次渲染对应的任务ID与状态
+    ;(displayWayline as any)._lastJobId = currentJobId
+    ;(displayWayline as any)._lastTaskStatus = currentTaskStatus
     
     // 显示当前航点
     updateCurrentWaypoint()
@@ -1259,6 +1377,9 @@ onMounted(async () => {
   }, 3000)
 })
 onBeforeUnmount(() => {
+  // 停止视频播放并清理视频资源
+  stopVideoPlayback()
+  
   // 清理设备状态刷新定时器
   if (statusRefreshTimer.value) {
     clearInterval(statusRefreshTimer.value)
