@@ -155,9 +155,9 @@
               <div class="dock-card-list">
                 <div class="dock-card-row">
                   <div class="dock-card-item">
-                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_sys.svg" alt="sys" />
+<img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_sys.svg" alt="sys" />
                     <div class="dock-card-content">
-                      <div class="dock-card-title">{{ osdData?.mode_code !== undefined ? StatusMaps.dockMode[osdData.mode_code as keyof typeof StatusMaps.dockMode] || '未知' : '未知' }}</div>
+                      <div class="dock-card-title">{{ getDockModeText(osdData?.mode_code) }}</div>  
                       <div class="dock-card-sub">机场系统</div>
                     </div>
                     <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleDockSystem">设置</button>
@@ -165,7 +165,7 @@
                   <div class="dock-card-item">
                     <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_box.svg" alt="box" />
                     <div class="dock-card-content">
-                      <div class="dock-card-title">{{ osdData?.cover_state !== undefined ? StatusMaps.coverState[osdData.cover_state as keyof typeof StatusMaps.coverState] || '未知' : '未知' }}</div>
+                      <div class="dock-card-title">{{ getCoverStateText(osdData?.cover_state) }}</div>
                       <div class="dock-card-sub">舱盖状态</div>
                     </div>
                     <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleCoverControl">
@@ -234,9 +234,7 @@ import { remoteDebugApi } from '../api/services'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
-import batteryIcon from '@/assets/source_data/svg_data/battery.svg'
-import systemIcon from '@/assets/source_data/svg_data/system.svg'
-import cameraIcon from '@/assets/source_data/svg_data/camera.svg'
+// 删除不存在的通用图标导入，避免构建找不到文件
 import plane2Img from '@/assets/source_data/plane_2.png'
 import batteryImg from '@/assets/source_data/Battery.png'
 import AMapLoader from '@amap/amap-jsapi-loader'
@@ -277,6 +275,17 @@ const {
 
 // 使用设备API
 const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
+
+// 文本映射辅助，避免模板中索引类型报错
+const getDockModeText = (code?: number) => {
+  if (code === undefined || code === null) return '未知'
+  return (StatusMaps.dockMode as any)[code] ?? '未知'
+}
+
+const getCoverStateText = (code?: number) => {
+  if (code === undefined || code === null) return '未知'
+  return (StatusMaps.coverState as any)[code] ?? '未知'
+}
 
 // 使用航线任务API
 const { fetchWaylineProgress, fetchWaylineJobDetail, fetchWaylineDetail } = useWaylineJobs()
@@ -1545,7 +1554,7 @@ onMounted(async () => {
   }, 3000)
   
   // 舱盖状态监听
-  watch(() => dockStatus.value?.coverState, (newCoverState, oldCoverState) => {
+  watch(() => dockStatus.value?.coverState, (newCoverState) => {
     // 只要舱盖不是关闭状态（值不为0）就播放警报声
     if (newCoverState !== 0 && !isAlarmPlaying.value) {
       // 舱盖非关闭状态，播放警报声

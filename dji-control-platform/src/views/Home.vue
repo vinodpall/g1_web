@@ -745,7 +745,7 @@ let statusRefreshTimer: number | null = null
 let droneStatusRefreshTimer: number | null = null
 
 // 舱盖状态警报声相关
-const previousCoverState = ref<number | undefined>(undefined)
+// const previousCoverState = ref<number | undefined>(undefined)
 const isAlarmPlaying = ref(false)
 
 // 生成警报声的函数
@@ -2804,7 +2804,7 @@ onUnmounted(() => {
 })
 
 // 舱盖状态监听
-watch(() => dockStatus.value?.coverState, (newCoverState, oldCoverState) => {
+watch(() => dockStatus.value?.coverState, (newCoverState) => {
   // 只要舱盖不是关闭状态（值不为0）就播放警报声
   if (newCoverState !== 0 && !isAlarmPlaying.value) {
     // 舱盖不是关闭状态，播放警报声
@@ -2940,6 +2940,10 @@ const clearWaylineDisplay = () => {
   }
 }
 
+    // 记录上次渲染的任务信息，避免为函数动态挂属性
+    const lastWaylineJobId = ref<any>(undefined)
+    const lastWaylineTaskStatus = ref<any>(undefined)
+
     // 显示航点和航线（仅在需要时重绘，避免每次都清空重画）
     const displayWayline = async () => {
   console.log('displayWayline 开始执行')
@@ -2958,7 +2962,7 @@ const clearWaylineDisplay = () => {
       const currentJobId = waylineProgress.value?.job_id
       const currentTaskStatus = waylineProgress.value?.status
       // 在 Home 页简化：当没有任何显示或任务ID/状态变化时才重绘
-      const shouldRedraw = !hasWaylineDisplay || displayWayline._lastJobId !== currentJobId || displayWayline._lastTaskStatus !== currentTaskStatus
+      const shouldRedraw = !hasWaylineDisplay || lastWaylineJobId.value !== currentJobId || lastWaylineTaskStatus.value !== currentTaskStatus
       if (!shouldRedraw) {
         // 仅更新当前航点高亮
         updateCurrentWaypoint()
@@ -3070,8 +3074,8 @@ const clearWaylineDisplay = () => {
         console.log('路径点数不足，无法创建航线')
       }
       // 记录本次渲染对应的任务ID与状态
-      displayWayline._lastJobId = currentJobId
-      displayWayline._lastTaskStatus = currentTaskStatus
+      lastWaylineJobId.value = currentJobId
+      lastWaylineTaskStatus.value = currentTaskStatus
     
     // 显示当前航点
     updateCurrentWaypoint()

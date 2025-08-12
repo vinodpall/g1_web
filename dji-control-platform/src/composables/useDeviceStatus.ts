@@ -26,8 +26,8 @@ export function useDeviceStatus() {
     error.value = null
     
     try {
-      const response = await deviceStatusApi.getDeviceStatus(deviceSn)
-      deviceStatus.value = response.data || response
+      const response: any = await deviceStatusApi.getDeviceStatus(deviceSn)
+      deviceStatus.value = (response && (response.data || response)) as DeviceStatus
       return deviceStatus.value
     } catch (err: any) {
       error.value = err.message || '获取设备状态失败'
@@ -74,8 +74,8 @@ export function useDeviceStatus() {
     error.value = null
     
     try {
-      const response = await deviceStatusApi.getDeviceStatus(mainDroneSn)
-      droneDeviceStatus.value = response.data || response
+      const response: any = await deviceStatusApi.getDeviceStatus(mainDroneSn)
+      droneDeviceStatus.value = (response && (response.data || response)) as DeviceStatus
       return droneDeviceStatus.value
     } catch (err: any) {
       error.value = err.message || '获取无人机状态失败'

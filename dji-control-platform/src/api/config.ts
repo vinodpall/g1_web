@@ -126,6 +126,7 @@ export class ApiClient {
   }
 
   // 构建带参数的URL
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private buildUrlWithParams(endpoint: string, params: Record<string, any>): string {
     const url = new URL(endpoint, this.baseURL)
     Object.entries(params).forEach(([key, value]) => {

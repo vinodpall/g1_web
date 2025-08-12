@@ -670,9 +670,7 @@ import { visionConfig, logVisionConfig } from '@/config/vision'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
-import batteryIcon from '@/assets/source_data/svg_data/battery.svg'
-import systemIcon from '@/assets/source_data/svg_data/system.svg'
-import cameraIcon from '@/assets/source_data/svg_data/camera.svg'
+// 移除不存在的通用图标导入，避免构建报错
 import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
 import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
 import plane2Img from '@/assets/source_data/plane_2.png'
@@ -2650,11 +2648,6 @@ watch(latestVisionData, (newData) => {
       if (dataAge > 100) {
         console.warn(`⏰ 数据延迟: ${dataAge}ms (frame_time)`)
       }
-    } else if (newData.timestamp) {
-      const dataAge = Date.now() - newData.timestamp
-      if (dataAge > 100) {
-        console.warn(`⏰ 数据延迟: ${dataAge}ms (timestamp)`)
-      }
     }
     
     // 检查检测结果数量
@@ -3134,7 +3127,7 @@ const handleLensChange = async (videoType: string) => {
       currentVideoType.value = videoType
       // 静默处理成功，不显示弹窗
     } else {
-      const msg = result?.detail || result?.message || '镜头切换失败';
+      const msg = (result as any)?.detail || (result as any)?.message || '镜头切换失败';
       alert(msg)
     }
     
@@ -3459,7 +3452,7 @@ const handleScreenSplit = async (enable: boolean) => {
       splitEnabled.value = enable
       // 静默处理成功，不显示弹窗
     } else {
-      const msg = result?.detail || result?.message || '分屏设置失败';
+      const msg = (result as any)?.detail || (result as any)?.message || '分屏设置失败';
       alert(msg)
     }
   } catch (error: any) {
@@ -3510,7 +3503,7 @@ const handleQualityChange = async (quality: number) => {
       currentQuality.value = quality
       // 静默处理成功，不显示弹窗
     } else {
-      const msg = result?.detail || result?.message || '清晰度设置失败';
+      const msg = (result as any)?.detail || (result as any)?.message || '清晰度设置失败';
       alert(msg)
     }
   } catch (error: any) {
@@ -3636,7 +3629,7 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
     await fetchMainDeviceStatus()
     
     // 舱盖状态监听
-    watch(() => dockStatus.value?.coverState, (newCoverState, oldCoverState) => {
+    watch(() => dockStatus.value?.coverState, (newCoverState) => {
       // 只要舱盖不是关闭状态（值不为0）就播放警报声
       if (newCoverState !== 0 && !isAlarmPlaying.value) {
         // 舱盖非关闭状态，播放警报声
@@ -4013,8 +4006,8 @@ const showAuthorityTooltip = () => {
   
   // 动态定位弹窗到按钮附近
   nextTick(() => {
-    const button = document.querySelector('.authority-btn-wrapper > button')
-    const tooltip = document.querySelector('.authority-tooltip')
+    const button = document.querySelector('.authority-btn-wrapper > button') as HTMLElement | null
+    const tooltip = document.querySelector('.authority-tooltip') as HTMLElement | null
     if (button && tooltip) {
       const rect = button.getBoundingClientRect()
       tooltip.style.left = `${rect.left + rect.width / 2}px`

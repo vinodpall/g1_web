@@ -11,7 +11,8 @@ export const useUserStore = defineStore('user', {
     isLoggedIn: (state) => !!state.token,
     hasPermission: (state) => (permission: string) => {
       if (!state.user) return false
-      if (state.user.role === 'super_admin') return true
+      // 简化校验：若后端包含 roles 数组，超级管理员判定可根据其中是否包含 'super_admin'
+      if (Array.isArray(state.user.roles) && state.user.roles.includes('super_admin')) return true
       // 这里可以根据角色和权限进行更复杂的判断
       return true
     }

@@ -6,7 +6,7 @@ import { useDeviceStore } from '../stores/device'
 
 // 视频缓存管理
 const VIDEO_CACHE_KEY = 'video_devices_cache'
-const VIDEO_CACHE_VERSION_KEY = 'video_cache_version'
+// const VIDEO_CACHE_VERSION_KEY = 'video_cache_version'
 
 // 视频设备信息结构
 interface VideoDeviceInfo {

@@ -110,7 +110,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   console.log('路由跳转:', to.path)
   
   // 检查是否需要认证

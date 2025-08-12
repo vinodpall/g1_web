@@ -55,7 +55,7 @@ interface VisionData {
 }
 
 interface VisionMessage {
-  type: 'connected' | 'vision_data' | 'pong' | 'error'
+  type: 'connected' | 'vision_data' | 'pong' | 'error' | 'config_updated' | 'subscription_updated' | 'heartbeat'
   device_sn?: string
   timestamp?: number
   data?: VisionData
@@ -189,15 +189,16 @@ export function useVisionWebSocket(serverHost: string = visionConfig.serverHost)
         if (message.data) {
           latestVisionData.value = message.data
           
-          // 调试：输出数据接收时间
-          const now = Date.now()
-          const dataTime = message.data.timestamp || message.timestamp
-          if (dataTime) {
-            const latency = now - dataTime
-            if (latency > 200) {
-              console.warn(`🐌 数据传输延迟: ${latency}ms`)
-            }
+        // 调试：输出数据接收时间
+        const now = Date.now()
+        const dataTimeFromFrame = message.data?.frame_time ? message.data.frame_time * 1000 : undefined
+        const dataTime = dataTimeFromFrame ?? message.timestamp
+        if (dataTime) {
+          const latency = now - dataTime
+          if (latency > 200) {
+            console.warn(`🐌 数据传输延迟: ${latency}ms`)
           }
+        }
         }
         break
 

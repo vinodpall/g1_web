@@ -183,6 +183,7 @@ export interface VisionAlert {
   has_images: boolean
   original_image_url: string
   marked_image_url: string
+  thumbnail_image_url?: string
   status: 'PENDING' | 'HANDLED' | 'IGNORED'
   handler_id: string | null
   handle_time: string | null

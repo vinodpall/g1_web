@@ -105,8 +105,8 @@ const handleLogin = async () => {
     // 正确的代码 👇
     const response = await login(loginForm.value)
     
-    userStore.setUser(response.user)
-    userStore.setToken(response.token)
+    userStore.setUser((response as any).user)
+    userStore.setToken((response as any).token)
     
     router.push('/dashboard')
   } catch (error) {

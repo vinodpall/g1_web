@@ -284,7 +284,7 @@ const loadAlerts = async () => {
     // 更新设备列表和任务列表（去重）
     const devices = new Set<string>()
     const jobs = new Set<string>()
-    response.alerts.forEach(alert => {
+    response.alerts.forEach((alert: VisionAlert) => {
       devices.add(alert.device_sn)
       jobs.add(alert.job_id)
     })
@@ -509,8 +509,8 @@ watch(() => userStore.token, (newToken, oldToken) => {
 })
 
 // 页面加载和alerts变化时批量下载缩略图
-watch(alerts, (newAlerts) => {
-  newAlerts.forEach(alert => {
+watch(alerts, (newAlerts: VisionAlert[]) => {
+  newAlerts.forEach((alert: VisionAlert) => {
     if (alert.thumbnail_image_url) getThumbnailUrl(alert.thumbnail_image_url)
   })
 }, { immediate: true })
