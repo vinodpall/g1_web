@@ -118,7 +118,7 @@
                   <span class="remote-control-text">远程调试</span>
                   <div
                     class="switch-container"
-                    :class="{ active: remoteEnabled }"
+                    :class="{ active: getRemoteDebugStatus() }"
                     @click="toggleRemote"
                   >
                     <div class="switch-toggle"></div>
@@ -128,26 +128,32 @@
                   <div class="remote-card-item">
                     <img :src="droneCloseIcon" class="remote-card-icon" alt="电源" />
                     <div class="remote-card-texts">
-                      <div class="remote-card-title">关机</div>
+                      <div class="remote-card-title">{{ droneStatus?.isOnline ? '开机' : '关机' }}</div>
                       <div class="remote-card-sub">飞行器电源</div>
                     </div>
-                    <button class="remote-card-btn" :disabled="!remoteEnabled">开机</button>
+                    <button class="remote-card-btn" :disabled="!remoteEnabled" @click="handleDronePower">
+                      {{ droneStatus?.isOnline ? '关机' : '开机' }}
+                    </button>
                   </div>
                   <div class="remote-card-item">
                     <img :src="droneBatteryIcon" class="remote-card-icon" alt="电池" />
                     <div class="remote-card-texts">
-                      <div class="remote-card-title">未充电</div>
+                      <div class="remote-card-title">{{ droneStatus?.chargeText || '未知' }}</div>
                       <div class="remote-card-sub">飞行器充电</div>
                     </div>
-                    <button class="remote-card-btn" :disabled="!remoteEnabled">充电</button>
+                    <button class="remote-card-btn" :disabled="!remoteEnabled" @click="handleDroneCharge">
+                      {{ droneStatus?.chargeState === 1 ? '停止' : '开始' }}
+                    </button>
                   </div>
                   <div class="remote-card-item">
-                    <img :src="drone4gIcon" class="remote-card-icon" alt="4G" />
+                    <img :src="droneLightIcon" class="remote-card-icon" alt="补光灯" />
                     <div class="remote-card-texts">
-                      <div class="remote-card-title">已开启</div>
-                      <div class="remote-card-sub">增强图传</div>
+                      <div class="remote-card-title">{{ getSupplementLightText() }}</div>
+                      <div class="remote-card-sub">补光灯</div>
                     </div>
-                    <button class="remote-card-btn" :disabled="!remoteEnabled">关闭</button>
+                    <button class="remote-card-btn" :disabled="!remoteEnabled" @click="handleSupplementLight">
+                      {{ getSupplementLightButtonText() }}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -656,7 +662,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { controlApi, drcApi, livestreamApi, waylineApi } from '../api/services'
+import { controlApi, drcApi, livestreamApi, waylineApi, remoteDebugApi } from '../api/services'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
 import { useWaylineJobs, useDevices } from '../composables/useApi'
 import { useVisionWebSocket } from '../composables/useVisionWebSocket'
@@ -676,7 +682,7 @@ import flvjs from 'flv.js'
 // 新增 drone_ 系列图标
 import droneCloseIcon from '@/assets/source_data/svg_data/drone_close.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
-import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
+import droneLightIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_light.svg'
 import droneUpIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_up.svg'
 import droneDownIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_down.svg'
 import droneLeftIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_left.svg'
@@ -716,6 +722,140 @@ const { getCachedWorkspaceId, getCachedDeviceSns } = useDevices()
 // 航线任务相关数据
 const waylineProgress = ref<any>(null)
 const waylineJobDetail = ref<any>(null)
+
+// 舱盖状态警报声相关
+const isAlarmPlaying = ref(false)
+
+// 生成警报声的函数
+const createAlarmSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+    
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+    
+    // 设置音频参数
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime) // 800Hz 频率
+    oscillator.type = 'sine'
+    
+    // 设置音量包络
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime)
+    gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.1)
+    gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5)
+    
+    oscillator.start(audioContext.currentTime)
+    oscillator.stop(audioContext.currentTime + 0.5)
+    
+    return audioContext
+  } catch (error) {
+    return null
+  }
+}
+
+// 播放警报声的函数
+const playAlarmSound = () => {
+  if (isAlarmPlaying.value) return
+  
+  isAlarmPlaying.value = true
+  let audioContext: AudioContext | null = null
+  
+  const playBeep = () => {
+    if (!isAlarmPlaying.value) return
+    
+    audioContext = createAlarmSound()
+    
+    // 1.5秒后播放下一个"滴"
+    setTimeout(() => {
+      if (isAlarmPlaying.value) {
+        playBeep()
+      }
+    }, 1500)
+  }
+  
+  playBeep()
+  
+  return () => {
+    isAlarmPlaying.value = false
+    if (audioContext) {
+      audioContext.close()
+    }
+  }
+}
+
+let stopAlarmSound: (() => void) | null | undefined = null
+
+// 补光灯状态相关函数
+const getSupplementLightText = () => {
+  const lightState = osdData.value?.supplement_light_state
+  if (lightState === 1) return '已开启'
+  if (lightState === 0) return '已关闭'
+  return '未知'
+}
+
+const getSupplementLightButtonText = () => {
+  const lightState = osdData.value?.supplement_light_state
+  if (lightState === 1) return '关闭'
+  if (lightState === 0) return '开启'
+  return '切换'
+}
+
+// 获取远程调试模式状态
+const getRemoteDebugStatus = () => {
+  // 优先使用本地状态，如果本地状态未设置则使用机场系统状态
+  if (remoteEnabled.value !== undefined) {
+    return remoteEnabled.value
+  }
+  // 根据机场状态判断是否处于远程调试模式
+  return osdData.value?.mode_code === 2 // 2表示远程调试模式
+}
+
+// 远程调试执行函数
+const executeRemoteDebug = async (method: string, params: any = {}) => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    const { dockSns } = getCachedDeviceSns()
+    
+    if (!workspaceId || dockSns.length === 0) {
+      console.error('缺少workspace_id或device_sn')
+      return
+    }
+    
+    const deviceSn = dockSns[0] // 使用第一个机场设备
+    const response = await remoteDebugApi.execute(workspaceId, deviceSn, method, params)
+    
+    // 类型断言处理响应
+    const responseData = response as any
+    if (responseData.success === true) {
+      console.log(`远程调试命令 ${method} 执行成功`)
+      // 执行成功后刷新设备状态
+      await fetchMainDeviceStatus()
+      await fetchDroneStatus()
+    } else {
+      console.error(`远程调试命令 ${method} 执行失败:`, responseData.message)
+    }
+  } catch (error) {
+    console.error(`远程调试命令 ${method} 执行出错:`, error)
+  }
+}
+
+// 远程调试按钮点击事件
+const handleDronePower = () => {
+  const method = droneStatus.value?.isOnline ? 'drone_close' : 'drone_open'
+  executeRemoteDebug(method)
+}
+
+const handleDroneCharge = () => {
+  const method = droneStatus.value?.chargeState === 1 ? 'charge_close' : 'charge_open'
+  executeRemoteDebug(method)
+}
+
+const handleSupplementLight = () => {
+  const isOn = osdData.value?.supplement_light_state === 1
+  const method = isOn ? 'supplement_light_close' : 'supplement_light_open'
+  executeRemoteDebug(method)
+}
 
 // 航线显示状态跟踪
 const waylineDisplayState = ref({
@@ -1264,9 +1404,37 @@ const isVideoPlaying = ref(false)
 const currentTime = ref('00:00')
 const totalTime = ref('00:00')
 
-const toggleRemote = () => {
-  remoteEnabled.value = !remoteEnabled.value;
-};
+const toggleRemote = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    const { dockSns } = getCachedDeviceSns()
+    
+    if (!workspaceId || dockSns.length === 0) {
+      console.error('缺少workspace_id或device_sn')
+      return
+    }
+    
+    const deviceSn = dockSns[0] // 使用第一个机场设备
+    const method = remoteEnabled.value ? 'debug_mode_close' : 'debug_mode_open'
+    
+    const response = await remoteDebugApi.execute(workspaceId, deviceSn, method, {})
+    
+    // 类型断言处理响应
+    const responseData = response as any
+    if (responseData.success === true) {
+      console.log(`远程调试模式${remoteEnabled.value ? '关闭' : '开启'}成功`)
+      // 立即更新本地状态，实现实时切换
+      remoteEnabled.value = !remoteEnabled.value
+      // 执行成功后刷新设备状态，确保与机场系统状态同步
+      await fetchMainDeviceStatus()
+      await fetchDroneStatus()
+    } else {
+      console.error(`远程调试模式${remoteEnabled.value ? '关闭' : '开启'}失败:`, responseData.message)
+    }
+  } catch (error) {
+    console.error(`远程调试模式切换失败:`, error)
+  }
+}
 const isSatellite = ref(true); // 默认为卫星图模式，确保显示卫星图
 const isInitialLoad = ref(true); // 标记是否为初始加载
 const toggleMapLayer = () => {
@@ -3428,6 +3596,13 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
       }
       // 清理视频流轮询定时器
       stopVideoPolling()
+      
+      // 停止并清理警报声
+      if (stopAlarmSound) {
+        stopAlarmSound()
+        stopAlarmSound = null
+      }
+      isAlarmPlaying.value = false
     })
     
     // 初始化无人机视频播放器（优先从缓存读取，没有则刷新获取）
@@ -3459,6 +3634,35 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
     
     // 获取机场状态数据（包含无人机充电状态）
     await fetchMainDeviceStatus()
+    
+    // 舱盖状态监听
+    watch(() => dockStatus.value?.coverState, (newCoverState, oldCoverState) => {
+      // 只要舱盖不是关闭状态（值不为0）就播放警报声
+      if (newCoverState !== 0 && !isAlarmPlaying.value) {
+        // 舱盖非关闭状态，播放警报声
+        stopAlarmSound = playAlarmSound()
+      }
+      // 舱盖状态变为关闭（值为0）时停止警报声
+      else if (newCoverState === 0 && isAlarmPlaying.value) {
+        // 舱盖关闭，停止警报声
+        if (stopAlarmSound) {
+          stopAlarmSound()
+          stopAlarmSound = null
+        }
+      }
+    })
+    
+    // 远程调试状态同步监听
+    watch(() => osdData.value?.mode_code, (newModeCode) => {
+      // 当机场系统状态变化时，同步远程调试状态
+      if (newModeCode !== undefined) {
+        // 如果本地状态与机场系统状态不一致，则同步
+        const shouldBeEnabled = newModeCode === 2 // 2表示远程调试模式
+        if (remoteEnabled.value !== shouldBeEnabled) {
+          remoteEnabled.value = shouldBeEnabled
+        }
+      }
+    })
     
     // 初始化起飞参数
     initTakeoffParams()
@@ -3548,7 +3752,7 @@ const loadWaylineProgress = async () => {
       console.log('loadWaylineProgress - jobDetail:', jobDetail)
       waylineJobDetail.value = jobDetail
     } else {
-      console.log('loadWaylineProgress - 没有job_id，清空任务详情')
+      // console.log('loadWaylineProgress - 没有job_id，清空任务详情')
       waylineJobDetail.value = null
     }
   } catch (err) {
@@ -3982,7 +4186,7 @@ const checkAuthorityStatus = async () => {
       // 检查飞行控制权：是否存在且属于当前用户
       const hasFlightAuthority = !!(data.flight_authority && data.flight_authority.user_id === currentUserId)
       if (data.flight_authority) {
-        console.log(`检查飞行权限 - 拥有者: ${data.flight_authority.username}, 是否属于当前用户: ${hasFlightAuthority}`)
+        // console.log(`检查飞行权限 - 拥有者: ${data.flight_authority.username}, 是否属于当前用户: ${hasFlightAuthority}`)
       } else {
         // console.log('飞行权限未被占用')
       }
@@ -4000,7 +4204,7 @@ const checkAuthorityStatus = async () => {
           username: payloadAuth.username,
           user_id: payloadAuth.user_id
         }
-        console.log(`检查载荷权限 - payload_index: ${targetPayloadIndex}, 拥有者: ${payloadAuth.username}, 是否属于当前用户: ${hasPayloadAuthority}`)
+        // console.log(`检查载荷权限 - payload_index: ${targetPayloadIndex}, 拥有者: ${payloadAuth.username}, 是否属于当前用户: ${hasPayloadAuthority}`)
       } else {
         // console.log(`载荷权限 - payload_index: ${targetPayloadIndex} 未被占用`)
       }
@@ -6059,7 +6263,8 @@ const handleCameraRecordingStop = async () => {
   justify-content: flex-start; /* 统一从上向下排列，避免出现分散导致空白 */
   flex-shrink: 0; /* 防止按钮组被压缩 */
   margin-top: 0; /* 去掉负外边距，保持与内容对齐 */
-  height: 100%; /* 让按钮组占满高度 */
+  height: 80%; /* 与左侧竖线一致的高度，顶部对齐 */
+  align-self: center; /* 与左侧竖线一样垂直居中，从而顶部平齐 */
 }
 .task-progress-actions-btns .span {
   width: clamp(60px, 6vw, 70px);

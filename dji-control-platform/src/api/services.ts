@@ -78,6 +78,17 @@ export const userApi = {
   }
 }
 
+// 远程调试接口
+export const remoteDebugApi = {
+  // 执行远程调试命令
+  execute: (workspaceId: string, deviceSn: string, method: string, params: any = {}) => {
+    return apiClient.post(`/workspaces/${workspaceId}/remote-debug/${deviceSn}/execute`, {
+      method,
+      params
+    })
+  }
+}
+
 // 机巢管理接口
 export const dockApi = {
   // 获取机巢列表

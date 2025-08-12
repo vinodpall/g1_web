@@ -69,7 +69,10 @@
               </div>
               <div class="status-item">
                 <div class="top-row">
-                  <img src="@/assets/source_data/svg_data/drone_battery.svg" alt="电量" />
+                  <img 
+                    :src="droneStatus?.chargeState === 1 ? droneBatteryChargeIcon : droneBatteryIcon" 
+                    alt="电量" 
+                  />
                   <span class="label">电量</span>
                 </div>
                 <span class="value">{{ formatBattery(droneStatus?.batteryPercent) }}</span>
@@ -658,6 +661,8 @@ import AMapLoader from '@amap/amap-jsapi-loader'
 import flvjs from 'flv.js'
 import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
 import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
+import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
+import droneBatteryChargeIcon from '@/assets/source_data/svg_data/drone_battery_charge.svg'
 
 const router = useRouter()
 
@@ -738,6 +743,72 @@ const flightStatsError = ref('')
 let statusRefreshTimer: number | null = null
 // 无人机状态刷新定时器（2秒一次）
 let droneStatusRefreshTimer: number | null = null
+
+// 舱盖状态警报声相关
+const previousCoverState = ref<number | undefined>(undefined)
+const isAlarmPlaying = ref(false)
+
+// 生成警报声的函数
+const createAlarmSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+    
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+    
+    // 设置音频参数
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime) // 800Hz 频率
+    oscillator.type = 'sine'
+    
+    // 设置音量包络
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime)
+    gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.1)
+    gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5)
+    
+    oscillator.start(audioContext.currentTime)
+    oscillator.stop(audioContext.currentTime + 0.5)
+    
+    return audioContext
+  } catch (error) {
+    return null
+  }
+}
+
+// 播放警报声的函数
+const playAlarmSound = () => {
+  if (isAlarmPlaying.value) return
+  
+  isAlarmPlaying.value = true
+  let audioContext: AudioContext | null = null
+  
+  const playBeep = () => {
+    if (!isAlarmPlaying.value) return
+    
+    audioContext = createAlarmSound()
+    
+    // 1.5秒后播放下一个"滴"
+    setTimeout(() => {
+      if (isAlarmPlaying.value) {
+        playBeep()
+      }
+    }, 1500)
+  }
+  
+  playBeep()
+  
+  return () => {
+    isAlarmPlaying.value = false
+    if (audioContext) {
+      audioContext.close()
+    }
+  }
+}
+
+let stopAlarmSound: (() => void) | null | undefined = null
+
+
 
 // 获取机场状态数据
 const loadDockStatus = async () => {
@@ -2549,6 +2620,8 @@ watch(() => videoStreamUrl.value, (newUrl) => {
 onMounted(async () => {
   console.log('开始初始化首页')
   
+  // 初始化警报声（使用Web Audio API生成）
+  
   // 获取最新报警数据
   await loadLatestAlarmData()
   
@@ -2720,6 +2793,30 @@ onUnmounted(() => {
   }
   if (lineChart) {
     lineChart.dispose()
+  }
+  
+  // 停止并清理警报声
+  if (stopAlarmSound) {
+    stopAlarmSound()
+    stopAlarmSound = null
+  }
+  isAlarmPlaying.value = false
+})
+
+// 舱盖状态监听
+watch(() => dockStatus.value?.coverState, (newCoverState, oldCoverState) => {
+  // 只要舱盖不是关闭状态（值不为0）就播放警报声
+  if (newCoverState !== 0 && !isAlarmPlaying.value) {
+    // 舱盖不是关闭状态，播放警报声
+    stopAlarmSound = playAlarmSound()
+  }
+  // 舱盖状态变为关闭（值为0）时停止警报声
+  else if (newCoverState === 0 && isAlarmPlaying.value) {
+    // 舱盖关闭，停止警报声
+    if (stopAlarmSound) {
+      stopAlarmSound()
+      stopAlarmSound = null
+    }
   }
 })
 
@@ -5615,4 +5712,6 @@ const centerToDroneMarker = () => {
   width: 16px;
   height: 16px;
 }
+
+
 </style>

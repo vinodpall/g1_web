@@ -149,7 +149,7 @@
                 <span class="dock-title-text">机场控制</span>
                 <span class="remote-switch-wrap" style="font-size:13px;font-weight:400;">
                   远程调试
-                  <span class="switch-container" :class="{ active: remoteEnabled }" @click="toggleRemote"><span class="switch-toggle"></span></span>
+                  <span class="switch-container" :class="{ active: getRemoteDebugStatus() }" @click="toggleRemote"><span class="switch-toggle"></span></span>
                 </span>
               </div>
               <div class="dock-card-list">
@@ -157,44 +157,52 @@
                   <div class="dock-card-item">
                     <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_sys.svg" alt="sys" />
                     <div class="dock-card-content">
-                      <div class="dock-card-title">工作中</div>
+                      <div class="dock-card-title">{{ osdData?.mode_code !== undefined ? StatusMaps.dockMode[osdData.mode_code as keyof typeof StatusMaps.dockMode] || '未知' : '未知' }}</div>
                       <div class="dock-card-sub">机场系统</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">开启</button>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleDockSystem">设置</button>
                   </div>
                   <div class="dock-card-item">
                     <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_box.svg" alt="box" />
                     <div class="dock-card-content">
-                      <div class="dock-card-title">已关闭</div>
+                      <div class="dock-card-title">{{ osdData?.cover_state !== undefined ? StatusMaps.coverState[osdData.cover_state as keyof typeof StatusMaps.coverState] || '未知' : '未知' }}</div>
                       <div class="dock-card-sub">舱盖状态</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">开启</button>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleCoverControl">
+                      {{ osdData?.cover_state === 0 ? '开启' : '关闭' }}
+                    </button>
                   </div>
                   <div class="dock-card-item">
                     <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_air.svg" alt="air" />
                     <div class="dock-card-content">
-                      <div class="dock-card-title">制冷中</div>
+                      <div class="dock-card-title">{{ osdData?.air_conditioner?.air_conditioner_state === 1 ? '运行中' : '空闲中' }}</div>
                       <div class="dock-card-sub">空调</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">停止</button>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleAirConditioner">
+                      {{ osdData?.air_conditioner?.air_conditioner_state === 1 ? '停止' : '启动' }}
+                    </button>
                   </div>
                 </div>
                 <div class="dock-card-row">
                   <div class="dock-card-item">
-                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_voice.svg" alt="voice" />
+                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_sim.svg" alt="sim" />
                     <div class="dock-card-content">
-                      <div class="dock-card-title">未开启</div>
-                      <div class="dock-card-sub">静音模式</div>
+                      <div class="dock-card-title">{{ osdData?.wireless_link?.link_workmode === 1 ? '已开启' : '未开启' }}</div>
+                      <div class="dock-card-sub">增强图传</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">开启</button>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleEnhancedTransmission">
+                      {{ osdData?.wireless_link?.link_workmode === 1 ? '关闭' : '开启' }}
+                    </button>
                   </div>
                   <div class="dock-card-item">
                     <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_warning.svg" alt="warning" />
                     <div class="dock-card-content">
-                      <div class="dock-card-title">未开启</div>
+                      <div class="dock-card-title">{{ osdData?.alarm_state === 1 ? '已开启' : '未开启' }}</div>
                       <div class="dock-card-sub">机场声光报警</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">开启</button>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleAlarmControl">
+                      {{ osdData?.alarm_state === 1 ? '关闭' : '开启' }}
+                    </button>
                   </div>
                   <div class="dock-card-item">
                     <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_storage.svg" alt="storage" />
@@ -202,27 +210,8 @@
                       <div class="dock-card-title">3.5/50.6GB</div>
                       <div class="dock-card-sub">机场存储</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">重置</button>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleStorageReset">重置</button>
                   </div>
-                </div>
-                <div class="dock-card-row">
-                  <div class="dock-card-item">
-                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_sim.svg" alt="sim" />
-                    <div class="dock-card-content">
-                      <div class="dock-card-title">...</div>
-                      <div class="dock-card-sub">机场增强图传</div>
-                    </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">设置</button>
-                  </div>
-                  <div class="dock-card-item">
-                    <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_certificate.svg" alt="certificate8" />
-                    <div class="dock-card-content">
-                      <div class="dock-card-title">解禁证书</div>
-                      <div class="dock-card-sub">限飞解禁证书</div>
-                    </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled">设置</button>
-                  </div>
-                  <div class="dock-card-item empty"></div>
                 </div>
               </div>
             </div>
@@ -234,13 +223,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
 import { useDeviceStore } from '../stores/device'
 import { useWaylineJobs } from '../composables/useApi'
 import { useDevices } from '../composables/useApi'
 import { StatusMaps } from '../api/deviceStatus'
+import { remoteDebugApi } from '../api/services'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
@@ -257,7 +247,7 @@ import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
 import dockStars from '@/assets/source_data/svg_data/dock_control_svg/dock_stars.svg'
 import dockWifi from '@/assets/source_data/svg_data/dock_control_svg/dock_wifi.svg'
-import DockInfoRow from '@/components/DockInfoRow.vue'
+import DockInfoRow from '../components/DockInfoRow.vue'
 
 const router = useRouter()
 
@@ -332,6 +322,69 @@ const interpolatePosition = (start: any, end: any, progress: number) => {
     height: start.height + (end.height - start.height) * progress
   }
 }
+
+// 舱盖状态警报声相关
+const isAlarmPlaying = ref(false)
+
+// 生成警报声的函数
+const createAlarmSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+    
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+    
+    // 设置音频参数
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime) // 800Hz 频率
+    oscillator.type = 'sine'
+    
+    // 设置音量包络
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime)
+    gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.1)
+    gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5)
+    
+    oscillator.start(audioContext.currentTime)
+    oscillator.stop(audioContext.currentTime + 0.5)
+    
+    return audioContext
+  } catch (error) {
+    return null
+  }
+}
+
+// 播放警报声的函数
+const playAlarmSound = () => {
+  if (isAlarmPlaying.value) return
+  
+  isAlarmPlaying.value = true
+  let audioContext: AudioContext | null = null
+  
+  const playBeep = () => {
+    if (!isAlarmPlaying.value) return
+    
+    audioContext = createAlarmSound()
+    
+    // 1.5秒后播放下一个"滴"
+    setTimeout(() => {
+      if (isAlarmPlaying.value) {
+        playBeep()
+      }
+    }, 1500)
+  }
+  
+  playBeep()
+  
+  return () => {
+    isAlarmPlaying.value = false
+    if (audioContext) {
+      audioContext.close()
+    }
+  }
+}
+
+let stopAlarmSound: (() => void) | null | undefined = null
 
 // 更新无人机位置动画
 const updateDronePositionAnimation = () => {
@@ -417,8 +470,123 @@ const isDroneTracking = ref(false)
 const statusRefreshTimer = ref<number | null>(null)
 // 无人机状态刷新定时器
 const droneStatusRefreshTimer = ref<number | null>(null)
-const toggleRemote = () => {
-  remoteEnabled.value = !remoteEnabled.value
+// 远程调试执行函数
+const executeRemoteDebug = async (method: string, params: any = {}) => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    const { dockSns } = getCachedDeviceSns()
+    
+    if (!workspaceId || dockSns.length === 0) {
+      console.error('缺少workspace_id或device_sn')
+      return
+    }
+    
+    const deviceSn = dockSns[0] // 使用第一个机场设备
+    const response = await remoteDebugApi.execute(workspaceId, deviceSn, method, params)
+    
+    // 类型断言处理响应
+    const responseData = response as any
+    if (responseData.success === true) {
+      console.log(`远程调试命令 ${method} 执行成功`)
+      // 执行成功后刷新设备状态
+      await fetchMainDeviceStatus()
+    } else {
+      console.error(`远程调试命令 ${method} 执行失败:`, responseData.message)
+    }
+  } catch (error) {
+    console.error(`远程调试命令 ${method} 执行出错:`, error)
+  }
+}
+
+// 机场系统控制
+const handleDockSystem = () => {
+  // 机场系统控制没有直接的API参数，暂时使用通用方法
+  const method = 'device_reboot' // 临时使用，需要确认正确的参数
+  executeRemoteDebug(method)
+}
+
+// 舱盖控制
+const handleCoverControl = () => {
+  const currentCoverState = osdData.value?.cover_state
+  // 如果当前是关闭状态(0)，则开启；如果当前是开启状态(1或2)，则关闭
+  const method = currentCoverState === 0 ? 'cover_open' : 'cover_close'
+  executeRemoteDebug(method)
+}
+
+// 空调控制
+const handleAirConditioner = () => {
+  const currentAcState = osdData.value?.air_conditioner?.air_conditioner_state
+  const method = 'air_conditioner_mode_switch'
+  // 如果当前是运行中(1)，则传0关闭；如果当前是空闲中(0)，则传1制冷
+  const action = currentAcState === 1 ? 0 : 1
+  executeRemoteDebug(method, { action })
+}
+
+
+// 声光报警控制
+const handleAlarmControl = () => {
+  const currentAlarmState = osdData.value?.alarm_state
+  const method = 'alarm_state_switch'
+  // 如果当前是开启状态(1)，则传0关闭；如果当前是关闭状态(0)，则传1开启
+  const action = currentAlarmState === 1 ? 0 : 1
+  executeRemoteDebug(method, { action })
+}
+
+// 存储重置
+const handleStorageReset = () => {
+  const method = 'device_format'
+  executeRemoteDebug(method)
+}
+
+// 增强图传控制
+const handleEnhancedTransmission = () => {
+  const linkWorkMode = osdData.value?.wireless_link?.link_workmode
+  const method = 'sdr_workmode_switch'
+  // 当前为1(开启)→传0关闭；当前为0(关闭)→传1开启
+  const linkMode = linkWorkMode === 1 ? 0 : 1
+  executeRemoteDebug(method, { link_mode: linkMode })
+}
+
+
+// 获取远程调试状态
+const getRemoteDebugStatus = () => {
+  // 优先使用本地状态，如果本地状态未设置则使用机场系统状态
+  if (remoteEnabled.value !== undefined) {
+    return remoteEnabled.value
+  }
+  // 根据机场状态判断是否处于远程调试模式
+  return osdData.value?.mode_code === 2 // 2表示远程调试模式
+}
+
+const toggleRemote = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    const { dockSns } = getCachedDeviceSns()
+    
+    if (!workspaceId || dockSns.length === 0) {
+      console.error('缺少workspace_id或device_sn')
+      return
+    }
+    
+    const deviceSn = dockSns[0] // 使用第一个机场设备
+    const method = remoteEnabled.value ? 'debug_mode_close' : 'debug_mode_open'
+    
+    const response = await remoteDebugApi.execute(workspaceId, deviceSn, method, {})
+    
+    // 类型断言处理响应
+    const responseData = response as any
+    if (responseData.success === true) {
+      console.log(`远程调试模式${remoteEnabled.value ? '关闭' : '开启'}成功`)
+      // 立即更新本地状态，实现实时切换
+      remoteEnabled.value = !remoteEnabled.value
+      // 执行成功后刷新设备状态，确保与机场系统状态同步
+      await fetchMainDeviceStatus()
+    } else {
+      console.error(`远程调试模式${remoteEnabled.value ? '关闭' : '开启'}失败:`, responseData.message)
+    }
+  } catch (error) {
+    console.error(`远程调试模式切换失败:`, error)
+  }
 }
 const isSatellite = ref(true) // 默认为卫星图模式
 const toggleMapLayer = () => {
@@ -1375,6 +1543,35 @@ onMounted(async () => {
   waylineProgressTimer.value = setInterval(async () => {
     await loadWaylineProgress()
   }, 3000)
+  
+  // 舱盖状态监听
+  watch(() => dockStatus.value?.coverState, (newCoverState, oldCoverState) => {
+    // 只要舱盖不是关闭状态（值不为0）就播放警报声
+    if (newCoverState !== 0 && !isAlarmPlaying.value) {
+      // 舱盖非关闭状态，播放警报声
+      stopAlarmSound = playAlarmSound()
+    }
+    // 舱盖状态变为关闭（值为0）时停止警报声
+    else if (newCoverState === 0 && isAlarmPlaying.value) {
+      // 舱盖关闭，停止警报声
+      if (stopAlarmSound) {
+        stopAlarmSound()
+        stopAlarmSound = null
+      }
+    }
+  })
+  
+  // 远程调试状态同步监听
+  watch(() => osdData.value?.mode_code, (newModeCode) => {
+    // 当机场系统状态变化时，同步远程调试状态
+    if (newModeCode !== undefined) {
+      // 如果本地状态与机场系统状态不一致，则同步
+      const shouldBeEnabled = newModeCode === 2 // 2表示远程调试模式
+      if (remoteEnabled.value !== shouldBeEnabled) {
+        remoteEnabled.value = shouldBeEnabled
+      }
+    }
+  })
 })
 onBeforeUnmount(() => {
   // 停止视频播放并清理视频资源
@@ -1411,6 +1608,13 @@ onBeforeUnmount(() => {
     amapInstance.value = null
     amapApiRef.value = null
   }
+  
+  // 停止并清理警报声
+  if (stopAlarmSound) {
+    stopAlarmSound()
+    stopAlarmSound = null
+  }
+  isAlarmPlaying.value = false
 })
 const updateProgress = (percent: number) => {
   progressPercent.value = Math.max(0, Math.min(100, percent))
