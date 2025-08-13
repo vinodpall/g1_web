@@ -1199,7 +1199,7 @@ const refreshingVideo = ref(false)
 
 // 视频流轮询相关
 const videoPollingTimer = ref<number | null>(null)
-const VIDEO_POLLING_INTERVAL = 10000 // 每10秒检查一次是否有无人机视频流
+const VIDEO_POLLING_INTERVAL = 5000 // 每5秒检查一次是否有无人机视频流
 
 // 视觉WebSocket相关状态
 const {
@@ -2539,7 +2539,7 @@ const startVideoPolling = () => {
   // 如果已经有轮询定时器，先清除
   stopVideoPolling()
   
-  console.log('开始视频流轮询，每10秒检查一次无人机视频流')
+  console.log('开始视频流轮询，每5秒检查一次无人机视频流')
   
   videoPollingTimer.value = setInterval(async () => {
     // 检查当前是否已经有视频在播放
@@ -3668,7 +3668,7 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
       updateMapMarkers()
     }
     
-    // 设置机场状态自动刷新（每3秒，包含无人机充电状态）
+    // 设置机场状态自动刷新（每1秒，包含无人机充电状态）
     statusRefreshTimer.value = setInterval(async () => {
       await fetchMainDeviceStatus()
       // 获取无人机状态数据
@@ -3708,7 +3708,7 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
           waylineDisplayState.value.lastTaskStatus = null
         }
       }
-    }, 3000)
+    }, 1000)
     
     loadTodayFlightStatistics()
   } catch (error) {

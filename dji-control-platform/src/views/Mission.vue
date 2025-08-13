@@ -209,7 +209,11 @@
                 v-model="dispatchTaskDialog.form.begin_time" 
                 type="datetime-local" 
                 class="dispatch-task-input"
+                :min="getMinDateTime()"
               />
+              <div v-if="dispatchTaskDialog.form.task_type === 1" class="time-tip">
+                提示：定时任务的开始时间必须在当前时间4分钟及以后
+              </div>
             </div>
             <div class="dispatch-task-row">
               <label>返航高度：</label>
@@ -489,6 +493,14 @@ const dispatchTaskDialog = ref({
 })
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+
+// 获取最小时间（当前时间 + 4分钟）
+function getMinDateTime() {
+  const now = new Date()
+  const minTime = new Date(now.getTime() + 4 * 60 * 1000) // 当前时间 + 4分钟
+  return minTime.toISOString().slice(0, 16) // 格式化为 datetime-local 需要的格式
+}
+
 function showUploadDialog() {
   uploadDialog.value.visible = true
   uploadDialog.value.file = null
@@ -663,6 +675,18 @@ async function onDispatchTaskConfirm() {
   if ((form.task_type === 1 || form.task_type === 2) && !form.begin_time) {
     alert('定时任务和条件任务需要设置开始时间')
     return
+  }
+  
+  // 验证定时任务的时间（必须在4分钟及以后）
+  if (form.task_type === 1 && form.begin_time) {
+    const selectedTime = new Date(form.begin_time)
+    const currentTime = new Date()
+    const minTime = new Date(currentTime.getTime() + 4 * 60 * 1000) // 当前时间 + 4分钟
+    
+    if (selectedTime < minTime) {
+      alert('定时任务的开始时间必须在当前时间4分钟及以后')
+      return
+    }
   }
   
   // 执行下发任务逻辑
@@ -1229,5 +1253,17 @@ onMounted(async () => {
 .upload-task-modal .upload-file-btn {
   width: 100%;
   justify-content: center;
+}
+
+/* 时间提示样式 */
+.time-tip {
+  font-size: 12px;
+  color: #ffa500;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 165, 0, 0.1);
+  border: 1px solid rgba(255, 165, 0, 0.3);
+  border-radius: 4px;
+  line-height: 1.4;
 }
 </style>

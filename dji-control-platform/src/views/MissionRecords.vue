@@ -128,7 +128,22 @@
                 <div class="mission-td">{{ job.file_name || job.name }}</div>
                 <div class="mission-td">{{ getTaskTypeText(job.task_type) }}</div>
                 <div class="mission-td">
-                  <span :class="['status-badge', getStatusClass(job.status)]">
+                  <div v-if="job.status === 6" class="error-tooltip-wrapper">
+                    <span
+                      class="status-badge status-failed"
+                      @click.stop="toggleErrorTooltip(job)"
+                      title="点击查看错误信息"
+                      style="cursor: pointer;"
+                    >
+                      {{ getStatusText(job.status) }}
+                    </span>
+                    <div v-if="openErrorTooltipJobId === job.job_id" class="error-tooltip-content">
+                      <div class="error-title">异常信息</div>
+                      <div class="error-text">{{ getJobErrorMessage(job) }}</div>
+                      <div v-if="job.error_code" class="error-code">错误码：{{ job.error_code }}</div>
+                    </div>
+                  </div>
+                  <span v-else :class="['status-badge', getStatusClass(job.status)]">
                     {{ getStatusText(job.status) }}
                   </span>
                 </div>
@@ -194,12 +209,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
 import { useWaylineJobs, useDevices } from '../composables/useApi'
+import { getErrorMessage } from '@/utils/errorCodes'
 
 const router = useRouter()
 const route = useRoute()
@@ -221,6 +237,19 @@ const pageSize = ref(10)
 const total = ref(0)
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 const pageInput = ref('')
+
+// 失败信息气泡相关
+const openErrorTooltipJobId = ref<string | null>(null)
+const closeErrorTooltip = () => { openErrorTooltipJobId.value = null }
+const toggleErrorTooltip = (job: any) => {
+  openErrorTooltipJobId.value = openErrorTooltipJobId.value === job.job_id ? null : job.job_id
+}
+const getJobErrorMessage = (job: any) => {
+  if (!job || job.status !== 6) return ''
+  const code = job.error_code ?? job.error?.code ?? job.errorCode
+  if (!code && job.error?.message) return job.error.message
+  return getErrorMessage(code, undefined, { fallback: '执行失败，具体原因未知' })
+}
 
 // 加载航线文件列表
 const loadWaylineFiles = async () => {
@@ -378,6 +407,13 @@ onMounted(async () => {
     loadWaylineFiles(),
     loadJobRecords()
   ])
+  // 点击页面空白关闭
+  window.addEventListener('click', closeErrorTooltip)
+})
+
+// 离开时移除监听
+onUnmounted(() => {
+  window.removeEventListener('click', closeErrorTooltip)
 })
 
 // 切换页面
@@ -498,6 +534,43 @@ function onRecordTrackSelectKeydown(e: KeyboardEvent) {
   background: rgba(245, 108, 108, 0.2);
   color: #f56c6c;
   border: 1px solid rgba(245, 108, 108, 0.3);
+}
+
+/* 错误提示气泡 */
+.error-tooltip-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.error-tooltip-content {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  top: calc(100% + 6px);
+  min-width: 220px;
+  max-width: 360px;
+  background: #0a2a3a;
+  border: 1px solid #164159;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #e6a23c;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  transform: translateX(-50%);
+}
+.error-title {
+  font-size: 12px;
+  color: #67d5fd;
+  margin-bottom: 6px;
+}
+.error-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ffd8d8;
+}
+.error-code {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #67d5fd;
+  opacity: 0.8;
 }
 
 .status-unknown {
