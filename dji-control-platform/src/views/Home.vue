@@ -399,24 +399,62 @@
           <table class="tableOne">
             <thead>
               <tr>
-                <th>设备名称</th>
-                <th>报警内容</th>
-                <th>报警类型</th>
-                <th>告警等级</th>
-                <th>告警时间</th>
+                <th v-if="currentTab === 'device'" title="设备名称">设备名称</th>
+                <th v-if="currentTab === 'device'" title="报警内容">报警内容</th>
+                <th v-if="currentTab === 'device'" title="报警类型">报警类型</th>
+                <th v-if="currentTab === 'device'" title="告警等级">告警等级</th>
+                <th v-if="currentTab === 'device'" title="告警时间">告警时间</th>
+                
+                <!-- 巡检告警列标题 -->
+                <th v-if="currentTab === 'inspection'" title="航线名称">航线名称</th>
+                <th v-if="currentTab === 'inspection'" title="目标图片">目标图片</th>
+                <th v-if="currentTab === 'inspection'" title="目标数量">目标数量</th>
+                <th v-if="currentTab === 'inspection'" title="算法名称">算法名称</th>
+                <th v-if="currentTab === 'inspection'" title="告警时间">告警时间</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(item, index) in currentAlarmData" :key="index">
-                <td>{{ item.deviceName }}</td>
-                <td>{{ item.content }}</td>
-                <td>{{ item.type }}</td>
-                <td>
+              <!-- 设备告警行 -->
+              <tr v-if="currentTab === 'device'" v-for="(item, index) in currentAlarmData" :key="`device-${index}`">
+                <td :title="item.deviceName || '--'">{{ item.deviceName }}</td>
+                <td :title="item.content || '--'">{{ item.content }}</td>
+                <td :title="item.type || '--'">{{ item.type }}</td>
+                <td :title="item.level || '--'">
                   <span :style="{ color: item.level === '严重' ? '#FF8000' : '' }">
                     {{ item.level }}
                   </span>
                 </td>
-                <td>{{ item.time }}</td>
+                <td :title="item.time || '--'">{{ item.time }}</td>
+              </tr>
+              
+              <!-- 巡检告警行 -->
+              <tr v-if="currentTab === 'inspection'" v-for="(item, index) in currentAlarmData" :key="`inspection-${index}`">
+                <td :title="item.wayline_name || '--'">{{ item.wayline_name || '--' }}</td>
+                <td :title="item.thumbnail_image_url ? '点击查看大图' : '暂无图片'">
+                  <template v-if="item.thumbnail_image_url">
+                    <img 
+                      v-if="thumbCache[item.thumbnail_image_url] && !thumbError[item.thumbnail_image_url]"
+                      :src="thumbCache[item.thumbnail_image_url]"
+                      alt="目标图片"
+                      class="target-image-small"
+                      @click="handleInspectionImageClick(item.marked_image_url)"
+                      style="cursor:pointer;"
+                    />
+                    <div v-else-if="thumbLoading[item.thumbnail_image_url]" class="loading-image-small">
+                      <span>加载中...</span>
+                    </div>
+                    <div v-else-if="thumbError[item.thumbnail_image_url]" class="loading-image-small">
+                      <span style='color:#f66;'>加载失败</span>
+                    </div>
+                  </template>
+                  <div v-else-if="item.marked_image_url" class="loading-image-small">
+                    <span>加载中...</span>
+                  </div>
+                  <span v-else class="no-image">--</span>
+                </td>
+                <td :title="`目标数量: ${item.target_count || 0}`" style="text-align: center;">{{ item.target_count || 0 }}</td>
+                <td :title="getAlgorithmName(item.target_type)">{{ getAlgorithmName(item.target_type) }}</td>
+                <td :title="formatTimestamp(item.detection_time)">{{ formatTimestamp(item.detection_time) }}</td>
               </tr>
             </tbody>
           </table>
@@ -650,9 +688,14 @@
           <button class="mission-btn mission-btn-pause" @click="onDispatchTaskConfirm">确定</button>
         </div>
       </div>
+          </div>
     </div>
-  </div>
-</template>
+    
+    <!-- 大图显示模态框 -->
+    <div v-if="showBigImage" class="big-image-mask" @click="closeBigImage">
+      <img :src="bigImageUrl" class="big-image" @click.stop />
+    </div>
+  </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
@@ -709,29 +752,125 @@ const currentTab = ref('device')
 const deviceAlarmData = ref<any[]>([])
 
 // 巡检告警数据
-const inspectionAlarmData = ref([
-  {
-    deviceName: 'DJI-01',
-    time: '2025-07-01 13:00:00',
-    type: '巡检告警',
-    level: '严重',
-    content: '发现设备异常'
-  },
-  {
-    deviceName: 'DJI-02',
-    time: '2025-07-01 13:01:00',
-    type: '巡检告警',
-    level: '严重',
-    content: '路灯损坏'
-  },
-  {
-    deviceName: 'DJI-03',
-    time: '2025-07-01 13:02:00',
-    type: '巡检告警',
-    level: '严重',
-    content: '呼吸灯缺失'
+const inspectionAlarmData = ref<any[]>([])
+
+// 获取最新的三条巡检告警数据
+const loadLatestInspectionAlerts = async () => {
+  try {
+    const workspaceId = getCachedWorkspaceId()
+    if (!workspaceId) {
+      return
+    }
+    
+    // 调用vision API获取巡检告警数据
+    const { visionApi } = await import('../api/services')
+    const response = await visionApi.getAlerts(workspaceId, {
+      limit: 3,
+      offset: 0
+    })
+    
+    if (response && response.alerts) {
+      inspectionAlarmData.value = response.alerts.slice(0, 3)
+      // 批量下载缩略图
+      downloadThumbnails(response.alerts.slice(0, 3))
+    }
+  } catch (err) {
+    console.error('获取巡检告警数据失败:', err)
+    // 静默处理错误
   }
-])
+}
+
+// 获取算法名称
+const getAlgorithmName = (targetType: string | number) => {
+  // 如果target_type是unknown，显示"无"
+  if (targetType === 'unknown' || targetType === 'Unknown') {
+    return '无'
+  }
+  
+  const algorithmMap: { [key: string]: string } = {
+    '49': '常熟1号线路灯',
+    '50': '常熟2号线路灯',
+    '51': '常熟3号线路灯',
+    '52': '常熟楼宇亮化',
+    '9': '人车检测'
+  }
+  return algorithmMap[targetType?.toString()] || `算法${targetType}`
+}
+
+// 图片缓存相关
+const thumbCache = ref<Record<string, string>>({})
+const thumbLoading = ref<Record<string, string>>({})
+const thumbError = ref<Record<string, boolean>>({})
+
+// 获取缩略图URL
+const getThumbnailUrl = async (thumbPath: string) => {
+  if (!thumbPath) return ''
+  if (thumbCache.value[thumbPath]) return thumbCache.value[thumbPath]
+  if (thumbLoading.value[thumbPath]) return ''
+  
+  thumbLoading.value[thumbPath] = 'loading'
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`${thumbPath}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'image/*'
+      }
+    })
+    if (!response.ok) throw new Error('缩略图下载失败')
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    thumbCache.value[thumbPath] = url
+    thumbError.value[thumbPath] = false
+    return url
+  } catch {
+    thumbError.value[thumbPath] = true
+    return ''
+  } finally {
+    thumbLoading.value[thumbPath] = ''
+  }
+}
+
+// 批量下载缩略图
+const downloadThumbnails = async (alerts: any[]) => {
+  alerts.forEach((alert: any) => {
+    if (alert.thumbnail_image_url) {
+      getThumbnailUrl(alert.thumbnail_image_url)
+    }
+  })
+}
+
+// 大图显示相关状态
+const bigImageUrl = ref('')
+const showBigImage = ref(false)
+
+// 处理巡检告警图片点击
+const handleInspectionImageClick = async (markedUrl: string) => {
+  if (!markedUrl) return
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`${markedUrl}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'image/*'
+      }
+    })
+    if (!response.ok) throw new Error('图片下载失败')
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    bigImageUrl.value = url
+    showBigImage.value = true
+  } catch (e) {
+    bigImageUrl.value = ''
+    showBigImage.value = false
+  }
+}
+
+const closeBigImage = () => {
+  if (bigImageUrl.value) URL.revokeObjectURL(bigImageUrl.value)
+  showBigImage.value = false
+  bigImageUrl.value = ''
+}
 
 // 航线任务相关数据
 const waylineProgress = ref<any>(null)
@@ -2648,6 +2787,9 @@ onMounted(async () => {
   // 获取最新报警数据
   await loadLatestAlarmData()
   
+  // 获取最新巡检告警数据
+  await loadLatestInspectionAlerts()
+  
   // 加载机场状态数据
   await loadDockStatus()
   console.log('机场状态加载完成:', dockStatus.value)
@@ -3418,6 +3560,72 @@ const centerToDroneMarker = () => {
 /* 覆盖mission-common.css中的::after伪元素，移除重复箭头 */
 .custom-select-wrapper::after {
   display: none !important;
+}
+
+/* 巡检告警图片样式 */
+.target-image-small {
+  max-width: 40px;
+  max-height: 30px;
+  border-radius: 4px;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  border: 1px solid #164159;
+  display: block;
+  margin: 0 auto;
+}
+
+.target-image-small:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(103, 213, 253, 0.3);
+}
+
+.loading-image-small {
+  width: 40px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a2a3a;
+  border: 1px solid #164159;
+  border-radius: 4px;
+  font-size: 8px;
+  color: #67d5fd;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.no-image {
+  color: #666;
+  font-size: 12px;
+}
+
+/* 调整巡检告警表格列宽 */
+/* 巡检告警列宽 - 使用百分比布局 */
+.tableOne th:nth-child(1),
+.tableOne td:nth-child(1) {
+  width: 20%;
+}
+
+.tableOne th:nth-child(2),
+.tableOne td:nth-child(2) {
+  width: 15%;
+}
+
+.tableOne th:nth-child(3),
+.tableOne td:nth-child(3) {
+  width: 10%;
+  text-align: center;
+}
+
+.tableOne th:nth-child(4),
+.tableOne td:nth-child(4) {
+  width: 20%;
+}
+
+.tableOne th:nth-child(5),
+.tableOne td:nth-child(5) {
+  width: 35%;
 }
 
 .custom-select-arrow {
@@ -4303,31 +4511,7 @@ const centerToDroneMarker = () => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-/* 设置列宽 */
-.tableOne th:nth-child(1),
-.tableOne td:nth-child(1) {
-  width: 15%;
-}
 
-.tableOne th:nth-child(2),
-.tableOne td:nth-child(2) {
-  width: 35%;
-}
-
-.tableOne th:nth-child(3),
-.tableOne td:nth-child(3) {
-  width: 15%;
-}
-
-.tableOne th:nth-child(4),
-.tableOne td:nth-child(4) {
-  width: 10%;
-}
-
-.tableOne th:nth-child(5),
-.tableOne td:nth-child(5) {
-  width: 25%;
-}
 
 .tableOne th {
   background-color: rgba(0, 28, 46, 0.95);
@@ -5750,6 +5934,68 @@ const centerToDroneMarker = () => {
   border: 1px solid rgba(255, 165, 0, 0.3);
   border-radius: 4px;
   line-height: 1.4;
+}
+
+/* 大图显示模态框样式 */
+.big-image-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.7);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.big-image {
+  max-width: 80vw;
+  max-height: 80vh;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px #000a;
+  background: #fff;
+}
+
+/* 表格tooltip样式优化 */
+.tableOne th[title]:hover::after,
+.tableOne td[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+  margin-bottom: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.tableOne th[title]:hover::before,
+.tableOne td[title]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+  margin-bottom: -5px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* 确保表格单元格有相对定位，以便tooltip正确定位 */
+.tableOne th,
+.tableOne td {
+  position: relative;
 }
 
 </style>

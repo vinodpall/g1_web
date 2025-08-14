@@ -116,7 +116,7 @@
               <div class="mission-th">任务名称</div>
               <div class="mission-th">目标图片</div>
               <div class="mission-th">目标数量</div>
-              <div class="mission-th">置信度</div>
+              <div class="mission-th">算法名称</div>
               <div class="mission-th">检测时间</div>
             </div>
             <div class="mission-table-body">
@@ -147,7 +147,7 @@
                   <span v-else class="no-image">--</span>
                 </div>
                 <div class="mission-td">{{ alert.target_count }}</div>
-                <div class="mission-td">{{ (alert.max_confidence * 100).toFixed(1) }}%</div>
+                <div class="mission-td">{{ getAlgorithmName(alert.target_type) }}</div>
                 <div class="mission-td">{{ formatTime(alert.detection_time) }}</div>
               </div>
             </div>
@@ -206,7 +206,14 @@
     </main>
   </div>
   <div v-if="showBigImage" class="big-image-mask" @click="closeBigImage">
-    <img :src="bigImageUrl" class="big-image" @click.stop />
+    <div class="big-image-content" @click.stop>
+      <img v-if="bigImageUrl" :src="bigImageUrl" class="big-image" @load="handleBigImageLoaded" @error="handleBigImageErrored" />
+      <div v-if="bigImageLoading" class="big-image-loading">
+        <div class="spinner"></div>
+        <div class="loading-text">图片加载中...</div>
+      </div>
+      <div v-if="bigImageError" class="big-image-error">{{ bigImageError }}</div>
+    </div>
   </div>
 </template>
 
@@ -377,6 +384,23 @@ const formatTime = (timestamp: number) => {
   })
 }
 
+// 获取算法名称
+const getAlgorithmName = (targetType: string | number) => {
+  // 如果target_type是unknown，显示"无"
+  if (targetType === 'unknown' || targetType === 'Unknown') {
+    return '无'
+  }
+  
+  const algorithmMap: { [key: string]: string } = {
+    '49': '常熟1号线路灯',
+    '50': '常熟2号线路灯',
+    '51': '常熟3号线路灯',
+    '52': '常熟楼宇亮化',
+    '9': '人车检测'
+  }
+  return algorithmMap[targetType?.toString()] || `算法${targetType}`
+}
+
 // 图片缓存
 const imageCache = ref<Record<string, string>>({})
 
@@ -437,9 +461,16 @@ const clearImageCache = () => {
 // 大图弹窗相关
 const bigImageUrl = ref('')
 const showBigImage = ref(false)
+const bigImageLoading = ref(false)
+const bigImageError = ref('')
 
 const handleImageClick = async (markedUrl: string) => {
   if (!markedUrl) return
+  // 先弹出弹窗，显示加载中，再去拉图片
+  showBigImage.value = true
+  bigImageLoading.value = true
+  bigImageError.value = ''
+  bigImageUrl.value = ''
   try {
     const token = userStore.token
     const response = await fetch(`${API_DOMAIN}${markedUrl}`, {
@@ -452,16 +483,28 @@ const handleImageClick = async (markedUrl: string) => {
     const blob = await response.blob()
     const url = URL.createObjectURL(blob)
     bigImageUrl.value = url
-    showBigImage.value = true
+    // 等待 <img> 的 onload 再隐藏 loading
   } catch (e) {
     bigImageUrl.value = ''
-    showBigImage.value = false
+    bigImageLoading.value = false
+    bigImageError.value = '图片加载失败，请稍后重试'
   }
+}
+
+const handleBigImageLoaded = () => {
+  bigImageLoading.value = false
+}
+
+const handleBigImageErrored = () => {
+  bigImageLoading.value = false
+  bigImageError.value = '图片加载失败，请稍后重试'
 }
 const closeBigImage = () => {
   if (bigImageUrl.value) URL.revokeObjectURL(bigImageUrl.value)
   showBigImage.value = false
   bigImageUrl.value = ''
+  bigImageLoading.value = false
+  bigImageError.value = ''
 }
 
 const thumbCache = ref<Record<string, string>>({})
@@ -689,6 +732,44 @@ watch(alerts, (newAlerts: VisionAlert[]) => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.big-image-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 200px;
+  min-height: 200px;
+}
+.big-image-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #67d5fd;
+}
+.loading-text {
+  font-size: 12px;
+}
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(103, 213, 253, 0.2);
+  border-top-color: #67d5fd;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.big-image-error {
+  color: #f56c6c;
+  background: rgba(245,108,108,0.08);
+  border: 1px solid rgba(245,108,108,0.4);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
 }
 .big-image {
   max-width: 80vw;

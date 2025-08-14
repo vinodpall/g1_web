@@ -32,7 +32,7 @@ export class ApiClient {
   // 通用请求方法
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit & { responseType?: 'blob' } = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`
     
@@ -55,13 +55,20 @@ export class ApiClient {
 
     try {
       const response = await fetch(url, config)
-      const contentType = response.headers.get('content-type')
       let data: any = null;
-      if (contentType && contentType.includes('application/json')) {
-        data = await response.json();
+      
+      // 检查是否需要返回blob
+      if (options?.responseType === 'blob') {
+        data = await response.blob();
       } else {
-        data = await response.text();
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json();
+        } else {
+          data = await response.text();
+        }
       }
+      
       if (!response.ok) {
         // 直接抛出data，这样catch能拿到后端的detail字段
         throw data;
@@ -77,7 +84,7 @@ export class ApiClient {
   }
 
   // GET请求
-  async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
+  async get<T>(endpoint: string, params?: Record<string, any>, options?: RequestInit & { responseType?: 'blob' }): Promise<T> {
     let url = endpoint
     if (params) {
       const queryParams = new URLSearchParams()
@@ -88,11 +95,11 @@ export class ApiClient {
       })
       url = `${endpoint}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
     }
-    return this.request<T>(url, { method: 'GET' })
+    return this.request<T>(url, { method: 'GET', ...options })
   }
 
   // POST请求
-  async post<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
+  async post<T>(endpoint: string, data?: any, options?: RequestInit & { responseType?: 'blob' }): Promise<T> {
     let body: string | undefined
     
     // 如果data是字符串且options中指定了Content-Type为form-urlencoded，直接使用

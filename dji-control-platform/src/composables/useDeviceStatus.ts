@@ -148,7 +148,7 @@ export function useDeviceStatus() {
   })
   
   // 无人机状态
-  const droneStatus = computed(() => {
+  const droneStatus = computed((): any => {
     // 如果没有机场状态数据，返回null
     if (!osdData.value) return null
     
@@ -161,16 +161,80 @@ export function useDeviceStatus() {
       droneOsdData = (droneDeviceStatus.value as any).osd?.data || droneDeviceStatus.value
     }
     
-    // 尝试多种可能的电量字段
+    // 尝试多种可能的电量字段，并添加数据验证
+    // 记忆上一次有效电量，避免异常值或短暂无效导致界面跳到0
+    // 使用闭包级变量保存
+    ;(droneStatus as any)._lastValidBatteryPercent = (droneStatus as any)._lastValidBatteryPercent ?? null
+    const getLastValid = (): number | null => (droneStatus as any)._lastValidBatteryPercent as number | null
+    const setLastValid = (v: number) => { (droneStatus as any)._lastValidBatteryPercent = v }
     let batteryPercent = null
-    if (osdData.value.drone_charge_state?.capacity_percent !== undefined) {
-      batteryPercent = osdData.value.drone_charge_state.capacity_percent
-    } else if (osdData.value.battery !== undefined) {
-      batteryPercent = osdData.value.battery
-    } else if (osdData.value.drone_battery_state?.capacity_percent !== undefined) {
-      batteryPercent = osdData.value.drone_battery_state.capacity_percent
-    } else if (osdData.value.capacity_percent !== undefined) {
-      batteryPercent = osdData.value.capacity_percent
+    
+    // 数据标准化与验证函数：
+    // - 接受 number 或可转为 number 的字符串
+    // - 若在 0-1 范围且非0，视为比例，乘以100
+    // - 裁剪到 0-100 区间
+    const validateBatteryValue = (raw: any): number | null => {
+      if (raw === undefined || raw === null) return null
+      let value: number
+      if (typeof raw === 'string') {
+        let trimmed = raw.trim()
+        if (trimmed.endsWith('%')) trimmed = trimmed.slice(0, -1)
+        if (trimmed === '') return null
+        const parsed = Number(trimmed)
+        if (!Number.isFinite(parsed)) return null
+        value = parsed
+      } else if (typeof raw === 'number') {
+        value = raw
+      } else {
+        return null
+      }
+      if (!Number.isFinite(value)) return null
+      // 如果是 0-1 之间的小数，按比例处理（如 0.87 => 87）
+      if (value > 0 && value <= 1) {
+        value = value * 100
+      }
+      // 过滤明显异常的大数
+      if (value > 1000) return null
+      // 裁剪到 0-100
+      value = Math.max(0, Math.min(100, value))
+      return value
+    }
+    
+    // 起飞后优先读取无人机自身 OSD 的电量，避免机场status短暂为0覆盖
+    const candidateValues: Array<any> = []
+    if (droneOsdData) {
+      candidateValues.push(
+        droneOsdData?.drone_charge_state?.capacity_percent,
+        droneOsdData?.drone_battery_state?.capacity_percent,
+        droneOsdData?.battery
+      )
+    }
+    // 其次读取机场 status 内映射出来的电量字段
+    candidateValues.push(
+      osdData.value.drone_charge_state?.capacity_percent,
+      osdData.value.drone_battery_state?.capacity_percent,
+      osdData.value.battery,
+      osdData.value.capacity_percent
+    )
+    
+    for (const v of candidateValues) {
+      const validated = validateBatteryValue(v)
+      if (validated !== null) {
+        batteryPercent = validated
+        break
+      }
+    }
+    
+    // 如果拿到有效值，更新记忆；否则回退到上一次有效值，避免闪到0
+    if (batteryPercent !== null) {
+      setLastValid(batteryPercent)
+    } else {
+      const last: number | null = getLastValid()
+      if (last !== null) {
+        batteryPercent = last
+      } else {
+        batteryPercent = 0
+      }
     }
     
     return {
@@ -303,8 +367,25 @@ export function useDeviceStatus() {
   
   // 格式化电池电量显示
   const formatBattery = (value: number | undefined | null) => {
-    if (value === undefined || value === null) return '--%'
-    if (typeof value !== 'number') return '--%'
+    // 严格的数据验证
+    if (value === undefined || value === null) return '0%'
+    if (typeof value !== 'number') return '0%'
+    
+    // 检查是否为有效数字（不是NaN或Infinity）
+    if (!Number.isFinite(value)) return '0%'
+    
+    // 检查电量是否在合理范围内（0-100）
+    if (value < 0 || value > 100) {
+      console.warn(`电池电量值异常: ${value}%，已重置为0%`)
+      return '0%'
+    }
+    
+    // 检查是否为整数或小数，如果是异常大的值则重置
+    if (value > 1000) {
+      console.warn(`电池电量值过大: ${value}%，可能是数据错误，已重置为0%`)
+      return '0%'
+    }
+    
     return `${Math.round(value)}%`
   }
   

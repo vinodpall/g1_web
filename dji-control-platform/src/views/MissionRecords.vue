@@ -108,6 +108,7 @@
               <div class="mission-th">航线名称</div>
               <div class="mission-th">任务类型</div>
               <div class="mission-th">状态</div>
+              <div class="mission-th">上传进度</div>
               <div class="mission-th">开始时间</div>
               <div class="mission-th">结束时间</div>
               <div class="mission-th">创建人</div>
@@ -146,6 +147,23 @@
                   <span v-else :class="['status-badge', getStatusClass(job.status)]">
                     {{ getStatusText(job.status) }}
                   </span>
+                </div>
+                <div class="mission-td">
+                  <div 
+                    class="upload-progress-container clickable"
+                    @click="showMediaFiles(job)"
+                    :title="job.media_count > 0 ? '点击查看媒体文件' : '暂无媒体文件'"
+                  >
+                    <div class="upload-progress-bar">
+                      <div 
+                        class="upload-progress-fill" 
+                        :style="{ width: getUploadProgress(job) + '%' }"
+                      ></div>
+                    </div>
+                    <div class="upload-progress-text">
+                      {{ job.uploaded_count || 0 }}/{{ job.media_count || 0 }}
+                    </div>
+                  </div>
                 </div>
                 <div class="mission-td">{{ formatTimestamp(job.begin_time) }}</div>
                 <div class="mission-td">{{ formatTimestamp(job.completed_time) }}</div>
@@ -205,6 +223,80 @@
         </section>
       </div>
     </main>
+    
+    <!-- 媒体文件弹窗 -->
+    <div v-if="showMediaModal" class="media-modal-mask" @click="closeMediaModal">
+      <div class="media-modal" @click.stop>
+        <div class="media-modal-header">
+          <div class="media-modal-title">媒体文件列表</div>
+          <button class="media-modal-close" @click="closeMediaModal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="media-modal-content">
+          <div v-if="mediaLoading" class="media-loading">
+            加载中...
+          </div>
+          <div v-else-if="mediaError" class="media-error">
+            {{ mediaError }}
+          </div>
+          <div v-else-if="mediaFiles.length === 0" class="media-empty">
+            暂无媒体文件
+          </div>
+          <div v-else class="media-files-list">
+            <div 
+              v-for="file in mediaFiles" 
+              :key="file.file_id" 
+              class="media-file-item"
+            >
+              <div class="media-file-info">
+                <div class="media-file-name">
+                  {{ file.file_name }}
+                  <span 
+                    v-if="getFileTypeLabel(file.file_name)" 
+                    class="file-type-tag"
+                    :style="{ 
+                      backgroundColor: getFileTypeLabel(file.file_name)?.color + '20',
+                      color: getFileTypeLabel(file.file_name)?.color,
+                      borderColor: getFileTypeLabel(file.file_name)?.color
+                    }"
+                  >
+                    {{ getFileTypeLabel(file.file_name)?.label }}
+                  </span>
+                  <!-- 下载进度条 -->
+                  <div v-if="downloadingFiles.includes(file.file_id)" class="download-progress-inline">
+                    <div class="download-progress-bar-inline">
+                      <div 
+                        class="download-progress-fill-inline" 
+                        :style="{ width: (downloadProgress[file.file_id] || 0) + '%' }"
+                      ></div>
+                    </div>
+                    <span class="download-progress-text-inline">
+                      {{ downloadProgress[file.file_id] || 0 }}%
+                    </span>
+                  </div>
+                </div>
+                <div class="media-file-meta">
+                  <span class="media-file-time">{{ formatMediaTime(file.create_time) }}</span>
+                  <span class="media-file-type">{{ getFileTypeText(file) }}</span>
+                </div>
+              </div>
+              <div class="media-file-actions">
+                <button 
+                  class="media-download-btn"
+                  @click="downloadMediaFile(file.file_id, file.file_name)"
+                  :disabled="downloadingFiles.includes(file.file_id)"
+                >
+                  {{ downloadingFiles.includes(file.file_id) ? '下载中...' : '下载' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -216,6 +308,7 @@ import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
 import { useWaylineJobs, useDevices } from '../composables/useApi'
 import { getErrorMessage } from '@/utils/errorCodes'
+import { mediaApi } from '../api/services'
 
 const router = useRouter()
 const route = useRoute()
@@ -244,11 +337,118 @@ const closeErrorTooltip = () => { openErrorTooltipJobId.value = null }
 const toggleErrorTooltip = (job: any) => {
   openErrorTooltipJobId.value = openErrorTooltipJobId.value === job.job_id ? null : job.job_id
 }
+
+// 媒体文件弹窗相关
+const showMediaModal = ref(false)
+const mediaFiles = ref<any[]>([])
+const mediaLoading = ref(false)
+const mediaError = ref<string | null>(null)
+const downloadingFiles = ref<string[]>([])
 const getJobErrorMessage = (job: any) => {
   if (!job || job.status !== 6) return ''
   const code = job.error_code ?? job.error?.code ?? job.errorCode
   if (!code && job.error?.message) return job.error.message
   return getErrorMessage(code, undefined, { fallback: '执行失败，具体原因未知' })
+}
+
+// 显示媒体文件弹窗
+const showMediaFiles = async (job: any) => {
+  if (!job.media_count || job.media_count === 0) {
+    alert('该任务暂无媒体文件')
+    return
+  }
+  
+  showMediaModal.value = true
+  mediaLoading.value = true
+  mediaError.value = null
+  mediaFiles.value = []
+  
+  try {
+    const response = await mediaApi.getMediaFiles({ 
+      job_id: job.job_id,
+      page_size: 100
+    })
+    mediaFiles.value = response.items || []
+  } catch (err: any) {
+    mediaError.value = err.message || '获取媒体文件失败'
+    console.error('获取媒体文件失败:', err)
+  } finally {
+    mediaLoading.value = false
+  }
+}
+
+// 关闭媒体文件弹窗
+const closeMediaModal = () => {
+  showMediaModal.value = false
+  mediaFiles.value = []
+  mediaError.value = null
+}
+
+// 格式化媒体文件时间
+const formatMediaTime = (timestamp: number) => {
+  const date = new Date(timestamp)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+// 获取文件类型标签
+const getFileTypeLabel = (fileName: string) => {
+  if (fileName.endsWith('_T.jpeg') || fileName.endsWith('_T.jpg') || fileName.endsWith('_T.mp4') || fileName.endsWith('_T.mov')) {
+    return { type: 'infrared', label: '红外', color: '#ff6b35' }
+  } else if (fileName.endsWith('_V.jpeg') || fileName.endsWith('_V.jpg') || fileName.endsWith('_V.mp4') || fileName.endsWith('_V.mov')) {
+    return { type: 'visible', label: '可见光', color: '#4ecdc4' }
+  }
+  return null
+}
+
+// 获取文件类型文本（原图/原始视频/缩略图）
+const getFileTypeText = (file: any) => {
+  if (!file.is_original) {
+    return '缩略图'
+  }
+  
+  // 判断是否为视频文件
+  const isVideo = file.file_name.endsWith('.mp4') || file.file_name.endsWith('.mov')
+  
+  return isVideo ? '原始视频' : '原图'
+}
+
+// 下载进度状态
+const downloadProgress = ref<{ [fileId: string]: number }>({})
+
+// 下载媒体文件
+const downloadMediaFile = async (fileId: string, fileName: string) => {
+  if (downloadingFiles.value.includes(fileId)) return
+  
+  downloadingFiles.value.push(fileId)
+  downloadProgress.value[fileId] = 0
+  
+  try {
+    // 走浏览器原生下载（后端已移除认证）
+    const downloadUrl = `/api/v1/media/download/${fileId}`
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = fileName || ''
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    // 设置为完成，浏览器接手下载过程
+    downloadProgress.value[fileId] = 100
+    console.log('文件下载已由浏览器处理:', fileName)
+  } catch (err: any) {
+    console.error('文件下载失败:', err)
+    alert('文件下载失败: ' + (err.message || '未知错误'))
+  } finally {
+    downloadingFiles.value = downloadingFiles.value.filter(id => id !== fileId)
+    delete downloadProgress.value[fileId]
+  }
 }
 
 // 加载航线文件列表
@@ -338,6 +538,14 @@ const getTaskTypeText = (taskType: number) => {
     [2]: '条件任务'
   }
   return taskTypeMap[taskType] || '未知'
+}
+
+// 获取上传进度百分比
+const getUploadProgress = (job: any) => {
+  if (!job.media_count || job.media_count === 0) return 0
+  if (!job.uploaded_count) return 0
+  const progress = (job.uploaded_count / job.media_count) * 100
+  return Math.min(100, Math.max(0, progress))
 }
 
 // 加载任务记录数据
@@ -710,5 +918,262 @@ function onRecordTrackSelectKeydown(e: KeyboardEvent) {
 .pagination-btn-jump:hover {
   background: #0c4666;
   color: #67d5fd;
+}
+
+/* 上传进度条样式 */
+.upload-progress-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.upload-progress-container.clickable {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.upload-progress-container.clickable:hover {
+  opacity: 0.8;
+}
+
+/* 媒体文件弹窗样式 */
+.media-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.media-modal {
+  background: #0a2a3a;
+  border: 1px solid #164159;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.media-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #164159;
+  background: #0c3c56;
+}
+
+.media-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #67d5fd;
+}
+
+.media-modal-close {
+  background: none;
+  border: none;
+  color: #67d5fd;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.media-modal-close:hover {
+  background: rgba(103, 213, 253, 0.1);
+}
+
+.media-modal-content {
+  padding: 20px;
+  max-height: calc(80vh - 120px);
+  overflow-y: auto;
+  
+  /* 自定义滚动条样式 */
+  scrollbar-width: thin;
+  scrollbar-color: #67d5fd #0c3c56;
+}
+
+/* Webkit浏览器滚动条样式 */
+.media-modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.media-modal-content::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.media-modal-content::-webkit-scrollbar-thumb {
+  background: #67d5fd;
+  border-radius: 4px;
+  border: 1px solid #0c3c56;
+}
+
+.media-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #00e1ff;
+}
+
+.media-loading,
+.media-error,
+.media-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #67d5fd;
+}
+
+.media-error {
+  color: #f56c6c;
+}
+
+.media-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.media-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: transparent;
+  border: 1px solid #164159;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.media-file-item:hover {
+  border-color: #67d5fd;
+  background: rgba(103, 213, 253, 0.05);
+}
+
+.media-file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.media-file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  margin-bottom: 4px;
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.file-type-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  border: 1px solid;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 内联下载进度条样式 */
+.download-progress-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+}
+
+.download-progress-bar-inline {
+  width: 40px;
+  height: 4px;
+  background: rgba(103, 213, 253, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  border: 1px solid rgba(103, 213, 253, 0.2);
+}
+
+.download-progress-fill-inline {
+  height: 100%;
+  background: linear-gradient(90deg, #67d5fd, #00e1ff);
+  border-radius: 1px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+.download-progress-text-inline {
+  color: #67d5fd;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 20px;
+}
+
+.media-file-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #67d5fd;
+}
+
+.media-file-actions {
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.media-download-btn {
+  background: #0c4666;
+  color: #67d5fd;
+  border: 1px solid #67d5fd;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.media-download-btn:hover:not(:disabled) {
+  background: #67d5fd;
+  color: #0a2a3a;
+}
+
+.media-download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+
+.upload-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(103, 213, 253, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(103, 213, 253, 0.2);
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #67d5fd, #00e1ff);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+.upload-progress-text {
+  color: #67d5fd;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 40px;
+  text-align: right;
 }
 </style>

@@ -200,6 +200,17 @@
                           ref="visionCanvas"
                           style="width: 100% !important; height: 100% !important; position: absolute !important; top: 0 !important; left: 0 !important; pointer-events: none !important; z-index: 10 !important;"
                         />
+
+                        <!-- 左上角水印信息 -->
+                        <div 
+                          class="video-watermark" 
+                          style="position: absolute; top: 8px; left: 8px; z-index: 20; background: rgba(0,0,0,0.35); color: #ffffff; font-size: 12px; line-height: 1.6; padding: 6px 8px; border-radius: 4px; pointer-events: none; min-width: 180px;"
+                        >
+                          <div>经度：{{ formatCoordinate((droneStatus?.longitude ?? position?.longitude) as number, 'longitude') }}</div>
+                          <div>纬度：{{ formatCoordinate((droneStatus?.latitude ?? position?.latitude) as number, 'latitude') }}</div>
+                          <div>高度：{{ formatHeight(droneStatus?.height ?? position?.height) }}</div>
+                          <div>时间：{{ watermarkTime }}</div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -707,6 +718,7 @@ const {
   formatBattery,
   formatSpeed,
   formatHeight,
+  formatCoordinate,
   formatTemperature,
   formatHumidity,
   formatWindSpeed,
@@ -1244,6 +1256,15 @@ const canUseScreenSplit = computed(() => {
   // 只有在红外镜头时才能使用分屏功能
   return currentVideoType.value === 'ir'
 })
+
+// 水印时间
+const watermarkTime = ref('')
+const updateWatermarkTime = () => {
+  const now = new Date()
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  watermarkTime.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+}
+let watermarkTimer: number | null = null
 
 // 无人机追踪相关状态
 const isDroneTracking = ref(false)
@@ -3522,6 +3543,9 @@ const handleQualityChange = async (quality: number) => {
 }
 
 onMounted(async () => {
+  // 启动水印时间更新
+  updateWatermarkTime()
+  watermarkTimer = window.setInterval(updateWatermarkTime, 1000)
   // 同步一次AI模式状态
   loadAiModeFromCache()
   // 添加点击外部关闭菜单的监听器
@@ -3589,6 +3613,11 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
       }
       // 清理视频流轮询定时器
       stopVideoPolling()
+      // 清理水印时间定时器
+      if (watermarkTimer) {
+        clearInterval(watermarkTimer)
+        watermarkTimer = null
+      }
       
       // 停止并清理警报声
       if (stopAlarmSound) {

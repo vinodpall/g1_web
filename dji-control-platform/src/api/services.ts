@@ -1043,6 +1043,40 @@ export const waylineApi = {
   }
 } 
 
+// 媒体文件接口
+export const mediaApi = {
+  // 获取媒体文件列表
+  getMediaFiles: (params?: {
+    job_id?: string
+    page?: number
+    page_size?: number
+  }) => {
+    return apiClient.get<{
+      items: Array<{
+        file_id: string
+        file_name: string
+        workspace_id: string
+        drone_sn: string
+        job_id: string
+        is_original: boolean
+        create_time: number
+        thumbnail: string | null
+      }>
+      total: number
+      page: number
+      page_size: number
+      has_more: boolean
+    }>('/media/files', params)
+  },
+
+  // 下载媒体文件
+  downloadMediaFile: (fileId: string) => {
+    return apiClient.get(`/media/download/${fileId}`, {}, {
+      responseType: 'blob'
+    } as any)
+  }
+}
+
 // Vision报警接口
 export const visionApi = {
   // 获取报警列表
