@@ -1,7 +1,9 @@
 // 视觉WebSocket配置
+import { config } from './environment'
+
 export const visionConfig = {
   // WebSocket服务器地址
-  serverHost: import.meta.env.VITE_VISION_WS_HOST || '10.10.1.3:8000',
+  serverHost: import.meta.env.VITE_VISION_WS_HOST || config.websocket.fullUrl,
   
   // 连接配置
   maxReconnectAttempts: 5,

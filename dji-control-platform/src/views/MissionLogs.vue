@@ -115,6 +115,7 @@
               <div class="mission-th">航线名称</div>
               <div class="mission-th">任务名称</div>
               <div class="mission-th">目标图片</div>
+              <div class="mission-th">位置预览</div>
               <div class="mission-th">目标数量</div>
               <div class="mission-th">算法名称</div>
               <div class="mission-th">检测时间</div>
@@ -145,6 +146,17 @@
                     <span>加载中...</span>
                   </div>
                   <span v-else class="no-image">--</span>
+                </div>
+                <div class="mission-td">
+                  <button 
+                    v-if="alert.latitude && alert.longitude"
+                    class="location-preview-btn"
+                    @click="showLocationPreview(alert)"
+                    title="查看位置"
+                  >
+                    预览
+                  </button>
+                  <span v-else class="no-location">--</span>
                 </div>
                 <div class="mission-td">{{ alert.target_count }}</div>
                 <div class="mission-td">{{ getAlgorithmName(alert.target_type) }}</div>
@@ -215,13 +227,49 @@
       <div v-if="bigImageError" class="big-image-error">{{ bigImageError }}</div>
     </div>
   </div>
+  
+  <!-- 位置预览弹窗 -->
+  <div v-if="showLocationModal" class="location-modal-mask" @click="closeLocationModal">
+    <div class="location-modal-content" @click.stop>
+      <div class="location-modal-header">
+        <h3>位置预览</h3>
+        <button class="location-modal-close" @click="closeLocationModal">×</button>
+      </div>
+      <div class="location-modal-body">
+        <div id="location-map-container" class="location-map-container"></div>
+        <div class="location-map-watermark">
+          <div>经度：{{ selectedAlert?.longitude?.toFixed(6) }}　纬度：{{ selectedAlert?.latitude?.toFixed(6) }}</div>
+          <div v-if="selectedAlert?.altitude">高度：{{ selectedAlert.altitude.toFixed(2) }} 米</div>
+          <div>检测时间：{{ selectedAlert?.detection_time ? formatTime(selectedAlert.detection_time) : '--' }}</div>
+          <div>位置：<span style="word-break: break-all;">{{ selectedAddress || '地址查询中...' }}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { visionApi } from '@/api/services'
-import { API_DOMAIN } from '@/api/config'
+import { API_BASE_URL } from '@/api/config'
+import AMapLoader from '@amap/amap-jsapi-loader'
+// 统一构建图片请求URL，避免本地出现 /api/v1/api/v1 的重复
+const buildImageFetchUrl = (path: string) => {
+  if (!path) return ''
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:') || path.startsWith('blob:')) {
+    return path
+  }
+  // 如果后端已经返回了 /api/ 前缀，直接使用
+  if (path.startsWith('/api/')) {
+    return path
+  }
+  // 兼容返回以 / 开头但未带 /api 的路径
+  if (path.startsWith('/')) {
+    return `${API_BASE_URL}${path}`
+  }
+  return `${API_BASE_URL}/${path}`
+}
 import { useUserStore } from '@/stores/user'
 import type { VisionAlert } from '@/types'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
@@ -412,7 +460,7 @@ const downloadAndCacheImage = async (imagePath: string) => {
 
   try {
     const token = userStore.token
-    const response = await fetch(`${API_DOMAIN}${imagePath}`, {
+    const response = await fetch(buildImageFetchUrl(imagePath), {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'image/*'
@@ -473,7 +521,7 @@ const handleImageClick = async (markedUrl: string) => {
   bigImageUrl.value = ''
   try {
     const token = userStore.token
-    const response = await fetch(`${API_DOMAIN}${markedUrl}`, {
+    const response = await fetch(buildImageFetchUrl(markedUrl), {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'image/*'
@@ -505,6 +553,7 @@ const closeBigImage = () => {
   bigImageUrl.value = ''
   bigImageLoading.value = false
   bigImageError.value = ''
+  // 清理事件绑定，避免内存泄漏（如果弹窗关闭时不再需要）
 }
 
 const thumbCache = ref<Record<string, string>>({})
@@ -518,7 +567,7 @@ const getThumbnailUrl = async (thumbPath: string) => {
   thumbLoading.value[thumbPath] = true
   try {
     const token = userStore.token
-    const response = await fetch(`${API_DOMAIN}${thumbPath}`, {
+    const response = await fetch(buildImageFetchUrl(thumbPath), {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'image/*'
@@ -542,6 +591,13 @@ const getThumbnailUrl = async (thumbPath: string) => {
 onMounted(() => {
   loadAlerts()
   pageInput.value = currentPage.value.toString()
+  // 监听从地图缩略图触发的大图打开事件
+  window.addEventListener('openBigImageFromMap', async (e: any) => {
+    const url = e?.detail?.url as string
+    if (url) {
+      await handleImageClick(url)
+    }
+  })
 })
 
 // 监听token变化，清理缓存
@@ -557,6 +613,209 @@ watch(alerts, (newAlerts: VisionAlert[]) => {
     if (alert.thumbnail_image_url) getThumbnailUrl(alert.thumbnail_image_url)
   })
 }, { immediate: true })
+
+// 位置预览相关
+const showLocationModal = ref(false)
+const selectedAlert = ref<VisionAlert | null>(null)
+const selectedAddress = ref<string>('')
+let locationMapInstance: any = null
+
+// 显示位置预览
+const showLocationPreview = (alert: VisionAlert) => {
+  selectedAlert.value = alert
+  selectedAddress.value = ''
+  showLocationModal.value = true
+  nextTick(() => {
+    initLocationMap()
+  })
+}
+
+// 关闭位置预览
+const closeLocationModal = () => {
+  showLocationModal.value = false
+  selectedAlert.value = null
+  selectedAddress.value = ''
+  if (locationMapInstance) {
+    locationMapInstance.destroy()
+    locationMapInstance = null
+  }
+}
+
+// 初始化位置地图
+const initLocationMap = async () => {
+  if (!selectedAlert.value?.latitude || !selectedAlert.value?.longitude) return
+  
+  try {
+    // 读取凭据：优先使用通过 vite.define 注入的常量，其次使用 VITE_ 环境变量
+    // @ts-ignore
+    const definedAmapKey = (typeof __AMAP_KEY__ !== 'undefined' ? __AMAP_KEY__ : '') as string
+    // @ts-ignore
+    const definedAmapSec = (typeof __AMAP_SECURITY__ !== 'undefined' ? __AMAP_SECURITY__ : '') as string
+    const envAmapKey = (import.meta as any).env?.VITE_AMAP_KEY || ''
+    const envAmapSec = (import.meta as any).env?.VITE_AMAP_SECURITY || ''
+    const amapKey = definedAmapKey || envAmapKey || '6f9eaf51960441fa4f813ea2d7e7cfff'
+    const amapSec = definedAmapSec || envAmapSec || ''
+    
+    if (amapSec) {
+      ;(window as any)._AMapSecurityConfig = { securityJsCode: amapSec }
+    }
+    
+    const AMap = await AMapLoader.load({
+      key: amapKey,
+      version: '2.0',
+      plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch', 'AMap.MapType', 'AMap.Geocoder']
+    })
+    
+    // 将WGS84坐标转换为GCJ-02坐标
+    const wgsLongitude = selectedAlert.value.longitude
+    const wgsLatitude = selectedAlert.value.latitude
+    const gcjCoords = transformWGS84ToGCJ02(wgsLongitude, wgsLatitude)
+    
+    locationMapInstance = new AMap.Map('location-map-container', {
+      zoom: 16,
+      center: [gcjCoords.longitude, gcjCoords.latitude],
+      logoEnable: false,
+      copyrightEnable: false,
+      mapStyle: 'amap://styles/satellite',
+      layers: [
+        new AMap.TileLayer.Satellite(),
+        new AMap.TileLayer.RoadNet()
+      ]
+    })
+    
+    // 添加标记点（图标 + 文字“检测点”）
+    const marker = new AMap.Marker({
+      position: [gcjCoords.longitude, gcjCoords.latitude],
+      title: `检测位置`,
+      icon: new AMap.Icon({
+        image: 'data:image/svg+xml;base64,' + btoa(`
+          <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="10" cy="10" r="8" fill="#ff4d4f" stroke="#ffffff" stroke-width="2" />
+          </svg>
+        `),
+        imageSize: new AMap.Size(20, 20),
+        size: new AMap.Size(20, 20)
+      }),
+      anchor: 'center',
+      offset: new AMap.Pixel(0, 0)
+    })
+
+    // 在图标右侧添加“检测点”标签
+    marker.setLabel({
+      direction: 'right',
+      offset: new AMap.Pixel(6, 0),
+      content: `
+        <div style="
+          background: rgba(255,255,255,0.9);
+          color: #ff4d4f;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 12px;
+          white-space: nowrap;
+        ">检测点</div>
+      `
+    })
+
+    locationMapInstance.add(marker)
+
+    // 在坐标点上方显示报警缩略图
+    try {
+      const thumbPath = selectedAlert.value?.thumbnail_image_url as string | undefined
+      if (thumbPath) {
+        const thumbUrl = await getThumbnailUrl(thumbPath)
+        if (thumbUrl) {
+          const imageMarker = new AMap.Marker({
+            position: [gcjCoords.longitude, gcjCoords.latitude],
+            content: `
+              <div style="
+                width: 40px;
+                height: 40px;
+                border-radius: 6px;
+                overflow: hidden;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+                border: 2px solid rgba(255,255,255,0.85);
+                background: rgba(0,0,0,0.2);
+              ">
+                <img src="${thumbUrl}" style="width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in;" alt="报警图片" onclick="window.dispatchEvent(new CustomEvent('openBigImageFromMap',{ detail: { url: '${selectedAlert.value?.marked_image_url || ''}' } }))"/>
+              </div>
+            `,
+            anchor: 'bottom-center',
+            offset: new AMap.Pixel(0, -26)
+          })
+          locationMapInstance.add(imageMarker)
+        }
+      }
+    } catch {}
+
+    // 逆地理编码：在右侧信息面板显示地址
+    try {
+      const geocoder = new AMap.Geocoder({
+        // 默认城市自动判断
+      })
+      geocoder.getAddress([gcjCoords.longitude, gcjCoords.latitude], (status: string, result: any) => {
+        if (status === 'complete' && result?.regeocode?.formattedAddress) {
+          const addr = result.regeocode.formattedAddress as string
+          selectedAddress.value = addr
+          marker.setTitle(addr)
+        }
+      })
+    } catch {}
+    
+  } catch (error) {
+    console.error('初始化位置地图失败:', error)
+  }
+}
+
+// WGS84坐标转GCJ-02坐标系
+const transformWGS84ToGCJ02 = (wgsLng: number, wgsLat: number) => {
+  const PI = Math.PI
+  const ee = 0.00669342162296594323
+  const a = 6378245.0
+  
+  if (outOfChina(wgsLng, wgsLat)) {
+    return { longitude: wgsLng, latitude: wgsLat }
+  }
+  
+  let dLat = transformLat(wgsLng - 105.0, wgsLat - 35.0)
+  let dLng = transformLng(wgsLng - 105.0, wgsLat - 35.0)
+  
+  const radLat = wgsLat / 180.0 * PI
+  let magic = Math.sin(radLat)
+  magic = 1 - ee * magic * magic
+  const sqrtMagic = Math.sqrt(magic)
+  
+  dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * PI)
+  dLng = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * PI)
+  
+  const mgLat = wgsLat + dLat
+  const mgLng = wgsLng + dLng
+  
+  return { longitude: mgLng, latitude: mgLat }
+}
+
+// 辅助函数：判断是否在中国境内
+const outOfChina = (lng: number, lat: number) => {
+  return (lng < 72.004 || lng > 137.8347) || (lat < 0.8293 || lat > 55.8271)
+}
+
+// 辅助函数：纬度转换
+const transformLat = (lng: number, lat: number) => {
+  const PI = Math.PI
+  let ret = -100.0 + 2.0 * lng + 3.0 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng))
+  ret += (20.0 * Math.sin(6.0 * lng * PI) + 20.0 * Math.sin(2.0 * lng * PI)) * 2.0 / 3.0
+  ret += (20.0 * Math.sin(lat * PI) + 40.0 * Math.sin(lat / 3.0 * PI)) * 2.0 / 3.0
+  ret += (160.0 * Math.sin(lat / 12.0 * PI) + 320 * Math.sin(lat * PI / 30.0)) * 2.0 / 3.0
+  return ret
+}
+
+// 辅助函数：经度转换
+const transformLng = (lng: number, lat: number) => {
+  let ret = 300.0 + lng + 2.0 * lat + 0.1 * lng * lng + 0.1 * lng * lat + 0.1 * Math.sqrt(Math.abs(lng))
+  ret += (20.0 * Math.sin(6.0 * lng * Math.PI) + 20.0 * Math.sin(2.0 * lng * Math.PI)) * 2.0 / 3.0
+  ret += (20.0 * Math.sin(lng * Math.PI) + 40.0 * Math.sin(lng / 3.0 * Math.PI)) * 2.0 / 3.0
+  ret += (150.0 * Math.sin(lng / 12.0 * Math.PI) + 300.0 * Math.sin(lng / 30.0 * Math.PI)) * 2.0 / 3.0
+  return ret
+}
 </script>
 
 <style>
@@ -728,7 +987,7 @@ watch(alerts, (newAlerts: VisionAlert[]) => {
   width: 100vw;
   height: 100vh;
   background: rgba(0,0,0,0.7);
-  z-index: 9999;
+  z-index: 10050; /* 高于位置预览弹窗，确保置顶 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -760,8 +1019,155 @@ watch(alerts, (newAlerts: VisionAlert[]) => {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+
+/* 位置预览按钮样式 */
+.location-preview-btn {
+  background: #0c3c56;
+  color: #67d5fd;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.location-preview-btn:hover {
+  background: #0c4666;
+  color: #67d5fd;
+  border-color: #67d5fd;
+}
+
+.no-location {
+  color: #666;
+  font-size: 12px;
+}
+
+/* 位置预览弹窗样式 */
+.location-modal-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.7);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.location-modal-content {
+  position: relative;
+  background: #0a0f1c;
+  border: 1px solid #164159;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 1200px;
+  height: 80%;
+  max-height: 820px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.location-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #164159;
+  background: #0c3c56;
+}
+
+.location-modal-header h3 {
+  color: #67d5fd;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.location-modal-close {
+  background: none;
+  border: none;
+  color: #67d5fd;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.location-modal-close:hover {
+  background: rgba(103, 213, 253, 0.1);
+}
+
+.location-modal-body {
+  flex: 1;
+  position: relative;
+  display: flex;
+  overflow: hidden;
+}
+
+.location-map-container {
+  flex: 1;
+  height: 100%;
+}
+
+/* 地图信息水印，显示经纬度/高度/时间/地址 */
+.location-map-watermark {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 2;
+  max-width: 50%;
+  color: #e6f7ff;
+  font-size: 12px;
+  line-height: 1.6;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(103, 213, 253, 0.25);
+  padding: 8px 10px;
+  border-radius: 6px;
+  backdrop-filter: blur(2px);
+}
+
+/* 覆盖 AMap 默认标签样式：去掉白色背景与蓝色边框 */
+.location-map-container .amap-marker-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.location-info {
+  width: 200px;
+  padding: 16px;
+  background: #0a2a3a;
+  border-left: 1px solid #164159;
+  overflow-y: auto;
+}
+
+.location-info p {
+  margin: 8px 0;
+  color: #67d5fd;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.location-info strong {
+  color: #fff;
+  font-weight: 500;
+}
+
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .big-image-error {
   color: #f56c6c;
@@ -772,8 +1178,8 @@ watch(alerts, (newAlerts: VisionAlert[]) => {
   font-size: 12px;
 }
 .big-image {
-  max-width: 80vw;
-  max-height: 80vh;
+  max-width: 60vw; /* 比位置预览稍小 */
+  max-height: 60vh;
   border-radius: 8px;
   box-shadow: 0 4px 24px #000a;
   background: #fff;

@@ -271,6 +271,7 @@ import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
 import { useWaylineJobs, useDevices } from '../composables/useApi'
+import { useDeviceStatus } from '../composables/useDeviceStatus'
 import icon360Photo from '@/assets/source_data/svg_data/task_line_svg/360_photo.svg'
 import iconAbsPhoto from '@/assets/source_data/svg_data/task_line_svg/abs_photo.svg'
 import iconBigger from '@/assets/source_data/svg_data/task_line_svg/bigger.svg'
@@ -290,6 +291,7 @@ const route = useRoute()
 // 使用航线文件API
 const { waylineFiles, waylineDetail, fetchWaylineFiles, fetchWaylineDetail, createJob, executeJob } = useWaylineJobs()
 const { getCachedWorkspaceId, getCachedDeviceSns, getCachedDeviceBySn } = useDevices()
+const { droneStatus, fetchMainDeviceStatus, fetchDroneStatus } = useDeviceStatus()
 
 // 航线文件相关
 const selectedTrack = ref('')
@@ -626,7 +628,7 @@ function handleAddTrack() {
   // 直接弹出上传文件弹窗
   showUploadDialog()
 }
-function handleDispatchTask() {
+async function handleDispatchTask() {
   // 获取当前选中的航线信息
   const currentWayline = waylineFiles.value.find(f => f.wayline_id === selectedTrack.value)
   if (!currentWayline) {
@@ -639,6 +641,24 @@ function handleDispatchTask() {
   if (!deviceSns.dockSns || deviceSns.dockSns.length === 0) {
     alert('未找到可用的设备')
     return
+  }
+  
+  // 刷新一次设备/无人机状态以获取最新电量
+  try {
+    await Promise.all([fetchMainDeviceStatus(), fetchDroneStatus()])
+  } catch (e) {
+    // 静默处理
+  }
+
+  // 低电量提示（小于30%时给予二次确认）
+  const currentBatteryPercent = typeof droneStatus.value?.batteryPercent === 'number'
+    ? Math.round(droneStatus.value.batteryPercent as number)
+    : null
+  if (currentBatteryPercent !== null && currentBatteryPercent < 30) {
+    const confirmContinue = window.confirm(`当前电量为${currentBatteryPercent}%，低于30%，不建议飞行。是否继续下发任务？`)
+    if (!confirmContinue) {
+      return
+    }
   }
   
   // 初始化弹窗数据

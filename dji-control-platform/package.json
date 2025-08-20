@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:intranet": "cross-env VITE_APP_ENVIRONMENT=intranet vite",
+    "dev:internet": "cross-env VITE_APP_ENVIRONMENT=internet vite",
     "build": "vue-tsc -b && vite build",
+    "build:intranet": "cross-env VITE_APP_ENVIRONMENT=intranet vue-tsc -b && vite build",
+    "build:internet": "cross-env VITE_APP_ENVIRONMENT=internet vue-tsc -b && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -21,6 +25,7 @@
     "@types/node": "^24.2.1",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/tsconfig": "^0.7.0",
+    "cross-env": "^7.0.3",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
     "vue-tsc": "^2.2.12"

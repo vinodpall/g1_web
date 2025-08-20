@@ -1,8 +1,10 @@
 import { ref, reactive, readonly } from 'vue'
 import { authApi, userApi, dockApi, droneApi, missionApi, alertApi, systemApi, deviceApi, roleApi, hmsApi, livestreamApi, waylineApi, controlApi } from '../api/services'
 import { apiClient } from '../api/config'
+import { config, refreshEnvironmentConfig } from '../config/environment'
 import type { User, Dock, Drone, Mission, Alert, Device, Role, HmsAlert } from '../types'
 import { useDeviceStore } from '../stores/device'
+import { setVideoStreams, setDefaultVideoType, cleanupOldVideoCache } from '../utils/videoCache'
 
 // 视频缓存管理
 const VIDEO_CACHE_KEY = 'video_devices_cache'
@@ -178,12 +180,20 @@ export function useAuth() {
     }
   }
 
+
+
   // 登录
   const login = async (loginData: { username: string; password: string }) => {
     loading.value = true
     error.value = null
     
     try {
+      // 强制刷新环境配置，确保使用最新的环境设置
+      const currentConfig = refreshEnvironmentConfig()
+      console.log('🔧 登录时环境配置验证:')
+      console.log('- 当前环境变量:', import.meta.env.VITE_APP_ENVIRONMENT)
+      console.log('- 当前视频配置:', currentConfig.video.webrtcDomain)
+      
       const response = await authApi.login(loginData.username, loginData.password)
       const { access_token, token_type } = response
       
@@ -311,14 +321,12 @@ export function useAuth() {
             console.log('机场视频流启动成功:', dockLivestreamResponse)
             // 处理push_url地址，替换为webrtc地址
             const pushUrl = dockLivestreamResponse.push_url
-            dockWebrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            dockWebrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, currentConfig.video.webrtcDomain)
             console.log('原始push_url:', pushUrl)
             console.log('转换后的webrtc地址:', dockWebrtcUrl)
-            // 保存视频流地址到localStorage
-            localStorage.setItem('video_stream_url', dockWebrtcUrl)
+            // 保存视频流BID（用于后续操作）
             localStorage.setItem('video_bid', dockLivestreamResponse.bid)
-            localStorage.setItem('current_video_type', 'dock')
-            console.log('机场视频流地址已保存到localStorage')
+            console.log('机场视频流地址已保存到video_streams缓存')
           }
 
           // 无人机可见光视频流
@@ -332,7 +340,7 @@ export function useAuth() {
                 video_id: droneVisibleDevice.videoId
               })
               const pushUrl = droneVisibleLivestreamResponse.push_url
-              droneVisibleWebrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+              droneVisibleWebrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, currentConfig.video.webrtcDomain)
             } catch (e) {
               // 无人机未起飞时这里会报错，忽略即可
             }
@@ -349,14 +357,14 @@ export function useAuth() {
                 video_id: droneInfraredDevice.videoId
               })
               const pushUrl = droneInfraredLivestreamResponse.push_url
-              droneInfraredWebrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+              droneInfraredWebrtcUrl = pushUrl.replace(/^rtmp:\/\/[^\/]+/, currentConfig.video.webrtcDomain)
             } catch (e) {
               // 无人机未起飞时这里会报错，忽略即可
             }
           }
 
           // 组装 video_streams 数组并写入缓存
-          const videoStreams = []
+          const videoStreams: any[] = []
           
           // 从capacity数据中获取真实的switchable_video_types
           const getSwitchableTypesFromCapacity = (deviceSn: string, videoId: string) => {
@@ -382,19 +390,20 @@ export function useAuth() {
           if (dockWebrtcUrl && dockVideoDevice) {
             const switchableTypes = getSwitchableTypesFromCapacity(dockVideoDevice.deviceSn, dockVideoDevice.videoId)
             videoStreams.push({ 
-              type: 'dock', 
+              type: 'dock' as const, 
               url: dockWebrtcUrl,
               switchable_video_types: switchableTypes,
               device_sn: dockVideoDevice.deviceSn,
               camera_index: dockVideoDevice.cameraIndex,
-              video_index: dockVideoDevice.videoIndex
+              video_index: dockVideoDevice.videoIndex,
+              ai_enabled: false
             })
           }
           
           if (droneVisibleWebrtcUrl && droneVisibleDevice) {
             const switchableTypes = getSwitchableTypesFromCapacity(droneVisibleDevice.deviceSn, droneVisibleDevice.videoId)
             videoStreams.push({ 
-              type: 'drone_visible', 
+              type: 'drone_visible' as const, 
               url: droneVisibleWebrtcUrl,
               switchable_video_types: switchableTypes,
               device_sn: droneVisibleDevice.deviceSn,
@@ -407,7 +416,7 @@ export function useAuth() {
           if (droneInfraredWebrtcUrl && droneInfraredDevice) {
             const switchableTypes = getSwitchableTypesFromCapacity(droneInfraredDevice.deviceSn, droneInfraredDevice.videoId)
             videoStreams.push({ 
-              type: 'drone_infrared', 
+              type: 'drone_infrared' as const, 
               url: droneInfraredWebrtcUrl,
               switchable_video_types: switchableTypes,
               device_sn: droneInfraredDevice.deviceSn,
@@ -415,7 +424,19 @@ export function useAuth() {
               video_index: droneInfraredDevice.videoIndex
             })
           }
-          localStorage.setItem('video_streams', JSON.stringify(videoStreams))
+          
+          // 统一保存到video_streams，不再设置重复的缓存字段
+          setVideoStreams(videoStreams)
+          
+          // 设置默认视频类型为机场视频（如果存在）
+          if (dockWebrtcUrl) {
+            setDefaultVideoType('dock')
+          } else if (droneVisibleWebrtcUrl) {
+            setDefaultVideoType('drone_visible')
+          }
+          
+          // 清理旧的重复缓存字段
+          cleanupOldVideoCache()
           
         } catch (videoError) {
           console.warn('登录时获取视频流失败:', videoError)
@@ -1311,6 +1332,12 @@ export function useWaylineJobs() {
     enable_vision?: boolean
     vision_algorithms?: number[]
     vision_threshold?: number
+    // 周期任务配置（新增）
+    recurrence_config?: {
+      recurrence_type: string // 'date_range'
+      start_date: string
+      end_date: string
+    }
   }) => {
     loading.value = true
     error.value = null

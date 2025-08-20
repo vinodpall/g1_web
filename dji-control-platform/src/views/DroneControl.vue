@@ -204,12 +204,14 @@
                         <!-- 左上角水印信息 -->
                         <div 
                           class="video-watermark" 
-                          style="position: absolute; top: 8px; left: 8px; z-index: 20; background: rgba(0,0,0,0.35); color: #ffffff; font-size: 12px; line-height: 1.6; padding: 6px 8px; border-radius: 4px; pointer-events: none; min-width: 180px;"
+                          style="position: absolute; top: 8px; left: 8px; z-index: 20; background: rgba(0,0,0,0.35); color: #ffffff; font-size: 12px; line-height: 1.6; padding: 6px 8px; border-radius: 4px; pointer-events: none; min-width: 180px; max-width: 420px;"
                         >
-                          <div>经度：{{ formatCoordinate((droneStatus?.longitude ?? position?.longitude) as number, 'longitude') }}</div>
-                          <div>纬度：{{ formatCoordinate((droneStatus?.latitude ?? position?.latitude) as number, 'latitude') }}</div>
+                          <div>坐标：{{ formatCoordinate((droneStatus?.longitude ?? position?.longitude) as number, 'longitude') }} {{ formatCoordinate((droneStatus?.latitude ?? position?.latitude) as number, 'latitude') }}</div>
                           <div>高度：{{ formatHeight(droneStatus?.height ?? position?.height) }}</div>
                           <div>时间：{{ watermarkTime }}</div>
+                          <div style="margin-top: 4px; max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            位置：{{ reverseGeocode.address || '获取中…' }}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -671,19 +673,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { controlApi, drcApi, livestreamApi, waylineApi, remoteDebugApi } from '../api/services'
-import { useDeviceStatus } from '../composables/useDeviceStatus'
+import { useDevicePolling } from '../composables/useDevicePolling'
 import { useWaylineJobs, useDevices } from '../composables/useApi'
 import { useVisionWebSocket } from '../composables/useVisionWebSocket'
 import { visionConfig, logVisionConfig } from '@/config/vision'
+import { config, refreshEnvironmentConfig } from '@/config/environment'
+import { getVideoStream, updateVideoStream } from '../utils/videoCache'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
 import stockIcon from '@/assets/source_data/svg_data/stock3.svg'
 import sheetIcon from '@/assets/source_data/svg_data/sheet.svg'
 // 移除不存在的通用图标导入，避免构建报错
 import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
-import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
+import droneArrowIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_arrow.svg'
 import plane2Img from '@/assets/source_data/plane_2.png'
 import batteryImg from '@/assets/source_data/Battery.png'
 import AMapLoader from '@amap/amap-jsapi-loader'
@@ -703,27 +707,70 @@ import cameraRightIcon from '@/assets/source_data/svg_data/camera_right.svg'
 
 const router = useRouter()
 
-// 使用设备状态API
+// 使用统一的设备状态轮询API
 const { 
-  fetchDeviceStatus, 
-  fetchMainDeviceStatus,
-  fetchDroneStatus,
-  deviceStatus,
+  startUnifiedPolling,
+  stopUnifiedPolling,
+  refreshStatus,
   position,
   dockStatus,
   droneStatus, 
   gpsStatus,
   environment,
   osdData,
-  formatBattery,
-  formatSpeed,
-  formatHeight,
-  formatCoordinate,
-  formatTemperature,
-  formatHumidity,
-  formatWindSpeed,
-  formatRainfall
-} = useDeviceStatus()
+  waylineProgress: pollingWaylineProgress
+} = useDevicePolling()
+
+// 从缓存获取设备状态
+const deviceStatus = computed(() => {
+  // 这里可以根据需要返回具体的设备状态
+  return {
+    dockStatus: dockStatus.value,
+    droneStatus: droneStatus.value,
+    environment: environment.value
+  }
+})
+
+// 格式化函数（从useDeviceStatus中提取）
+const formatBattery = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value}%`
+}
+
+const formatSpeed = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}m/s`
+}
+
+const formatHeight = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}m`
+}
+
+const formatCoordinate = (value: number | undefined, type: 'longitude' | 'latitude') => {
+  if (value === undefined || value === null) return '--'
+  return value.toFixed(6)
+}
+
+const formatTemperature = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}°C`
+}
+
+const formatHumidity = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}%`
+}
+
+const formatWindSpeed = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}m/s`
+}
+
+const formatRainfall = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}mm`
+}
 
 // 使用航线任务API
 const { fetchWaylineProgress, fetchWaylineJobDetail, fetchWaylineDetail, stopJob, pauseJob, resumeJob } = useWaylineJobs()
@@ -732,6 +779,9 @@ const { getCachedWorkspaceId, getCachedDeviceSns } = useDevices()
 // 航线任务相关数据
 const waylineProgress = ref<any>(null)
 const waylineJobDetail = ref<any>(null)
+
+// 地图更新定时器引用
+let mapUpdateTimerRef: number | null = null
 
 // 舱盖状态警报声相关
 const isAlarmPlaying = ref(false)
@@ -840,8 +890,7 @@ const executeRemoteDebug = async (method: string, params: any = {}) => {
     if (responseData.success === true) {
       console.log(`远程调试命令 ${method} 执行成功`)
       // 执行成功后刷新设备状态
-      await fetchMainDeviceStatus()
-      await fetchDroneStatus()
+      await refreshStatus()
     } else {
       console.error(`远程调试命令 ${method} 执行失败:`, responseData.message)
     }
@@ -1066,6 +1115,36 @@ const remoteEnabled = ref(false);
 // 地图标记点
 const dockMarkers = ref<any[]>([])
 const droneMarkers = ref<any[]>([])
+// 无人机朝向扇形覆盖物集合（此处只使用一个）
+const droneHeadingSectors = ref<any[]>([])
+// 为了避免因纬度变化导致米-度转换变化而引起扇形形状抖动，这里在创建扇形时固定转换系数
+const sectorDegPerMeter = ref<{ degLatPerMeter: number; degLngPerMeter: number } | null>(null)
+// 扇形更新节流与阈值控制
+const sectorUpdateState = ref({
+  lastUpdateMs: 0,
+  lastHeading: 0,
+  lastCenter: [0, 0] as [number, number]
+})
+const SECTOR_UPDATE_MIN_INTERVAL_MS = 150
+const SECTOR_UPDATE_MIN_HEADING_DIFF = 2 // 度
+const SECTOR_UPDATE_MIN_CENTER_DIFF_DEG = 0.00003 // 约3米量级（随纬度略有误差）
+
+const shouldUpdateSector = (center: [number, number], heading: number) => {
+  const now = Date.now()
+  if (now - sectorUpdateState.value.lastUpdateMs < SECTOR_UPDATE_MIN_INTERVAL_MS) return false
+  const dHeading = Math.abs(heading - sectorUpdateState.value.lastHeading)
+  const dLng = Math.abs(center[0] - sectorUpdateState.value.lastCenter[0])
+  const dLat = Math.abs(center[1] - sectorUpdateState.value.lastCenter[1])
+  const moved = dLng > SECTOR_UPDATE_MIN_CENTER_DIFF_DEG || dLat > SECTOR_UPDATE_MIN_CENTER_DIFF_DEG
+  const rotated = dHeading > SECTOR_UPDATE_MIN_HEADING_DIFF
+  if (moved || rotated) {
+    sectorUpdateState.value.lastUpdateMs = now
+    sectorUpdateState.value.lastHeading = heading
+    sectorUpdateState.value.lastCenter = center
+    return true
+  }
+  return false
+}
 
 // 无人机动画相关状态
 const droneAnimationState = ref({
@@ -1073,7 +1152,7 @@ const droneAnimationState = ref({
   targetPosition: { longitude: 0, latitude: 0, height: 0 },
   isAnimating: false,
   animationStartTime: 0,
-  animationDuration: 2000, // 2秒动画时长
+  animationDuration: 1200, // 缩短动画时长，减少路径更新可见性
   lastUpdateTime: 0
 })
 
@@ -1107,7 +1186,26 @@ const updateDronePositionAnimation = () => {
   const droneMarker = droneMarkers.value[0]
   if (droneMarker) {
     droneMarker.setPosition([interpolatedPos.longitude, interpolatedPos.latitude])
+    // 更新航向角（度）
+    const heading = (droneStatus.value?.attitude?.head ?? 0) as number
+    if (typeof (droneMarker as any).setAngle === 'function') {
+      ;(droneMarker as any).setAngle(heading)
+    } else if (typeof (droneMarker as any).setRotation === 'function') {
+      ;(droneMarker as any).setRotation(heading)
+    }
   }
+  // 动画过程中同步更新扇形位置（若存在）
+  try {
+    const heading = getCurrentGimbalYaw()
+    const poly = (droneHeadingSectors as any)?.value?.[0]
+    if (poly) {
+      const center: [number, number] = [interpolatedPos.longitude, interpolatedPos.latitude]
+      if (shouldUpdateSector(center, heading)) {
+        const path = computeSectorPath(center, heading)
+        poly.setPath(path)
+      }
+    }
+  } catch {}
 
   // 如果动画完成，停止动画
   if (progress >= 1) {
@@ -1196,8 +1294,7 @@ const GIMBAL_CONTROL_INTERVAL_MS = 200 // 每200ms发送一次云台控制指令
 // DRC状态相关
 const DRC_STATUS_CHECK_INTERVAL = 5000 // 每5秒检查一次DRC状态
 
-// 设备状态刷新定时器
-const statusRefreshTimer = ref<number | null>(null)
+// 设备状态轮询已合并到useDevicePolling中
 
 // 视频流相关状态管理
 const videoStreamUrl = ref<string>('')
@@ -1247,6 +1344,86 @@ const lensChanging = ref(false)
 const showQualityMenu = ref(false)
 const currentQuality = ref<number>(0)
 const qualityChanging = ref(false)
+
+// 逆地理编码（经纬度 -> 地址）
+const reverseGeocode = reactive({ address: '' })
+let geocoder: any = null
+let lastGeoTime = 0
+let lastGeoLngLat: [number, number] | null = null
+const MIN_GEOCODE_INTERVAL_MS = 3000
+const MIN_MOVE_METERS = 8
+let pendingReverseCoords: [number, number] | null = null
+const initGeocoder = () => {
+  if (!amapApiRef.value) return
+  if (geocoder) return
+  const AMap = amapApiRef.value
+  try {
+    // 确保插件已就绪
+    AMap.plugin('AMap.Geocoder', () => {
+      geocoder = new AMap.Geocoder({})
+      console.log('[Geocoder] 初始化完成')
+      // 初始化完成后，如果有挂起的坐标，立刻触发一次请求
+      if (pendingReverseCoords) {
+        const [plng, plat] = pendingReverseCoords
+        pendingReverseCoords = null
+        setTimeout(() => updateAddressByCoord(plng, plat), 0)
+      }
+    })
+  } catch (e) {
+    // 兜底：直接尝试实例化（在已通过loader加载plugins的情况下可用）
+    try {
+      geocoder = new AMap.Geocoder({})
+      console.log('[Geocoder] 直接实例化完成')
+    } catch {}
+  }
+}
+
+
+// 简单距离计算（近似，足够用于节流）
+const distanceMeters = (lng1: number, lat1: number, lng2: number, lat2: number): number => {
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const R = 6371000
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+const updateAddressByCoord = (lng: number, lat: number) => {
+  try {
+    initGeocoder()
+    if (!amapApiRef.value) return
+    if (!geocoder) {
+      // 若此刻刚初始化，下一轮再请求
+      console.log('[Geocoder] 尚未就绪，稍后重试')
+      pendingReverseCoords = [lng, lat]
+      setTimeout(() => updateAddressByCoord(lng, lat), 600)
+      return
+    }
+    const now = Date.now()
+    if (now - lastGeoTime < MIN_GEOCODE_INTERVAL_MS) return
+    if (lastGeoLngLat) {
+      const moved = distanceMeters(lastGeoLngLat[0], lastGeoLngLat[1], lng, lat)
+      if (moved < MIN_MOVE_METERS) return
+    }
+    
+    // 使用原始坐标（无人机返回的已经是GCJ02坐标系）
+    console.log('[Geocoder] 坐标:', lng, lat)
+    geocoder.getAddress([lng, lat], (status: string, result: any) => {
+      console.log('[Geocoder] 返回: ', status, result)
+      if (status === 'complete' && result?.regeocode?.formattedAddress) {
+        // 直接使用高德返回的完整地址，不做额外处理
+        reverseGeocode.address = result.regeocode.formattedAddress
+        console.log('[Geocoder] 完整地址:', result.regeocode.formattedAddress)
+        console.log('[Geocoder] 地址组件详情:', JSON.stringify(result.regeocode.addressComponent, null, 2))
+      } else if (result?.info) {
+        reverseGeocode.address = '' // 保持获取中显示
+      }
+      lastGeoTime = Date.now()
+      lastGeoLngLat = [lng, lat]
+    })
+  } catch {}
+}
 
 // 分屏相关状态
 const splitChanging = ref(false)
@@ -1339,14 +1516,11 @@ const toggleVideoAiMode = async () => {
       return
     }
     const dockSn = cachedDockSns[0]
-    const newUrl = `webrtc://10.10.1.3:8000/live/cam_rtsp_${dockSn}`
+    const currentCfg = refreshEnvironmentConfig()
+    const newUrl = `${currentCfg.video.webrtcDomain}/live/cam_rtsp_${dockSn}`
 
-    if (idx >= 0) {
-      streams[idx] = { ...streams[idx], url: newUrl, ai_enabled: true }
-    } else {
-      streams.push({ type: 'drone_visible', url: newUrl, ai_enabled: true })
-    }
-    localStorage.setItem('video_streams', JSON.stringify(streams))
+    // 使用工具函数更新缓存
+    updateVideoStream('drone_visible', { url: newUrl, ai_enabled: true })
 
     // 更新当前播放
     videoStreamUrl.value = newUrl
@@ -1358,16 +1532,9 @@ const toggleVideoAiMode = async () => {
     await reloadVideo()
     // 将 ai_enabled 置为 false，并确保缓存中的 drone_visible.url 为最新播放地址
     const latestUrl = videoStreamUrl.value || ''
-    const streamsStr2 = localStorage.getItem('video_streams')
-    let streams2: any[] = []
-    try { streams2 = streamsStr2 ? JSON.parse(streamsStr2) : [] } catch {}
-    const idx2 = streams2.findIndex(s => s.type === 'drone_visible')
-    if (idx2 >= 0) {
-      streams2[idx2] = { ...streams2[idx2], url: latestUrl, ai_enabled: false }
-    } else {
-      streams2.push({ type: 'drone_visible', url: latestUrl, ai_enabled: false })
-    }
-    localStorage.setItem('video_streams', JSON.stringify(streams2))
+    
+    // 使用工具函数更新缓存
+    updateVideoStream('drone_visible', { url: latestUrl, ai_enabled: false })
     aiMode.value = false
   }
 }
@@ -1445,8 +1612,7 @@ const toggleRemote = async () => {
       // 立即更新本地状态，实现实时切换
       remoteEnabled.value = !remoteEnabled.value
       // 执行成功后刷新设备状态，确保与机场系统状态同步
-      await fetchMainDeviceStatus()
-      await fetchDroneStatus()
+      await refreshStatus()
     } else {
       console.error(`远程调试模式${remoteEnabled.value ? '关闭' : '开启'}失败:`, responseData.message)
     }
@@ -1561,6 +1727,69 @@ const addDockMarker = (longitude: number, latitude: number, dockInfo: any) => {
   dockMarkers.value.push(marker)
 }
 
+// 计算扇形顶点（返回经纬度数组）
+const computeSectorPath = (center: [number, number], headingDeg: number, radiusMeters = 60, halfAngleDeg = 25) => {
+  if (!amapApiRef.value) return []
+  const AMap = amapApiRef.value
+  const path: [number, number][] = []
+  const steps = 16
+  const start = headingDeg - halfAngleDeg
+  const end = headingDeg + halfAngleDeg
+  // 中心点
+  path.push(center)
+  for (let i = 0; i <= steps; i++) {
+    const ang = start + (i * (end - start)) / steps
+    const rad = (ang * Math.PI) / 180
+    // 固定米->度的转换，避免每次因纬度微调导致形状闪动
+    const degLatPerMeter = sectorDegPerMeter.value?.degLatPerMeter ?? (1 / 111320)
+    const baseDegLngPerMeter = sectorDegPerMeter.value?.degLngPerMeter ?? (1 / (111320 * Math.cos((center[1] * Math.PI) / 180)))
+    const dLat = radiusMeters * degLatPerMeter * Math.cos(rad)
+    const dLng = radiusMeters * baseDegLngPerMeter * Math.sin(rad)
+    path.push([center[0] + dLng, center[1] + dLat])
+  }
+  return path
+}
+
+// 创建无人机朝向扇形
+const createHeadingSector = (center: [number, number], headingDeg: number) => {
+  if (!amapApiRef.value) return null
+  const AMap = amapApiRef.value
+  // 在首次创建时固定转换系数，减少形状因纬度变化而抖动
+  const latRad = (center[1] * Math.PI) / 180
+  sectorDegPerMeter.value = {
+    degLatPerMeter: 1 / 111320,
+    degLngPerMeter: 1 / (111320 * Math.cos(latRad))
+  }
+  const path = computeSectorPath(center, headingDeg)
+  if (!path.length) return null
+  return new AMap.Polygon({
+    path,
+    strokeColor: '#ff9900',
+    strokeWeight: 2,
+    fillColor: 'rgba(255,153,0,0.25)',
+    fillOpacity: 0.35,
+    zIndex: 120
+  })
+}
+
+// 获取当前云台偏航角（优先设备状态，其次视觉WS，最后回退机体航向）
+const getCurrentGimbalYaw = (): number => {
+  const a = (droneStatus.value?.gimbalYaw ?? null) as number | null
+  if (typeof a === 'number' && Number.isFinite(a)) return a
+  const b = (latestVisionData.value as any)?.device_properties?.gimbal?.yaw
+  if (typeof b === 'number' && Number.isFinite(b)) return b
+  return (droneStatus.value?.attitude?.head ?? 0) as number
+}
+
+// 更新现有扇形（若不存在返回null）
+const updateHeadingSector = (center: [number, number], headingDeg: number) => {
+  const sector = (droneHeadingSectors as any)?.value?.[0]
+  if (!sector || !amapApiRef.value) return null
+  const path = computeSectorPath(center, headingDeg)
+  sector.setPath(path)
+  return sector
+}
+
 // 添加无人机标记到地图
 const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => {
   if (!amapInstance.value || !amapApiRef.value) {
@@ -1569,21 +1798,18 @@ const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => 
 
   const AMap = amapApiRef.value
   
-  // 创建无人机标记点
+  // 创建无人机标记点（箭头图标，后续通过 rotateAngle 实时旋转）
   const marker = new AMap.Marker({
     position: [longitude, latitude],
     title: `无人机: ${droneInfo?.deviceSn || '未知设备'}`,
-    content: `
-      <img 
-        src="${mapDroneIcon}" 
-        style="
-          width: 32px;
-          height: 32px;
-          filter: brightness(0) saturate(100%) invert(15%) sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%);
-        "
-        alt="无人机"
-      />
-    `,
+    icon: new AMap.Icon({
+      image: droneArrowIcon,
+      imageSize: new AMap.Size(32, 32),
+      size: new AMap.Size(32, 32)
+    }),
+    // 使用 autoRotation/angle 需要配合 setAngle
+    autoRotation: false,
+    angle: (droneStatus.value?.attitude?.head ?? 0) as number,
     anchor: 'center',
     offset: new AMap.Pixel(0, 0)
   })
@@ -1596,6 +1822,16 @@ const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => 
   // 添加到地图
   amapInstance.value.add(marker)
   droneMarkers.value.push(marker)
+
+  // 添加朝向扇形（仅无人机在线时显示）
+  if (droneStatus.value?.isOnline) {
+    const heading = getCurrentGimbalYaw()
+    const sector = createHeadingSector([longitude, latitude], heading)
+    if (sector) {
+      amapInstance.value.add(sector)
+      ;(droneHeadingSectors as any).value = [sector]
+    }
+  }
 }
 
 // 清除所有机场标记
@@ -1619,6 +1855,15 @@ const clearDroneMarkers = () => {
       }
     })
     droneMarkers.value = []
+  }
+  // 清除无人机朝向扇形
+  if ((droneHeadingSectors as any)?.value?.length > 0) {
+    ;(droneHeadingSectors as any).value.forEach((poly: any) => {
+      if (amapInstance.value) {
+        amapInstance.value.remove(poly)
+      }
+    })
+    ;(droneHeadingSectors as any).value = []
   }
 }
 
@@ -1673,8 +1918,12 @@ const updateMapMarkers = (shouldCenter = false) => {
       droneLongitude = droneGcjCoords.longitude
       droneLatitude = droneGcjCoords.latitude
       droneHeight = droneStatus.value.height || 0
+      // 更新逆地理信息（节流由API自身承担，这里每次位置刷新尝试）
+      updateAddressByCoord(droneLongitude, droneLatitude)
     } else {
       // 无人机没有独立坐标数据，使用机场坐标
+      // 使用机场(或全局位置)坐标也进行逆地理编码
+      updateAddressByCoord(longitude, latitude)
     }
     
     const droneInfo = {
@@ -1707,6 +1956,47 @@ const updateMapMarkers = (shouldCenter = false) => {
         // 位置有变化且当前没有动画，开始新的动画
         startDronePositionAnimation(newPos)
       }
+      // 无论位置是否变化，都根据机体航向更新箭头角度
+      try {
+        const heading = (droneStatus.value?.attitude?.head ?? 0) as number
+        const marker = droneMarkers.value[0]
+        if (marker) {
+          if (typeof (marker as any).setAngle === 'function') {
+            ;(marker as any).setAngle(heading)
+          } else if (typeof (marker as any).setRotation === 'function') {
+            ;(marker as any).setRotation(heading)
+          }
+        }
+      } catch {}
+      // 同步更新朝向扇形（仅在线时显示）
+      try {
+        if (droneStatus.value?.isOnline) {
+          const heading = getCurrentGimbalYaw()
+          const center: [number, number] = [droneLongitude, droneLatitude]
+          let sector = (droneHeadingSectors as any)?.value?.[0]
+          if (sector) {
+            if (shouldUpdateSector(center, heading)) {
+              sector = updateHeadingSector(center, heading)
+            }
+          } else {
+            const newSector = createHeadingSector(center, heading)
+            if (newSector) {
+              amapInstance.value?.add(newSector)
+              ;(droneHeadingSectors as any).value = [newSector]
+              // 初始化更新状态
+              sectorUpdateState.value.lastUpdateMs = Date.now()
+              sectorUpdateState.value.lastHeading = heading
+              sectorUpdateState.value.lastCenter = center
+            }
+          }
+        } else {
+          // 离线则清理扇形
+          if ((droneHeadingSectors as any)?.value?.length > 0) {
+            ;(droneHeadingSectors as any).value.forEach((poly: any) => amapInstance.value?.remove(poly))
+            ;(droneHeadingSectors as any).value = []
+          }
+        }
+      } catch {}
     }
     
     // 只在初始加载或明确要求时才设置地图中心
@@ -1956,29 +2246,14 @@ const getCurrentVideoInfo = () => {
 
 // 从缓存获取无人机视频地址
 const getDroneVideoFromCache = () => {
-  // 首先检查视频流缓存
-  const videoStreamsStr = localStorage.getItem('video_streams')
-  if (videoStreamsStr) {
-    try {
-      const videoStreams = JSON.parse(videoStreamsStr)
-      
-      // 优先返回无人机可见光视频
-      const droneVisibleStream = videoStreams.find((stream: any) => stream.type === 'drone_visible')
-      const droneInfraredStream = videoStreams.find((stream: any) => stream.type === 'drone_infrared')
-      
-      if (droneVisibleStream) {
-        return droneVisibleStream.url
-      } else if (droneInfraredStream) {
-        return droneInfraredStream.url
-      }
-    } catch (error: any) {
-    }
-  }
+  // 从video_streams缓存中获取无人机视频
+  const droneVisibleStream = getVideoStream('drone_visible')
+  const droneInfraredStream = getVideoStream('drone_infrared')
   
-  // 检查专用的无人机视频地址
-  const droneVideoUrl = localStorage.getItem('drone_video_stream_url')
-  if (droneVideoUrl) {
-    return droneVideoUrl
+  if (droneVisibleStream) {
+    return droneVisibleStream.url
+  } else if (droneInfraredStream) {
+    return droneInfraredStream.url
   }
   
   return null
@@ -2020,7 +2295,6 @@ const initVideoPlayer = async () => {
     startVideoPlayback()
   } else {
     // 如果缓存中没有无人机视频，启动轮询等待无人机视频流
-    console.log('无人机控制页面：未找到无人机视频流，启动轮询等待...')
     startVideoPolling()
   }
 }
@@ -2119,7 +2393,7 @@ const startVideoPlayback = () => {
       if (flvjs.isSupported()) {
         
         // 将rtmp地址转换为http-flv地址
-        const flvUrl = videoStreamUrl.value.replace(/^rtmp:\/\/[^\/]+/, 'http://10.10.1.3:8000')
+        const flvUrl = videoStreamUrl.value.replace(/^rtmp:\/\/[^\/]+/, config.api.domain)
         
         // 创建flv播放器
         videoPlayer.value = flvjs.createPlayer({
@@ -2378,7 +2652,7 @@ const refreshVideoCapacityAndCache = async (forceRestart: boolean = false) => {
       try {
         existingVideoStreams = JSON.parse(existingVideoStreamsStr)
       } catch (error) {
-        console.warn('解析现有video_streams缓存失败:', error)
+        // 解析现有video_streams缓存失败
       }
     }
     
@@ -2389,8 +2663,11 @@ const refreshVideoCapacityAndCache = async (forceRestart: boolean = false) => {
     
     // 构建将要写回的 video_streams
     const videoStreams: any[] = []
-    // 非强制刷新时，先保留现有
-    if (!forceRestart) {
+    // 强制刷新时，只保留机场视频流（因为机场视频相对稳定）
+    // 非强制刷新时，保留所有现有视频流
+    if (forceRestart) {
+      if (existingDockStream) videoStreams.push(existingDockStream)
+    } else {
       if (existingDockStream) videoStreams.push(existingDockStream)
       if (existingDroneVisibleStream) videoStreams.push(existingDroneVisibleStream)
       if (existingDroneInfraredStream) videoStreams.push(existingDroneInfraredStream)
@@ -2412,7 +2689,8 @@ const refreshVideoCapacityAndCache = async (forceRestart: boolean = false) => {
             const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
               video_id: analysis.dock.video_id
             })
-            const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            const cfg = refreshEnvironmentConfig()
+            const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, cfg.video.webrtcDomain)
             videoStreams.push({
               type: 'dock',
               url: webrtcUrl,
@@ -2422,7 +2700,10 @@ const refreshVideoCapacityAndCache = async (forceRestart: boolean = false) => {
               video_index: analysis.dock.video_index
             })
           } catch (error: any) {
-            // 获取机场视频流失败
+            // 启动失败时，如果有现有机场视频流，保留它
+            if (existingDockStream) {
+              videoStreams.push(existingDockStream)
+            }
           }
         } else if (analysis.dock && !newCache.dock) {
           // 如果有现有机场数据，直接使用
@@ -2438,7 +2719,8 @@ const refreshVideoCapacityAndCache = async (forceRestart: boolean = false) => {
             const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
               video_id: analysis.droneVisible.video_id
             })
-            const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            const cfg2 = refreshEnvironmentConfig()
+            const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, cfg2.video.webrtcDomain)
             videoStreams.push({
               type: 'drone_visible',
               url: webrtcUrl,
@@ -2449,7 +2731,10 @@ const refreshVideoCapacityAndCache = async (forceRestart: boolean = false) => {
               ai_enabled: false // 新增：AI画框状态字段，默认为false（原始视频）
             })
           } catch (error: any) {
-            // 获取无人机可见光视频流失败
+            // 启动失败时，如果有现有无人机可见光视频流，保留它
+            if (existingDroneVisibleStream) {
+              videoStreams.push(existingDroneVisibleStream)
+            }
           }
         } else if (analysis.droneVisible && !newCache.droneVisible) {
           // 如果有现有数据，直接使用
@@ -2464,7 +2749,7 @@ const refreshVideoCapacityAndCache = async (forceRestart: boolean = false) => {
             const livestreamResponse = await livestreamApi.startLivestream(dockSn, {
               video_id: analysis.droneInfrared.video_id
             })
-            const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, 'webrtc://10.10.1.3:8000')
+            const webrtcUrl = livestreamResponse.push_url.replace(/^rtmp:\/\/[^\/]+/, config.video.webrtcDomain)
             videoStreams.push({
               type: 'drone_infrared',
               url: webrtcUrl,
@@ -2474,7 +2759,10 @@ const refreshVideoCapacityAndCache = async (forceRestart: boolean = false) => {
               video_index: analysis.droneInfrared.video_index
             })
           } catch (error: any) {
-            // 获取无人机红外视频流失败
+            // 启动失败时，如果有现有无人机红外视频流，保留它
+            if (existingDroneInfraredStream) {
+              videoStreams.push(existingDroneInfraredStream)
+            }
           }
         } else if (analysis.droneInfrared && !newCache.droneInfrared) {
           // 如果有现有数据，直接使用
@@ -2527,13 +2815,13 @@ const reloadVideo = async () => {
   if (droneVideoUrl) {
     // 设置无人机视频地址
     videoStreamUrl.value = droneVideoUrl
-    localStorage.setItem('drone_video_stream_url', droneVideoUrl)
-    localStorage.setItem('current_video_type', 'drone_visible')
 
-    // 同步更新 video_streams 中的 drone_visible.url
+    // 更新 video_streams 中的 drone_visible.url，保留其他视频流
     try {
       const streamsStr = localStorage.getItem('video_streams')
       const streams = streamsStr ? JSON.parse(streamsStr) : []
+      
+      // 查找并更新无人机可见光视频流
       const idx = streams.findIndex((s: any) => s.type === 'drone_visible')
       if (idx >= 0) {
         streams[idx].url = droneVideoUrl
@@ -2541,8 +2829,19 @@ const reloadVideo = async () => {
       } else {
         streams.push({ type: 'drone_visible', url: droneVideoUrl, ai_enabled: false })
       }
+      
+                // 确保机场视频流存在
+          if (!streams.find((s: any) => s.type === 'dock')) {
+            const dockStream = getVideoStream('dock')
+            if (dockStream) {
+              streams.push(dockStream)
+            }
+          }
+      
       localStorage.setItem('video_streams', JSON.stringify(streams))
-    } catch {}
+    } catch (error) {
+      console.error('更新video_streams失败:', error)
+    }
 
     // 确保DOM更新后再开始播放
     await nextTick()
@@ -2552,7 +2851,6 @@ const reloadVideo = async () => {
     stopVideoPolling()
   } else {
     // 没有无人机视频，直接不播放
-    console.log('无人机控制页面：无法获取无人机视频流，不播放任何视频')
   }
 }
 // 开始视频流轮询
@@ -2560,28 +2858,45 @@ const startVideoPolling = () => {
   // 如果已经有轮询定时器，先清除
   stopVideoPolling()
   
-  console.log('开始视频流轮询，每5秒检查一次无人机视频流')
-  
   videoPollingTimer.value = setInterval(async () => {
     // 检查当前是否已经有视频在播放
     if (videoStreamUrl.value && videoElement.value && !videoElement.value.paused) {
-      console.log('当前已有视频在播放，跳过轮询检查')
       return
     }
-    
-    console.log('轮询检查：尝试获取无人机视频流...')
     
     try {
       // 尝试重新获取视频流
       const droneVideoUrl = await refreshVideoCapacityAndCache()
       
       if (droneVideoUrl && droneVideoUrl !== videoStreamUrl.value) {
-        console.log('轮询发现新的无人机视频流，开始播放')
-        
         // 设置新的视频地址
         videoStreamUrl.value = droneVideoUrl
-        localStorage.setItem('drone_video_stream_url', droneVideoUrl)
-        localStorage.setItem('current_video_type', 'drone_visible')
+        
+        // 更新 video_streams 中的无人机视频流，保留其他视频流
+        try {
+          const streamsStr = localStorage.getItem('video_streams')
+          const streams = streamsStr ? JSON.parse(streamsStr) : []
+          
+          // 查找并更新无人机可见光视频流
+          const idx = streams.findIndex((s: any) => s.type === 'drone_visible')
+          if (idx >= 0) {
+            streams[idx].url = droneVideoUrl
+          } else {
+            streams.push({ type: 'drone_visible', url: droneVideoUrl, ai_enabled: false })
+          }
+          
+          // 确保机场视频流存在
+          if (!streams.find((s: any) => s.type === 'dock')) {
+            const dockStream = getVideoStream('dock')
+            if (dockStream) {
+              streams.push(dockStream)
+            }
+          }
+          
+          localStorage.setItem('video_streams', JSON.stringify(streams))
+        } catch (error) {
+          console.error('轮询检查：更新video_streams失败:', error)
+        }
         
         // 开始播放
         await nextTick()
@@ -2590,10 +2905,10 @@ const startVideoPolling = () => {
         // 成功获取到视频流，停止轮询
         stopVideoPolling()
       } else {
-        console.log('轮询检查：仍未发现可用的无人机视频流')
+        // 轮询检查：仍未发现可用的无人机视频流
       }
     } catch (error) {
-      console.log('轮询检查：获取视频流失败', error)
+      // 轮询检查：获取视频流失败
     }
   }, VIDEO_POLLING_INTERVAL)
 }
@@ -2603,7 +2918,6 @@ const stopVideoPolling = () => {
   if (videoPollingTimer.value) {
     clearInterval(videoPollingTimer.value)
     videoPollingTimer.value = null
-    console.log('停止视频流轮询')
   }
 }
 
@@ -2665,10 +2979,9 @@ watch(latestVisionData, (newData) => {
     if (newData.frame_time) {
       const frameTimeMs = newData.frame_time * 1000
       const dataAge = Date.now() - frameTimeMs
-      console.log('frame_time:', newData.frame_time, 'frameTimeMs:', frameTimeMs, 'dataAge:', dataAge)
-      if (dataAge > 100) {
-        console.warn(`⏰ 数据延迟: ${dataAge}ms (frame_time)`)
-      }
+          if (dataAge > 100) {
+      // 数据延迟超过100ms
+    }
     }
     
     // 检查检测结果数量
@@ -2949,7 +3262,7 @@ const reconnectVision = () => {
   const dockSn = cachedDockSns[0]
   
   // 构建新的WebRTC URL
-  const newWebRtcUrl = `webrtc://10.10.1.3:8000/live/cam_rtsp_${dockSn}`
+  const newWebRtcUrl = `${config.video.webrtcDomain}/live/cam_rtsp_${dockSn}`
   console.log('新的WebRTC URL:', newWebRtcUrl)
   
   // 获取现有的video_streams缓存
@@ -2958,9 +3271,9 @@ const reconnectVision = () => {
   if (existingVideoStreamsStr) {
     try {
       existingVideoStreams = JSON.parse(existingVideoStreamsStr)
-    } catch (error) {
-      console.warn('解析现有video_streams缓存失败:', error)
-    }
+          } catch (error) {
+        // 解析现有video_streams缓存失败
+      }
   }
   
   // 更新无人机可见光视频流的URL
@@ -3560,10 +3873,22 @@ onMounted(async () => {
   })
   
   try {
+    // 读取凭据：优先使用通过 vite.define 注入的常量，其次使用 VITE_ 环境变量
+    // @ts-ignore
+    const definedAmapKey = (typeof __AMAP_KEY__ !== 'undefined' ? __AMAP_KEY__ : '') as string
+    // @ts-ignore
+    const definedAmapSec = (typeof __AMAP_SECURITY__ !== 'undefined' ? __AMAP_SECURITY__ : '') as string
+    const envAmapKey = (import.meta as any).env?.VITE_AMAP_KEY || ''
+    const envAmapSec = (import.meta as any).env?.VITE_AMAP_SECURITY || ''
+    const amapKey = definedAmapKey || envAmapKey || '6f9eaf51960441fa4f813ea2d7e7cfff'
+    const amapSec = definedAmapSec || envAmapSec || ''
+    if (amapSec) {
+      ;(window as any)._AMapSecurityConfig = { securityJsCode: amapSec }
+    }
     AMapLoader.load({
-      key: '6f9eaf51960441fa4f813ea2d7e7cfff', 
+      key: amapKey,
       version: '2.0',
-      plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch', 'AMap.MapType']
+      plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch', 'AMap.MapType', 'AMap.Geocoder']
     }).then((AMap) => {
       amapApiRef.value = AMap; // 缓存 AMap
       amapInstance.value = new AMap.Map('amap-container', {
@@ -3592,17 +3917,47 @@ onMounted(async () => {
       console.error('AMap加载失败:', error)
     })
     
+    // 启动统一的设备状态轮询（包含条件轮询）
+    startUnifiedPolling()
+    
     // 启动DRC状态轮询
     startDrcStatusPolling()
     
-    // 检查控制权限状态
-    checkAuthorityStatus()
+    // 监听useDevicePolling中的航线进度数据变化
+    watch(pollingWaylineProgress, (newProgress) => {
+      if (newProgress) {
+        waylineProgress.value = newProgress
+        
+        // 如果有job_id，获取详细信息
+        if (newProgress.job_id) {
+          const workspaceId = getCachedWorkspaceId()
+          const { dockSns } = getCachedDeviceSns()
+          
+          if (workspaceId && dockSns.length > 0) {
+            // 使用 job_id 获取任务详情，修复名称不更新问题
+            fetchWaylineJobDetail(workspaceId, newProgress.job_id).then(jobDetail => {
+              waylineJobDetail.value = jobDetail
+            }).catch(err => {
+              // 静默处理错误
+            })
+          }
+        } else {
+          waylineJobDetail.value = null
+        }
+      }
+    }, { immediate: true })
     
-    // 启动权限状态轮询，每2秒检查一次
-const authorityInterval = setInterval(checkAuthorityStatus, 2000)
+    // 检查控制权限状态
+checkAuthorityStatus()
+
+// 启动权限状态轮询，每10秒检查一次（进一步降低频率，权限状态变化不频繁）
+const authorityInterval = setInterval(checkAuthorityStatus, 10000)
     
     // 在组件销毁时清理定时器
     onBeforeUnmount(() => {
+      // 停止统一的设备状态轮询
+      stopUnifiedPolling()
+      
       if (authorityInterval) {
         clearInterval(authorityInterval)
       }
@@ -3617,6 +3972,11 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
       if (watermarkTimer) {
         clearInterval(watermarkTimer)
         watermarkTimer = null
+      }
+      
+      // 清理地图标记更新定时器
+      if (mapUpdateTimerRef) {
+        clearInterval(mapUpdateTimerRef)
       }
       
       // 停止并清理警报声
@@ -3648,14 +4008,8 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
       resizeObserver.observe(videoElement.value)
     }
     
-    // 获取机场状态数据
-    await fetchMainDeviceStatus()
-    
-    // 获取无人机状态数据
-    await fetchDroneStatus()
-    
-    // 获取机场状态数据（包含无人机充电状态）
-    await fetchMainDeviceStatus()
+    // 获取设备状态数据（使用统一轮询）
+    await refreshStatus()
     
     // 舱盖状态监听
     watch(() => dockStatus.value?.coverState, (newCoverState) => {
@@ -3689,30 +4043,27 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
     // 初始化起飞参数
     initTakeoffParams()
     
-    // 获取航线任务进度数据
-    await loadWaylineProgress()
-    
     // 首次获取设备状态后，更新地图标记
     if (amapInstance.value) {
       updateMapMarkers()
     }
     
-    // 设置机场状态自动刷新（每1秒，包含无人机充电状态）
-    statusRefreshTimer.value = setInterval(async () => {
-      await fetchMainDeviceStatus()
-      // 获取无人机状态数据
-      await fetchDroneStatus()
-      // 获取航线任务进度数据
-      await loadWaylineProgress()
+    // 设置地图标记更新定时器（每3秒更新一次地图，使用useDevicePolling中的航线进度数据）
+    const mapUpdateTimer = setInterval(async () => {
       // 设备状态更新后，更新地图标记
       if (amapInstance.value) {
         updateMapMarkers()
         // 更新无人机追踪位置
         updateDroneTracking()
-        // 更新航线显示（只在状态变化时重新绘制）
+        // 更新航线显示（只在状态或任务变化时重新绘制）
         const currentTaskStatus = waylineTaskStatus.value
         const currentJobId = waylineProgress.value?.job_id
-        const shouldShowWayline = currentTaskStatus === 'running' || currentTaskStatus === 'paused'
+        // 执行中/暂停/已下发(等待)都显示航线
+        const shouldShowWayline = Boolean(currentJobId) && (
+          currentTaskStatus === 'running' ||
+          currentTaskStatus === 'paused' ||
+          currentTaskStatus === 'waiting'
+        )
         
         // 检查是否需要重新绘制航线
         const hasWaylineDisplay = waylineMarkers.value.length > 0 || waylinePolyline.value
@@ -3737,7 +4088,10 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
           waylineDisplayState.value.lastTaskStatus = null
         }
       }
-    }, 1000)
+    }, 3000) // 改为3秒间隔，减少频率
+    
+    // 保存定时器引用以便清理
+    mapUpdateTimerRef = mapUpdateTimer as unknown as number
     
     loadTodayFlightStatistics()
   } catch (error) {
@@ -3745,26 +4099,20 @@ const authorityInterval = setInterval(checkAuthorityStatus, 2000)
   }
 })
 
-// 获取航线任务进度数据
+// 获取航线任务进度数据（现在由useDevicePolling统一管理，此函数保留用于手动刷新）
 const loadWaylineProgress = async () => {
   try {
     const workspaceId = getCachedWorkspaceId()
     const { dockSns } = getCachedDeviceSns()
     
-    // console.log('loadWaylineProgress - workspaceId:', workspaceId)
-    // console.log('loadWaylineProgress - dockSns:', dockSns)
-    
     if (!workspaceId || dockSns.length === 0) {
-      // console.log('loadWaylineProgress - 缺少workspaceId或dockSns')
       return
     }
     
     // 获取第一个机场的航线任务进度
     const dockSn = dockSns[0]
-    // console.log('loadWaylineProgress - 使用dockSn:', dockSn)
     
     const progressData = await fetchWaylineProgress(workspaceId, dockSn)
-    // console.log('loadWaylineProgress - progressData:', progressData)
     waylineProgress.value = progressData
     
     // 如果有job_id，获取详细信息
@@ -3774,7 +4122,6 @@ const loadWaylineProgress = async () => {
       console.log('loadWaylineProgress - jobDetail:', jobDetail)
       waylineJobDetail.value = jobDetail
     } else {
-      // console.log('loadWaylineProgress - 没有job_id，清空任务详情')
       waylineJobDetail.value = null
     }
   } catch (err) {
@@ -3879,9 +4226,15 @@ const getCameraIndexByDeviceSn = (deviceSn: string) => {
   return device.camera_list[0].camera_index
 }
 
-// 获取可用的payload索引列表（从最近的权限检查中获取）
+// 获取可用的payload索引列表（从最近的权限检查中获取，避免重复调用API）
 const getAvailablePayloadIndexes = async () => {
   try {
+    // 优先使用已缓存的权限状态，避免重复调用API
+    if (controlAuthorityStatus.value.payloadAuthorityOwner) {
+      // 如果已经有权限状态，直接返回标准格式
+      return ["99-0-0"]
+    }
+    
     const cachedDockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
     if (cachedDockSns.length === 0) {
       return ["99-0-0"] // 默认值
@@ -4705,11 +5058,7 @@ onBeforeUnmount(() => {
     resizeTimeout = null
   }
   
-  // 清理机场状态刷新定时器
-  if (statusRefreshTimer.value) {
-    clearInterval(statusRefreshTimer.value)
-    statusRefreshTimer.value = null
-  }
+  // 机场状态轮询已合并到useDevicePolling中
   
 
   

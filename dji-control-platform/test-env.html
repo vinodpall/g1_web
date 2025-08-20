@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>环境配置测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔧 环境配置测试页面</h1>
+    
+    <div class="test-section info">
+        <h3>当前环境信息</h3>
+        <p>这个页面用于测试环境配置是否正确加载</p>
+        <button onclick="testEnvironment()">测试环境配置</button>
+        <button onclick="clearCache()">清除缓存</button>
+        <button onclick="reloadPage()">重新加载页面</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <script type="module">
+        // 模拟环境变量（实际项目中这些会由Vite注入）
+        window.import = {
+            meta: {
+                env: {
+                    VITE_APP_ENVIRONMENT: 'internet' // 可以修改这个值来测试
+                }
+            }
+        };
+        
+        // 模拟环境配置
+        const Environment = {
+            INTRANET: 'intranet',
+            INTERNET: 'internet'
+        };
+        
+        const intranetConfig = {
+            api: { domain: 'http://192.168.111.49:8000' },
+            video: { webrtcDomain: 'webrtc://192.168.111.49:8000' }
+        };
+        
+        const internetConfig = {
+            api: { domain: 'http://10.10.1.3:8000' },
+            video: { webrtcDomain: 'webrtc://10.10.1.3:8000' }
+        };
+        
+        function getCurrentEnvironment() {
+            const envFromVar = window.import.meta.env.VITE_APP_ENVIRONMENT;
+            if (envFromVar === Environment.INTRANET) return Environment.INTRANET;
+            if (envFromVar === Environment.INTERNET) return Environment.INTERNET;
+            return Environment.INTRANET; // 默认
+        }
+        
+        function getCurrentConfig() {
+            const currentEnv = getCurrentEnvironment();
+            return currentEnv === Environment.INTRANET ? intranetConfig : internetConfig;
+        }
+        
+        function testEnvironment() {
+            const resultsDiv = document.getElementById('results');
+            const currentEnv = getCurrentEnvironment();
+            const config = getCurrentConfig();
+            
+            let html = `
+                <div class="test-section ${currentEnv === 'internet' ? 'success' : 'info'}">
+                    <h3>✅ 环境配置测试结果</h3>
+                    <p><strong>当前环境:</strong> ${currentEnv}</p>
+                    <p><strong>环境变量:</strong> ${window.import.meta.env.VITE_APP_ENVIRONMENT || 'undefined'}</p>
+                    <p><strong>API域名:</strong> ${config.api.domain}</p>
+                    <p><strong>WebRTC域名:</strong> ${config.video.webrtcDomain}</p>
+                </div>
+            `;
+            
+            // 测试localStorage
+            const videoStreams = localStorage.getItem('video_streams');
+            if (videoStreams) {
+                try {
+                    const streams = JSON.parse(videoStreams);
+                    html += `
+                        <div class="test-section info">
+                            <h3>📹 当前视频流缓存</h3>
+                            <pre>${JSON.stringify(streams, null, 2)}</pre>
+                        </div>
+                    `;
+                } catch (e) {
+                    html += `
+                        <div class="test-section error">
+                            <h3>❌ 视频流缓存解析失败</h3>
+                            <p>${e.message}</p>
+                        </div>
+                    `;
+                }
+            } else {
+                html += `
+                    <div class="test-section info">
+                        <h3>📹 视频流缓存</h3>
+                        <p>没有找到视频流缓存</p>
+                    </div>
+                `;
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        function clearCache() {
+            localStorage.removeItem('video_streams');
+            localStorage.removeItem('video_stream_url');
+            localStorage.removeItem('video_bid');
+            localStorage.removeItem('current_video_type');
+            localStorage.removeItem('cached_dock_sns');
+            localStorage.removeItem('cached_drone_sns');
+            alert('缓存已清除！');
+            testEnvironment();
+        }
+        
+        function reloadPage() {
+            location.reload();
+        }
+        
+        // 页面加载完成后自动测试
+        window.addEventListener('load', testEnvironment);
+        
+        // 暴露函数到全局
+        window.testEnvironment = testEnvironment;
+        window.clearCache = clearCache;
+        window.reloadPage = reloadPage;
+    </script>
+</body>
+</html> 

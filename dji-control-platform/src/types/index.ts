@@ -184,6 +184,9 @@ export interface VisionAlert {
   original_image_url: string
   marked_image_url: string
   thumbnail_image_url?: string
+  latitude?: number
+  longitude?: number
+  altitude?: number
   status: 'PENDING' | 'HANDLED' | 'IGNORED'
   handler_id: string | null
   handle_time: string | null

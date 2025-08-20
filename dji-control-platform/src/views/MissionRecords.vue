@@ -112,6 +112,7 @@
               <div class="mission-th">开始时间</div>
               <div class="mission-th">结束时间</div>
               <div class="mission-th">创建人</div>
+              <div class="mission-th">操作</div>
             </div>
             <div class="mission-table-body">
               <div v-if="loading" class="mission-loading">
@@ -165,9 +166,18 @@
                     </div>
                   </div>
                 </div>
-                <div class="mission-td">{{ formatTimestamp(job.begin_time) }}</div>
+                <div class="mission-td">{{ formatTimestamp(job.execute_time) }}</div>
                 <div class="mission-td">{{ formatTimestamp(job.completed_time) }}</div>
                 <div class="mission-td">{{ job.username }}</div>
+                <div class="mission-td">
+                  <button 
+                    class="mission-btn mission-btn-stop"
+                    @click.stop="handleDeleteJob(job)"
+                    :title="'删除任务记录'"
+                  >
+                    删除
+                  </button>
+                </div>
               </div>
             </div>
             <!-- 分页组件 -->
@@ -285,6 +295,14 @@
               </div>
               <div class="media-file-actions">
                 <button 
+                  class="media-preview-btn"
+                  @click="previewMediaFile(file)"
+                  :disabled="!canPreview(file)"
+                  :title="getPreviewButtonTitle(file)"
+                >
+                  {{ getPreviewButtonText(file) }}
+                </button>
+                <button 
                   class="media-download-btn"
                   @click="downloadMediaFile(file.file_id, file.file_name)"
                   :disabled="downloadingFiles.includes(file.file_id)"
@@ -297,6 +315,67 @@
         </div>
       </div>
     </div>
+
+    <!-- 图片预览弹窗 -->
+    <div v-if="showImagePreview" class="preview-modal-mask" @click="closeImagePreview">
+      <div class="preview-modal" @click.stop>
+        <div class="preview-modal-header">
+          <div class="preview-modal-title">图片预览</div>
+          <button class="preview-modal-close" @click="closeImagePreview">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="preview-modal-content">
+          <div v-if="imagePreviewLoading" class="preview-loading">
+            加载中...
+          </div>
+          <div v-else-if="imagePreviewError" class="preview-error">
+            {{ imagePreviewError }}
+          </div>
+          <div v-else class="image-preview-container">
+            <img 
+              :src="imagePreviewUrl" 
+              :alt="currentPreviewFile?.file_name || '图片预览'"
+              class="image-preview"
+              @error="handleImagePreviewError"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 视频预览弹窗 -->
+    <div v-if="showVideoPreview" class="preview-modal-mask" @click="closeVideoPreview">
+      <div class="preview-modal video-preview-modal" @click.stop>
+        <div class="preview-modal-header">
+          <div class="preview-modal-title">视频预览</div>
+          <button class="preview-modal-close" @click="closeVideoPreview">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="preview-modal-content">
+          <div v-if="videoPreviewLoading" class="preview-loading">
+            加载中...
+          </div>
+          <div v-else-if="videoPreviewError" class="preview-error">
+            {{ videoPreviewError }}
+          </div>
+          <div v-else class="video-preview-container">
+            <video 
+              :src="videoPreviewUrl" 
+              controls 
+              class="video-preview"
+            ></video>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
   </div>
 </template>
 
@@ -307,6 +386,7 @@ import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
 import { useWaylineJobs, useDevices } from '../composables/useApi'
+import { waylineApi } from '../api/services'
 import { getErrorMessage } from '@/utils/errorCodes'
 import { mediaApi } from '../api/services'
 
@@ -344,6 +424,18 @@ const mediaFiles = ref<any[]>([])
 const mediaLoading = ref(false)
 const mediaError = ref<string | null>(null)
 const downloadingFiles = ref<string[]>([])
+
+// 预览相关状态
+const showImagePreview = ref(false)
+const showVideoPreview = ref(false)
+const imagePreviewUrl = ref('')
+const videoPreviewUrl = ref('')
+const imagePreviewLoading = ref(false)
+const videoPreviewLoading = ref(false)
+const imagePreviewError = ref<string | null>(null)
+const videoPreviewError = ref<string | null>(null)
+const currentPreviewFile = ref<any>(null)
+const currentBlobUrls = ref<string[]>([])
 const getJobErrorMessage = (job: any) => {
   if (!job || job.status !== 6) return ''
   const code = job.error_code ?? job.error?.code ?? job.errorCode
@@ -382,6 +474,113 @@ const closeMediaModal = () => {
   showMediaModal.value = false
   mediaFiles.value = []
   mediaError.value = null
+}
+
+// 预览相关函数
+const canPreview = (file: any) => {
+  if (!file || !file.file_name) return false
+  const fileName = file.file_name.toLowerCase()
+  return fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png') || 
+         fileName.endsWith('.mp4') || fileName.endsWith('.mov')
+}
+
+const getPreviewButtonText = (file: any) => {
+  if (!file || !file.file_name) return '预览'
+  const fileName = file.file_name.toLowerCase()
+  if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png')) {
+    return '图片预览'
+  } else if (fileName.endsWith('.mp4') || fileName.endsWith('.mov')) {
+    return '视频预览'
+  }
+  return '预览'
+}
+
+const getPreviewButtonTitle = (file: any) => {
+  if (!file || !file.file_name) return '无法预览此文件'
+  const fileName = file.file_name.toLowerCase()
+  if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png')) {
+    return '点击预览图片'
+  } else if (fileName.endsWith('.mp4') || fileName.endsWith('.mov')) {
+    return '点击预览视频'
+  }
+  return '无法预览此文件'
+}
+
+const previewMediaFile = async (file: any) => {
+  if (!canPreview(file)) {
+    alert('无法预览此文件类型')
+    return
+  }
+
+  currentPreviewFile.value = file
+  const fileName = file.file_name.toLowerCase()
+  
+  if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png')) {
+    // 图片预览
+    showImagePreview.value = true
+    imagePreviewLoading.value = true
+    imagePreviewError.value = null
+    
+    try {
+      // 使用下载接口获取图片内容，然后转换为blob URL进行预览
+      const response = await mediaApi.downloadMediaFile(file.file_id)
+      const blob = new Blob([response as BlobPart], { type: 'image/jpeg' })
+      const imageUrl = URL.createObjectURL(blob)
+      imagePreviewUrl.value = imageUrl
+      currentBlobUrls.value.push(imageUrl)
+      imagePreviewLoading.value = false
+    } catch (err: any) {
+      imagePreviewError.value = err.message || '图片加载失败'
+      imagePreviewLoading.value = false
+    }
+  } else if (fileName.endsWith('.mp4') || fileName.endsWith('.mov')) {
+    // 视频预览 - 使用支持range请求的预览接口
+    showVideoPreview.value = true
+    videoPreviewLoading.value = true
+    videoPreviewError.value = null
+    
+    try {
+      // 使用预览接口，支持range请求
+      const videoUrl = `/api/v1/media/preview/${file.file_id}`
+      videoPreviewUrl.value = videoUrl
+      videoPreviewLoading.value = false
+    } catch (err: any) {
+      videoPreviewError.value = err.message || '视频加载失败'
+      videoPreviewLoading.value = false
+    }
+  }
+}
+
+const closeImagePreview = () => {
+  showImagePreview.value = false
+  // 清理blob URL
+  if (imagePreviewUrl.value) {
+    URL.revokeObjectURL(imagePreviewUrl.value)
+    currentBlobUrls.value = currentBlobUrls.value.filter(url => url !== imagePreviewUrl.value)
+    imagePreviewUrl.value = ''
+  }
+  imagePreviewError.value = null
+  currentPreviewFile.value = null
+}
+
+const closeVideoPreview = () => {
+  showVideoPreview.value = false
+  videoPreviewUrl.value = ''
+  videoPreviewError.value = null
+  currentPreviewFile.value = null
+}
+
+// 清理所有blob URL
+const cleanupBlobUrls = () => {
+  currentBlobUrls.value.forEach(url => {
+    URL.revokeObjectURL(url)
+  })
+  currentBlobUrls.value = []
+}
+
+const handleImagePreviewError = () => {
+  imagePreviewError.value = '图片加载失败，请检查文件是否存在'
+  imagePreviewLoading.value = false
 }
 
 // 格式化媒体文件时间
@@ -622,6 +821,7 @@ onMounted(async () => {
 // 离开时移除监听
 onUnmounted(() => {
   window.removeEventListener('click', closeErrorTooltip)
+  cleanupBlobUrls() // 清理所有blob URL
 })
 
 // 切换页面
@@ -648,6 +848,26 @@ const jumpToPage = () => {
 const onFilterChange = () => {
   currentPage.value = 1
   loadJobRecords()
+}
+
+// 删除任务记录
+const handleDeleteJob = (job: any) => {
+  if (!job || !job.job_id) return
+  const ok = confirm(`确定要删除任务记录“${job.name || job.job_id}”吗？该操作不可恢复。`)
+  if (!ok) return
+  const workspaceId = getCachedWorkspaceId()
+  if (!workspaceId) {
+    alert('未找到工作空间ID，无法删除任务记录')
+    return
+  }
+  waylineApi.deleteJob(workspaceId, job.job_id)
+    .then(() => {
+      // 删除后刷新列表
+      loadJobRecords()
+    })
+    .catch((err: any) => {
+      alert('删除失败：' + (err?.message || '未知错误'))
+    })
 }
 
 const recordTrackSelectRef = ref<HTMLSelectElement | null>(null)
@@ -937,6 +1157,32 @@ function onRecordTrackSelectKeydown(e: KeyboardEvent) {
   opacity: 0.8;
 }
 
+.upload-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(103, 213, 253, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(103, 213, 253, 0.2);
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #67d5fd, #00e1ff);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+.upload-progress-text {
+  color: #67d5fd;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 40px;
+  text-align: right;
+}
+
 /* 媒体文件弹窗样式 */
 .media-modal-mask {
   position: fixed;
@@ -1128,6 +1374,28 @@ function onRecordTrackSelectKeydown(e: KeyboardEvent) {
   margin-left: 16px;
 }
 
+.media-preview-btn {
+  background: #0c4666;
+  color: #67d5fd;
+  border: 1px solid #67d5fd;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 8px; /* Add some space between preview and download */
+}
+
+.media-preview-btn:hover:not(:disabled) {
+  background: #67d5fd;
+  color: #0a2a3a;
+}
+
+.media-preview-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .media-download-btn {
   background: #0c4666;
   color: #67d5fd;
@@ -1149,31 +1417,138 @@ function onRecordTrackSelectKeydown(e: KeyboardEvent) {
   cursor: not-allowed;
 }
 
+/* 预览弹窗样式 */
+.preview-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 20px;
+  box-sizing: border-box;
+}
 
-
-.upload-progress-bar {
-  flex: 1;
-  height: 8px;
-  background: rgba(103, 213, 253, 0.1);
-  border-radius: 4px;
+.preview-modal {
+  background: #0a2a3a;
+  border: 1px solid #164159;
+  border-radius: 8px;
+  width: 1100px;
+  height: 700px;
+  max-width: 95vw;
+  max-height: 80vh;
   overflow: hidden;
-  border: 1px solid rgba(103, 213, 253, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  margin: auto;
 }
 
-.upload-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #67d5fd, #00e1ff);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-  min-width: 0;
+.video-preview-modal {
+  max-width: 95vw;
+  width: 1100px;
+  height: 700px;
+  max-height: 80vh;
 }
 
-.upload-progress-text {
+.preview-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #164159;
+  background: #0c3c56;
+  height: 45px;
+  box-sizing: border-box;
+}
+
+.preview-modal-title {
+  font-size: 16px;
+  font-weight: 600;
   color: #67d5fd;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  min-width: 40px;
-  text-align: right;
 }
+
+.preview-modal-close {
+  background: none;
+  border: none;
+  color: #67d5fd;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.preview-modal-close:hover {
+  background: rgba(103, 213, 253, 0.1);
+}
+
+.preview-modal-content {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  max-height: calc(100vh - 40px - 45px);
+  overflow: hidden;
+  height: calc(100% - 45px);
+  box-sizing: border-box;
+}
+
+.preview-loading,
+.preview-error {
+  text-align: center;
+  padding: 40px 20px;
+  color: #67d5fd;
+  font-size: 14px;
+}
+
+.preview-error {
+  color: #f56c6c;
+}
+
+.image-preview-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.image-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0;
+  box-shadow: none;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.video-preview-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.video-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0;
+  box-shadow: none;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+
 </style>

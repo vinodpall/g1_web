@@ -393,7 +393,7 @@
       <div class="content-on2">
         <div class="on2-top">
           <span :class="{ active: currentTab === 'device' }" @click="switchTab('device')">设备告警</span>
-          <span :class="{ active: currentTab === 'inspection' }" @click="switchTab('inspection')">巡检告警</span>
+          <span :class="{ active: currentTab === 'inspection' }" @click="switchTab('inspection')">任务告警</span>
         </div>
         <div class="on2-bottom">
           <table class="tableOne">
@@ -623,7 +623,6 @@
               <select v-model="dispatchTaskDialog.form.task_type" class="mission-select">
                 <option :value="0">立即任务</option>
                 <option :value="1">定时任务</option>
-                <option :value="2">条件任务</option>
               </select>
               <span class="custom-select-arrow">
                 <svg width="12" height="12" viewBox="0 0 12 12">
@@ -632,17 +631,45 @@
               </span>
             </div>
           </div>
-          <div v-if="dispatchTaskDialog.form.task_type === 1 || dispatchTaskDialog.form.task_type === 2" class="dispatch-task-row">
+          <div v-if="dispatchTaskDialog.form.task_type === 1" class="dispatch-task-row">
             <label>开始时间：</label>
             <input 
               v-model="dispatchTaskDialog.form.begin_time" 
               type="datetime-local" 
               class="dispatch-task-input"
-              :min="getMinDateTime()"
+              :min="getMinLocalDateTime()"
             />
-            <div v-if="dispatchTaskDialog.form.task_type === 1" class="time-tip">
-              提示：定时任务的开始时间必须在当前时间4分钟及以后
+            <div v-if="dispatchTaskDialog.form.task_type === 1" class="time-tip">提示：定时任务的开始时间必须在当前时间4分钟及以后</div>
+          </div>
+          <!-- 周期任务开关（仅定时任务可用） -->
+          <div v-if="dispatchTaskDialog.form.task_type === 1" class="dispatch-task-row">
+            <label>周期任务：</label>
+            <div class="dispatch-switch-wrapper">
+              <div
+                class="switch-container"
+                :class="{ active: dispatchTaskDialog.form.enable_recurrence }"
+                @click="dispatchTaskDialog.form.enable_recurrence = !dispatchTaskDialog.form.enable_recurrence"
+              >
+                <div class="switch-toggle"></div>
+              </div>
+              <span class="dispatch-switch-label">{{ dispatchTaskDialog.form.enable_recurrence ? '开启' : '关闭' }}</span>
             </div>
+          </div>
+          <div v-if="dispatchTaskDialog.form.task_type === 1 && dispatchTaskDialog.form.enable_recurrence" class="dispatch-task-row">
+            <label>日期范围：</label>
+            <input 
+              v-model="dispatchTaskDialog.form.recurrence_start_date" 
+              type="date" 
+              class="dispatch-task-input"
+              :min="getTodayDate()"
+            />
+            <span style="margin: 0 8px; color: #67d5fd;">至</span>
+            <input 
+              v-model="dispatchTaskDialog.form.recurrence_end_date" 
+              type="date" 
+              class="dispatch-task-input"
+              :min="getTodayDate()"
+            />
           </div>
           <div class="dispatch-task-row">
             <label>返航高度：</label>
@@ -703,11 +730,14 @@ import { useRouter } from 'vue-router'
 import { useHmsAlerts, useDevices, useWaylineJobs } from '../composables/useApi'
 import { controlApi, waylineApi } from '../api/services'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
+import { config } from '../config/environment'
+import { getVideoStreams, getVideoStream, getDefaultVideoType } from '../utils/videoCache'
 import * as echarts from 'echarts'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import flvjs from 'flv.js'
 import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
 import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
+import droneArrowIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_arrow.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import droneBatteryChargeIcon from '@/assets/source_data/svg_data/drone_battery_charge.svg'
 
@@ -1077,24 +1107,17 @@ const switchGimbal = async (videoType: 'dock' | 'drone_visible' | 'drone_infrare
   videoLoading.value = true
   
   try {
-    const videoStreamsCache = localStorage.getItem('video_streams')
-    if (!videoStreamsCache) {
-      alert('没有找到视频流信息，请先完成视频能力缓存')
-      return
-    }
-    
-    const videoStreams = JSON.parse(videoStreamsCache)
-    const targetStream = videoStreams.find((stream: any) => stream.type === videoType)
+    const targetStream = getVideoStream(videoType)
     if (!targetStream) {
       alert(`没有找到${getVideoTypeName(videoType)}视频流`)
       return
     }
     
-    // 仅更新流地址和类型，播放由watch统一触发
+    // 更新当前视频流地址和类型
     videoStreamUrl.value = targetStream.url
     currentVideoType.value = videoType
-    localStorage.setItem('video_stream_url', targetStream.url)
-    localStorage.setItem('current_video_type', videoType)
+    
+    console.log(`已切换到${getVideoTypeName(videoType)}视频流`)
   } finally {
     videoLoading.value = false
   }
@@ -1535,6 +1558,62 @@ const clearDockMarkers = () => {
   }
 }
 
+// 无人机朝向扇形覆盖物集合（此处只使用一个）
+const droneHeadingSectors = ref<any[]>([])
+
+// 计算扇形顶点（返回经纬度数组）
+const computeSectorPath = (center: [number, number], headingDeg: number, radiusMeters = 60, halfAngleDeg = 25) => {
+  if (!amapApiRef) return []
+  const AMap = amapApiRef
+  const path: [number, number][] = []
+  const steps = 16
+  const start = headingDeg - halfAngleDeg
+  const end = headingDeg + halfAngleDeg
+  // 中心点
+  path.push(center)
+  for (let i = 0; i <= steps; i++) {
+    const ang = start + (i * (end - start)) / steps
+    const rad = (ang * Math.PI) / 180
+    // 粗略将半径从米转近似经纬度偏移（按纬度方向近似）
+    const dLat = (radiusMeters / 111320) * Math.cos(rad)
+    const dLng = (radiusMeters / (111320 * Math.cos((center[1] * Math.PI) / 180))) * Math.sin(rad)
+    path.push([center[0] + dLng, center[1] + dLat])
+  }
+  return path
+}
+
+// 创建无人机朝向扇形
+const createHeadingSector = (center: [number, number], headingDeg: number) => {
+  if (!amapApiRef) return null
+  const AMap = amapApiRef
+  const path = computeSectorPath(center, headingDeg)
+  if (!path.length) return null
+  return new AMap.Polygon({
+    path,
+    strokeColor: '#ff9900',
+    strokeWeight: 2,
+    fillColor: 'rgba(255,153,0,0.25)',
+    fillOpacity: 0.35,
+    zIndex: 120
+  })
+}
+
+// 获取当前云台偏航角（优先设备状态，其次回退机体航向）
+const getCurrentGimbalYaw = (): number => {
+  const a = (droneStatus.value?.gimbalYaw ?? null) as number | null
+  if (typeof a === 'number' && Number.isFinite(a)) return a
+  return (droneStatus.value?.attitude?.head ?? 0) as number
+}
+
+// 更新现有扇形（若不存在返回null）
+const updateHeadingSector = (center: [number, number], headingDeg: number) => {
+  const sector = droneHeadingSectors.value?.[0]
+  if (!sector || !amapApiRef) return null
+  const path = computeSectorPath(center, headingDeg)
+  sector.setPath(path)
+  return sector
+}
+
 // 添加无人机标记到地图
 const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => {
   if (!amapInstance || !amapApiRef) {
@@ -1543,28 +1622,40 @@ const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => 
 
   const AMap = amapApiRef
   
-  // 创建无人机标记点
+  // 创建无人机标记点（箭头图标，后续通过 rotateAngle 实时旋转）
   const marker = new AMap.Marker({
     position: [longitude, latitude],
     title: `无人机: ${droneInfo?.deviceSn || '未知设备'}`,
-    content: `
-      <img 
-        src="${mapDroneIcon}" 
-        style="
-          width: 32px;
-          height: 32px;
-          filter: brightness(0) saturate(100%) invert(15%) sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%);
-        "
-        alt="无人机"
-      />
-    `,
+    icon: new AMap.Icon({
+      image: droneArrowIcon,
+      imageSize: new AMap.Size(32, 32),
+      size: new AMap.Size(32, 32)
+    }),
+    // 使用 autoRotation/angle 需要配合 setAngle
+    autoRotation: false,
+    angle: (droneStatus.value?.attitude?.head ?? 0) as number,
     anchor: 'center',
     offset: new AMap.Pixel(0, 0)
+  })
+
+  // 添加点击事件
+  marker.on('click', () => {
+    // 可以在这里添加更多交互功能，比如显示详细信息
   })
 
   // 添加到地图
   amapInstance.add(marker)
   droneMarkers.value.push(marker)
+
+  // 添加朝向扇形（仅无人机在线时显示）
+  if (droneStatus.value?.isOnline) {
+    const heading = getCurrentGimbalYaw()
+    const sector = createHeadingSector([longitude, latitude], heading)
+    if (sector) {
+      amapInstance.add(sector)
+      droneHeadingSectors.value = [sector]
+    }
+  }
 }
 
 // 清除所有无人机标记
@@ -1576,6 +1667,15 @@ const clearDroneMarkers = () => {
       }
     })
     droneMarkers.value = []
+  }
+  // 清除无人机朝向扇形
+  if (droneHeadingSectors.value?.length > 0) {
+    droneHeadingSectors.value.forEach((poly: any) => {
+      if (amapInstance) {
+        amapInstance.remove(poly)
+      }
+    })
+    droneHeadingSectors.value = []
   }
 }
 
@@ -1663,6 +1763,38 @@ const updateMapMarkers = (shouldCenter = false) => {
         // 位置有变化且当前没有动画，开始新的动画
         startDronePositionAnimation(newPos)
       }
+      // 无论位置是否变化，都根据机体航向更新箭头角度
+      try {
+        const heading = (droneStatus.value?.attitude?.head ?? 0) as number
+        const marker = droneMarkers.value[0]
+        if (marker) {
+          if (typeof (marker as any).setAngle === 'function') {
+            ;(marker as any).setAngle(heading)
+          } else if (typeof (marker as any).setRotation === 'function') {
+            ;(marker as any).setRotation(heading)
+          }
+        }
+      } catch {}
+      // 同步更新朝向扇形（仅在线时显示）
+      try {
+        if (droneStatus.value?.isOnline) {
+          const heading = getCurrentGimbalYaw()
+          const sector = updateHeadingSector([droneLongitude, droneLatitude], heading)
+          if (!sector) {
+            const newSector = createHeadingSector([droneLongitude, droneLatitude], heading)
+            if (newSector) {
+              amapInstance?.add(newSector)
+              droneHeadingSectors.value = [newSector]
+            }
+          }
+        } else {
+          // 离线则清理扇形
+          if (droneHeadingSectors.value?.length > 0) {
+            droneHeadingSectors.value.forEach((poly: any) => amapInstance?.remove(poly))
+            droneHeadingSectors.value = []
+          }
+        }
+      } catch {}
     }
     
     // 更新无人机追踪
@@ -1694,15 +1826,17 @@ const totalTime = ref('00:00')
 
 // 初始化视频播放器
 const initVideoPlayer = () => {
-  const savedVideoUrl = localStorage.getItem('video_stream_url')
-  const savedVideoType = localStorage.getItem('current_video_type')
+  // 从video_streams缓存中获取默认视频流
+  const defaultVideoType = getDefaultVideoType()
   
-  if (savedVideoUrl) {
-    videoStreamUrl.value = savedVideoUrl
-  }
-  
-  if (savedVideoType) {
-    currentVideoType.value = savedVideoType as 'dock' | 'drone_visible' | 'drone_infrared'
+  if (defaultVideoType) {
+    const defaultStream = getVideoStream(defaultVideoType)
+    
+    if (defaultStream) {
+      videoStreamUrl.value = defaultStream.url
+      currentVideoType.value = defaultVideoType
+      console.log(`首页初始化：使用默认视频流 ${defaultVideoType}`)
+    }
   }
   
   // 由watch(videoStreamUrl)统一触发播放，避免重复拉流
@@ -1740,9 +1874,11 @@ const startVideoPlayback = () => {
         updateVideoTime()
       })
       
-      // 确保视频加载后也应用样式
+      // 确保视频加载后也应用样式（元素可能在回调触发时已不存在，需判空）
       videoElement.value.addEventListener('loadeddata', () => {
-        videoElement.value!.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
+        const el = videoElement.value
+        if (!el) return
+        el.style.cssText = 'width: 100% !important; height: 100% !important; object-fit: fill !important; position: absolute !important; top: 0 !important; left: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important;'
       })
     }
 
@@ -1754,7 +1890,7 @@ const startVideoPlayback = () => {
       if (flvjs.isSupported()) {
         
         // 将rtmp地址转换为http-flv地址
-        const flvUrl = videoStreamUrl.value.replace(/^rtmp:\/\/[^\/]+/, 'http://10.10.1.3:8000')
+        const flvUrl = videoStreamUrl.value.replace(/^rtmp:\/\/[^\/]+/, config.api.domain)
         
         // 创建flv播放器
         videoPlayer.value = flvjs.createPlayer({
@@ -1980,7 +2116,11 @@ const dispatchTaskDialog = ref({
     end_time: null as string | null,
     enable_vision: false,
     vision_algorithms: [] as number[],
-    vision_threshold: 0.5
+    vision_threshold: 0.5,
+    // 周期任务相关
+    enable_recurrence: false,
+    recurrence_start_date: '' as string,
+    recurrence_end_date: '' as string
   }
 })
 
@@ -2024,6 +2164,17 @@ const handleDispatchTask = () => {
     alert('未找到可用的设备')
     return
   }
+
+  // 低电量提示（小于30%时给予二次确认）
+  const currentBatteryPercent = typeof droneStatus.value?.batteryPercent === 'number' 
+    ? Math.round(droneStatus.value.batteryPercent as number) 
+    : null
+  if (currentBatteryPercent !== null && currentBatteryPercent < 30) {
+    const confirmContinue = window.confirm(`当前电量为${currentBatteryPercent}%，低于30%，不建议飞行。是否继续下发任务？`)
+    if (!confirmContinue) {
+      return
+    }
+  }
   
   // 初始化弹窗数据
   dispatchTaskDialog.value.form = {
@@ -2040,17 +2191,45 @@ const handleDispatchTask = () => {
     end_time: null,
     enable_vision: false,
     vision_algorithms: [],
-    vision_threshold: 0.5
+    vision_threshold: 0.5,
+    enable_recurrence: false,
+    recurrence_start_date: '',
+    recurrence_end_date: ''
   }
   
   dispatchTaskDialog.value.visible = true
 }
 
-// 获取最小时间（当前时间 + 4分钟）
-const getMinDateTime = () => {
+// 返回当前本地时间+4分钟（到分钟）的最小值，供 datetime-local 作为最小值
+const getMinLocalDateTime = () => {
   const now = new Date()
-  const minTime = new Date(now.getTime() + 4 * 60 * 1000) // 当前时间 + 4分钟
-  return minTime.toISOString().slice(0, 16) // 格式化为 datetime-local 需要的格式
+  now.setMinutes(now.getMinutes() + 4)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const y = now.getFullYear()
+  const m = pad(now.getMonth() + 1)
+  const d = pad(now.getDate())
+  const hh = pad(now.getHours())
+  const mm = pad(now.getMinutes())
+  return `${y}-${m}-${d}T${hh}:${mm}`
+}
+
+// 返回今天的本地日期 YYYY-MM-DD
+const getTodayDate = () => {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+// 将Date按本地时间格式化为 YYYY-MM-DDTHH:mm:ss（不带时区）
+const formatLocalDateTime = (date: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const y = date.getFullYear()
+  const m = pad(date.getMonth() + 1)
+  const d = pad(date.getDate())
+  const hh = pad(date.getHours())
+  const mm = pad(date.getMinutes())
+  const ss = pad(date.getSeconds())
+  return `${y}-${m}-${d}T${hh}:${mm}:${ss}`
 }
 
 // 下发任务确认
@@ -2063,17 +2242,35 @@ const onDispatchTaskConfirm = async () => {
     return
   }
   
-  if ((form.task_type === 1 || form.task_type === 2) && !form.begin_time) {
-    alert('定时任务和条件任务需要设置开始时间')
+  if ((form.task_type === 1) && !form.begin_time) {
+    alert('定时任务需要设置开始时间')
     return
   }
+
+  // 周期任务校验（仅定时任务）
+  if (form.task_type === 1 && form.enable_recurrence) {
+    if (!form.recurrence_start_date || !form.recurrence_end_date) {
+      alert('请选择周期任务的开始和结束日期')
+      return
+    }
+    const sd = new Date(form.recurrence_start_date)
+    const ed = new Date(form.recurrence_end_date)
+    const today = new Date(getTodayDate())
+    if (sd < today || ed < today) {
+      alert('周期任务日期不能早于今天')
+      return
+    }
+    if (sd > ed) {
+      alert('周期任务的开始日期不能晚于结束日期')
+      return
+    }
+  }
   
-  // 验证定时任务的时间（必须在4分钟及以后）
+  // 验证定时任务的时间（必须在当前时间4分钟及以后）
   if (form.task_type === 1 && form.begin_time) {
     const selectedTime = new Date(form.begin_time)
     const currentTime = new Date()
-    const minTime = new Date(currentTime.getTime() + 4 * 60 * 1000) // 当前时间 + 4分钟
-    
+    const minTime = new Date(currentTime.getTime() + 4 * 60 * 1000)
     if (selectedTime < minTime) {
       alert('定时任务的开始时间必须在当前时间4分钟及以后')
       return
@@ -2099,14 +2296,24 @@ const onDispatchTaskConfirm = async () => {
     
     // 根据任务类型设置execute_time
     if (form.task_type === 0) {
-      // 立即任务：设置当前时间作为execute_time
-      taskData.execute_time = new Date().toISOString()
+      // 立即任务：使用本地时间字符串（不带时区）
+      taskData.execute_time = formatLocalDateTime(new Date())
     } else if (form.task_type === 1 && form.begin_time) {
-      // 定时任务：使用begin_time作为execute_time
-      taskData.execute_time = new Date(form.begin_time).toISOString()
+      // 定时任务：使用选择的本地时间字符串（不带时区）
+      taskData.execute_time = form.begin_time.length === 16 ? `${form.begin_time}:00` : form.begin_time
     }
     
     // 创建任务
+    // 附加周期任务配置，并将提交的 task_type 改为 3
+    if (form.task_type === 1 && form.enable_recurrence) {
+      taskData.task_type = 3
+      taskData.recurrence_config = {
+        recurrence_type: 'date_range',
+        start_date: form.recurrence_start_date,
+        end_date: form.recurrence_end_date
+      }
+    }
+
     const response = await createJob(workspaceId, taskData)
     console.log('任务创建成功:', response)
     
@@ -2831,8 +3038,22 @@ onMounted(async () => {
   
   // 初始化地图
   if (mapContainer.value) {
+    // 读取凭据：优先使用通过 vite.define 注入的常量，其次使用 VITE_ 环境变量
+    // @ts-ignore
+    const definedAmapKey = (typeof __AMAP_KEY__ !== 'undefined' ? __AMAP_KEY__ : '') as string
+    // @ts-ignore
+    const definedAmapSec = (typeof __AMAP_SECURITY__ !== 'undefined' ? __AMAP_SECURITY__ : '') as string
+    const envAmapKey = (import.meta as any).env?.VITE_AMAP_KEY || ''
+    const envAmapSec = (import.meta as any).env?.VITE_AMAP_SECURITY || ''
+    const amapKey = definedAmapKey || envAmapKey || '6f9eaf51960441fa4f813ea2d7e7cfff'
+    const amapSec = definedAmapSec || envAmapSec || ''
+    
+    if (amapSec) {
+      ;(window as any)._AMapSecurityConfig = { securityJsCode: amapSec }
+    }
+    
     AMapLoader.load({
-      key: '6f9eaf51960441fa4f813ea2d7e7cfff',
+      key: amapKey,
       version: '2.0',
       plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch']
     }).then((AMap) => {
@@ -4433,13 +4654,13 @@ const centerToDroneMarker = () => {
   height: 41px;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 10px;
   background-image: url('@/assets/source_data/bg_data/card_second_body_title.png');
   background-size: 100% 100%;
 }
 
 .on2-top span {
-  padding: 0 20px;
+  padding: 0 12px;
   color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   font-size: 14px;

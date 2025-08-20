@@ -225,10 +225,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useDeviceStatus } from '../composables/useDeviceStatus'
+import { useDevicePolling } from '../composables/useDevicePolling'
 import { useDeviceStore } from '../stores/device'
 import { useWaylineJobs } from '../composables/useApi'
 import { useDevices } from '../composables/useApi'
+import { getVideoStream } from '../utils/videoCache'
 import { StatusMaps } from '../api/deviceStatus'
 import { remoteDebugApi } from '../api/services'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
@@ -240,6 +241,7 @@ import batteryImg from '@/assets/source_data/Battery.png'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
 import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
+import droneArrowIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_arrow.svg'
 import droneCloseIcon from '@/assets/source_data/svg_data/drone_close.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import drone4gIcon from '@/assets/source_data/svg_data/drone_4g.svg'
@@ -252,26 +254,59 @@ const router = useRouter()
 // 使用设备存储
 const deviceStore = useDeviceStore()
 
-// 使用设备状态API
+// 使用统一的设备状态轮询API
 const { 
-  fetchDeviceStatus, 
-  fetchMainDeviceStatus,
-  fetchDroneStatus,
+  startUnifiedPolling,
+  stopUnifiedPolling,
+  refreshStatus,
   droneStatus, 
   dockStatus,
   environment,
   gpsStatus,
   osdData,
-  formatVoltage,
-  formatCurrent,
-  formatTemperature,
-  formatHumidity,
-  formatWindSpeed,
-  formatRainfall,
-  formatNetworkRate,
-  formatAccTime,
   position
-} = useDeviceStatus()
+} = useDevicePolling()
+
+// 格式化函数（从useDeviceStatus中提取）
+const formatVoltage = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}V`
+}
+
+const formatCurrent = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(2)}A`
+}
+
+const formatTemperature = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}°C`
+}
+
+const formatHumidity = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}%`
+}
+
+const formatWindSpeed = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}m/s`
+}
+
+const formatRainfall = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value.toFixed(1)}mm`
+}
+
+const formatNetworkRate = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${value}Mbps`
+}
+
+const formatAccTime = (value: number | undefined) => {
+  if (value === undefined || value === null) return '--'
+  return `${Math.floor(value / 3600)}h ${Math.floor((value % 3600) / 60)}m`
+}
 
 // 使用设备API
 const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
@@ -475,10 +510,8 @@ const currentWaypointMarker = ref<any>(null)
 // 追踪无人机
 const isDroneTracking = ref(false)
 
-// 设备状态刷新定时器
-const statusRefreshTimer = ref<number | null>(null)
-// 无人机状态刷新定时器
-const droneStatusRefreshTimer = ref<number | null>(null)
+// 地图更新定时器引用
+let mapUpdateTimerRef: number | null = null
 // 远程调试执行函数
 const executeRemoteDebug = async (method: string, params: any = {}) => {
   try {
@@ -498,7 +531,7 @@ const executeRemoteDebug = async (method: string, params: any = {}) => {
     if (responseData.success === true) {
       console.log(`远程调试命令 ${method} 执行成功`)
       // 执行成功后刷新设备状态
-      await fetchMainDeviceStatus()
+      await refreshStatus()
     } else {
       console.error(`远程调试命令 ${method} 执行失败:`, responseData.message)
     }
@@ -589,7 +622,7 @@ const toggleRemote = async () => {
       // 立即更新本地状态，实现实时切换
       remoteEnabled.value = !remoteEnabled.value
       // 执行成功后刷新设备状态，确保与机场系统状态同步
-      await fetchMainDeviceStatus()
+      await refreshStatus()
     } else {
       console.error(`远程调试模式${remoteEnabled.value ? '关闭' : '开启'}失败:`, responseData.message)
     }
@@ -761,6 +794,62 @@ const clearDockMarkers = () => {
   }
 }
 
+// 无人机朝向扇形覆盖物集合（此处只使用一个）
+const droneHeadingSectors = ref<any[]>([])
+
+// 计算扇形顶点（返回经纬度数组）
+const computeSectorPath = (center: [number, number], headingDeg: number, radiusMeters = 60, halfAngleDeg = 25) => {
+  if (!amapApiRef.value) return []
+  const AMap = amapApiRef.value
+  const path: [number, number][] = []
+  const steps = 16
+  const start = headingDeg - halfAngleDeg
+  const end = headingDeg + halfAngleDeg
+  // 中心点
+  path.push(center)
+  for (let i = 0; i <= steps; i++) {
+    const ang = start + (i * (end - start)) / steps
+    const rad = (ang * Math.PI) / 180
+    // 粗略将半径从米转近似经纬度偏移（按纬度方向近似）
+    const dLat = (radiusMeters / 111320) * Math.cos(rad)
+    const dLng = (radiusMeters / (111320 * Math.cos((center[1] * Math.PI) / 180))) * Math.sin(rad)
+    path.push([center[0] + dLng, center[1] + dLat])
+  }
+  return path
+}
+
+// 创建无人机朝向扇形
+const createHeadingSector = (center: [number, number], headingDeg: number) => {
+  if (!amapApiRef.value) return null
+  const AMap = amapApiRef.value
+  const path = computeSectorPath(center, headingDeg)
+  if (!path.length) return null
+  return new AMap.Polygon({
+    path,
+    strokeColor: '#ff9900',
+    strokeWeight: 2,
+    fillColor: 'rgba(255,153,0,0.25)',
+    fillOpacity: 0.35,
+    zIndex: 120
+  })
+}
+
+// 获取当前云台偏航角（优先设备状态，其次回退机体航向）
+const getCurrentGimbalYaw = (): number => {
+  const a = (droneStatus.value?.gimbalYaw ?? null) as number | null
+  if (typeof a === 'number' && Number.isFinite(a)) return a
+  return (droneStatus.value?.attitude?.head ?? 0) as number
+}
+
+// 更新现有扇形（若不存在返回null）
+const updateHeadingSector = (center: [number, number], headingDeg: number) => {
+  const sector = droneHeadingSectors.value?.[0]
+  if (!sector || !amapApiRef.value) return null
+  const path = computeSectorPath(center, headingDeg)
+  sector.setPath(path)
+  return sector
+}
+
 // 添加无人机标记到地图
 const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => {
   if (!amapInstance.value || !amapApiRef.value) {
@@ -769,28 +858,40 @@ const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => 
 
   const AMap = amapApiRef.value
   
-  // 创建无人机标记点
+  // 创建无人机标记点（箭头图标，后续通过 rotateAngle 实时旋转）
   const marker = new AMap.Marker({
     position: [longitude, latitude],
     title: `无人机: ${droneInfo?.deviceSn || '未知设备'}`,
-    content: `
-      <img 
-        src="${mapDroneIcon}" 
-        style="
-          width: 32px;
-          height: 32px;
-          filter: brightness(0) saturate(100%) invert(15%) sepia(100%) saturate(10000%) hue-rotate(0deg) brightness(100%) contrast(100%);
-        "
-        alt="无人机"
-      />
-    `,
+    icon: new AMap.Icon({
+      image: droneArrowIcon,
+      imageSize: new AMap.Size(32, 32),
+      size: new AMap.Size(32, 32)
+    }),
+    // 使用 autoRotation/angle 需要配合 setAngle
+    autoRotation: false,
+    angle: (droneStatus.value?.attitude?.head ?? 0) as number,
     anchor: 'center',
     offset: new AMap.Pixel(0, 0)
+  })
+
+  // 添加点击事件
+  marker.on('click', () => {
+    // 可以在这里添加更多交互功能，比如显示详细信息
   })
 
   // 添加到地图
   amapInstance.value.add(marker)
   droneMarkers.value.push(marker)
+
+  // 添加朝向扇形（仅无人机在线时显示）
+  if (droneStatus.value?.isOnline) {
+    const heading = getCurrentGimbalYaw()
+    const sector = createHeadingSector([longitude, latitude], heading)
+    if (sector) {
+      amapInstance.value.add(sector)
+      droneHeadingSectors.value = [sector]
+    }
+  }
 }
 
 // 清除所有无人机标记
@@ -802,6 +903,15 @@ const clearDroneMarkers = () => {
       }
     })
     droneMarkers.value = []
+  }
+  // 清除无人机朝向扇形
+  if (droneHeadingSectors.value?.length > 0) {
+    droneHeadingSectors.value.forEach((poly: any) => {
+      if (amapInstance.value) {
+        amapInstance.value.remove(poly)
+      }
+    })
+    droneHeadingSectors.value = []
   }
 }
 
@@ -888,6 +998,38 @@ const updateMapMarkers = (shouldCenter = false) => {
         // 位置有变化且当前没有动画，开始新的动画
         startDronePositionAnimation(newPos)
       }
+      // 无论位置是否变化，都根据机体航向更新箭头角度
+      try {
+        const heading = (droneStatus.value?.attitude?.head ?? 0) as number
+        const marker = droneMarkers.value[0]
+        if (marker) {
+          if (typeof (marker as any).setAngle === 'function') {
+            ;(marker as any).setAngle(heading)
+          } else if (typeof (marker as any).setRotation === 'function') {
+            ;(marker as any).setRotation(heading)
+          }
+        }
+      } catch {}
+      // 同步更新朝向扇形（仅在线时显示）
+      try {
+        if (droneStatus.value?.isOnline) {
+          const heading = getCurrentGimbalYaw()
+          const sector = updateHeadingSector([droneLongitude, droneLatitude], heading)
+          if (!sector) {
+            const newSector = createHeadingSector([droneLongitude, droneLatitude], heading)
+            if (newSector) {
+              amapInstance.value?.add(newSector)
+              droneHeadingSectors.value = [newSector]
+            }
+          }
+        } else {
+          // 离线则清理扇形
+          if (droneHeadingSectors.value?.length > 0) {
+            droneHeadingSectors.value.forEach((poly: any) => amapInstance.value?.remove(poly))
+            droneHeadingSectors.value = []
+          }
+        }
+      } catch {}
     }
     
     // 更新无人机追踪
@@ -1193,32 +1335,13 @@ let isPlaying = false
 
 // 获取机场视频流地址
 const getDockVideoFromCache = () => {
-  // 优先从video_streams缓存中获取机场视频
-  const videoStreamsStr = localStorage.getItem('video_streams')
-  if (videoStreamsStr) {
-    try {
-      const videoStreams = JSON.parse(videoStreamsStr)
-      const dockStream = videoStreams.find((stream: any) => stream.type === 'dock')
-      if (dockStream) {
-        return dockStream.url
-      }
-    } catch (error) {
-      console.error('解析video_streams缓存失败:', error)
-    }
+  // 从video_streams缓存中获取机场视频
+  const dockStream = getVideoStream('dock')
+  if (dockStream) {
+    return dockStream.url
   }
   
-  // 备用方案1：使用首页的通用视频地址
-  const videoStreamUrl = localStorage.getItem('video_stream_url')
-  if (videoStreamUrl) {
-    return videoStreamUrl
-  }
-  
-  // 备用方案2：使用机场专用视频地址
-  const dockVideoUrl = localStorage.getItem('dock_video_stream_url')
-  if (dockVideoUrl) {
-    return dockVideoUrl
-  }
-  
+  console.warn('机场控制页：未找到机场视频流信息')
   return ''
 }
 
@@ -1486,10 +1609,8 @@ const stopVideoPlayback = () => {
 }
 
 onMounted(async () => {
-  // 加载设备状态数据（使用缓存的设备SN）
-  await fetchMainDeviceStatus()
-  // 加载无人机状态数据
-  await fetchDroneStatus()
+  // 加载设备状态数据（使用统一轮询）
+  await refreshStatus()
   
   // 加载航线任务进度
   await loadWaylineProgress()
@@ -1497,8 +1618,22 @@ onMounted(async () => {
   // 初始化视频播放器
   await initVideoPlayer()
   
+  // 读取凭据：优先使用通过 vite.define 注入的常量，其次使用 VITE_ 环境变量
+  // @ts-ignore
+  const definedAmapKey = (typeof __AMAP_KEY__ !== 'undefined' ? __AMAP_KEY__ : '') as string
+  // @ts-ignore
+  const definedAmapSec = (typeof __AMAP_SECURITY__ !== 'undefined' ? __AMAP_SECURITY__ : '') as string
+  const envAmapKey = (import.meta as any).env?.VITE_AMAP_KEY || ''
+  const envAmapSec = (import.meta as any).env?.VITE_AMAP_SECURITY || ''
+  const amapKey = definedAmapKey || envAmapKey || '6f9eaf51960441fa4f813ea2d7e7cfff'
+  const amapSec = definedAmapSec || envAmapSec || ''
+  
+  if (amapSec) {
+    ;(window as any)._AMapSecurityConfig = { securityJsCode: amapSec }
+  }
+  
   AMapLoader.load({
-    key: '6f9eaf51960441fa4f813ea2d7e7cfff',
+    key: amapKey,
     version: '2.0',
     plugins: ['AMap.ToolBar', 'AMap.Geolocation', 'AMap.PlaceSearch', 'AMap.MapType']
   }).then((AMap) => {
@@ -1530,28 +1665,18 @@ onMounted(async () => {
     // 可以在这里添加备用方案，比如显示一个简单的div
   })
   
-  // 设置设备状态自动刷新（每5秒）
-  statusRefreshTimer.value = setInterval(async () => {
-    await fetchMainDeviceStatus()
-    // 设备状态更新后，更新地图标记（不定位）
-    if (amapInstance.value) {
-      updateMapMarkers()
-    }
-  }, 5000)
+  // 启动统一的设备状态轮询（包含条件轮询）
+  startUnifiedPolling()
   
-  // 设置无人机状态自动刷新（每2秒）
-  droneStatusRefreshTimer.value = setInterval(async () => {
-    await fetchDroneStatus()
-    // 无人机状态更新后，更新地图标记（不定位）
+  // 设置地图标记更新定时器（每2秒更新一次地图）
+  const mapUpdateTimer = setInterval(() => {
     if (amapInstance.value) {
       updateMapMarkers()
     }
   }, 2000)
   
-  // 设置航线任务进度自动刷新（每3秒）
-  waylineProgressTimer.value = setInterval(async () => {
-    await loadWaylineProgress()
-  }, 3000)
+  // 保存定时器引用以便清理
+  const mapUpdateTimerRef = mapUpdateTimer
   
   // 舱盖状态监听
   watch(() => dockStatus.value?.coverState, (newCoverState) => {
@@ -1586,22 +1711,12 @@ onBeforeUnmount(() => {
   // 停止视频播放并清理视频资源
   stopVideoPlayback()
   
-  // 清理设备状态刷新定时器
-  if (statusRefreshTimer.value) {
-    clearInterval(statusRefreshTimer.value)
-    statusRefreshTimer.value = null
-  }
+  // 停止统一的设备状态轮询
+  stopUnifiedPolling()
   
-  // 清理无人机状态刷新定时器
-  if (droneStatusRefreshTimer.value) {
-    clearInterval(droneStatusRefreshTimer.value)
-    droneStatusRefreshTimer.value = null
-  }
-  
-  // 清理航线任务进度刷新定时器
-  if (waylineProgressTimer.value) {
-    clearInterval(waylineProgressTimer.value)
-    waylineProgressTimer.value = null
+  // 清理地图标记更新定时器
+  if (mapUpdateTimerRef) {
+    clearInterval(mapUpdateTimerRef)
   }
   
   // 清理地图标记

@@ -861,6 +861,12 @@ export const waylineApi = {
     enable_vision?: boolean
     vision_algorithms?: number[]
     vision_threshold?: number
+    // 周期任务配置（新增）
+    recurrence_config?: {
+      recurrence_type: string // e.g. 'date_range'
+      start_date: string      // YYYY-MM-DD
+      end_date: string        // YYYY-MM-DD
+    }
   }) => {
     return apiClient.post<{
       code: number
@@ -954,6 +960,14 @@ export const waylineApi = {
         update_time: string
         uploading: boolean
       }
+    }>(`/wayline/workspaces/${workspaceId}/jobs/${jobId}`)
+  },
+
+  // 删除任务记录
+  deleteJob: (workspaceId: string, jobId: string) => {
+    return apiClient.delete<{
+      code: number
+      message: string
     }>(`/wayline/workspaces/${workspaceId}/jobs/${jobId}`)
   },
 

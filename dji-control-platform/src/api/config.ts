@@ -1,6 +1,27 @@
 // API配置文件
-export const API_BASE_URL = '/api/v1'
-export const API_DOMAIN = 'http://10.10.1.3:8000'
+import { config, getCurrentConfig } from '../config/environment'
+
+// 根据环境动态获取API配置
+const getApiConfig = () => {
+  // 在生产环境中使用相对路径（同域部署），在开发环境中使用相对路径（依赖Vite代理）
+  if (import.meta.env.PROD) {
+    // 生产环境：同域部署，使用相对路径
+    return {
+      baseUrl: '/api/v1',
+      domain: window.location.origin
+    }
+  } else {
+    // 开发环境：使用相对路径，依赖Vite代理
+    return {
+      baseUrl: config.api.baseUrl,
+      domain: ''
+    }
+  }
+}
+
+const apiConfig = getApiConfig()
+export const API_BASE_URL = apiConfig.baseUrl
+export const API_DOMAIN = apiConfig.domain
 
 // HTTP请求工具类
 export class ApiClient {
@@ -147,6 +168,13 @@ export class ApiClient {
 
 // 创建API客户端实例
 export const apiClient = new ApiClient(API_BASE_URL)
+
+// 调试信息
+console.log('🔧 API客户端配置:')
+console.log('- 环境:', import.meta.env.PROD ? '生产环境' : '开发环境')
+console.log('- API_BASE_URL:', API_BASE_URL)
+console.log('- API_DOMAIN:', API_DOMAIN)
+console.log('- 当前域名:', window.location.origin)
 
 // 响应数据类型定义
 export interface ApiResponse<T = any> {

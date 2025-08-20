@@ -260,7 +260,9 @@ export function useDeviceStatus() {
         head: droneOsdData?.attitude_head || osdData.value.attitude_head,
         pitch: droneOsdData?.attitude_pitch || osdData.value.attitude_pitch,
         roll: droneOsdData?.attitude_roll || osdData.value.attitude_roll
-      }
+      },
+      // 云台偏航角（用于扇形范围）
+      gimbalYaw: droneOsdData?.gimbal_yaw || osdData.value.gimbal_yaw
     }
   })
   

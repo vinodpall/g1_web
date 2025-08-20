@@ -5,6 +5,7 @@ import router from './router'
 import { permission, permissionAll } from './directives/permission'
 import { useAuth } from './composables/useApi'
 import { apiClient } from './api/config'
+import { logEnvironmentConfig } from './config/environment'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -15,6 +16,9 @@ app.use(router)
 // 注册权限指令
 app.directive('permission', permission)
 app.directive('permission-all', permissionAll)
+
+// 显示当前环境配置
+logEnvironmentConfig()
 
 // 初始化认证状态
 const { initAuth } = useAuth()

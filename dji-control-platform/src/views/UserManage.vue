@@ -534,8 +534,7 @@ onMounted(async () => {
   line-height: 32px;
   box-shadow: 0 0 0 1px #164159 inset;
   transition: border 0.2s, box-shadow 0.2s;
-  display: flex;
-  align-items: center;
+  box-sizing: border-box;
   flex-shrink: 0;
 }
 .user-input:focus, .user-select:focus {
@@ -559,9 +558,9 @@ onMounted(async () => {
   position: relative;
   display: inline-block;
   flex-shrink: 0;
-  min-width: 140px;
-  max-width: 180px;
-  width: 100%;
+  min-width: 0;
+  max-width: 240px;
+  width: 240px;
   vertical-align: middle;
 }
 .custom-select-arrow {
@@ -643,6 +642,12 @@ onMounted(async () => {
   max-width: 240px;
   width: 240px;
   margin-right: 0;
+}
+/* 保障新增用户弹窗内下拉选择与输入框宽度完全一致 */
+.add-user-form .custom-select-wrapper {
+  width: 240px;
+  max-width: 240px;
+  min-width: 0;
 }
 .custom-dialog {
   background: linear-gradient(135deg, #1a233a 80%, #16213a 100%);
