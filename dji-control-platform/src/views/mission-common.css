@@ -820,7 +820,14 @@
   width: 150px !important;
   min-width: 150px !important;
   max-width: 150px !important;
-} 
+}
+
+/* 为航线库选择器提供更宽的专用类，避免被通用宽度覆盖 */
+.track-select-wide {
+  width: 260px !important;
+  min-width: 260px !important;
+  max-width: 260px !important;
+}
 /* 让航线下拉框本身透明 */
 .mission-select.treeselect-track {
   background: transparent !important;

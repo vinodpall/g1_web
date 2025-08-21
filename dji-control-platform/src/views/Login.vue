@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { useAuth } from '../composables/useApi'
@@ -89,13 +89,38 @@ const userStore = useUserStore()
 const { login, loading, error } = useAuth()
 
 const loginForm = ref({
-  username: 'admin',
-  password: 'admin123',
+  username: '',
+  password: '',
   remember: false
 })
 
 const errorMessage = ref('')
 const showErrorDialog = ref(false)
+
+// 页面加载时检查是否有保存的登录信息
+onMounted(() => {
+  const savedUsername = localStorage.getItem('savedUsername')
+  const savedPassword = localStorage.getItem('savedPassword')
+  const savedExpireTime = localStorage.getItem('savedExpireTime')
+  
+  // 检查是否过期
+  if (savedUsername && savedPassword && savedExpireTime) {
+    const expireTime = parseInt(savedExpireTime)
+    const currentTime = Date.now()
+    
+    if (currentTime < expireTime) {
+      // 未过期，加载保存的信息
+      loginForm.value.username = savedUsername
+      loginForm.value.password = savedPassword
+      loginForm.value.remember = true
+    } else {
+      // 已过期，清除保存的信息
+      localStorage.removeItem('savedUsername')
+      localStorage.removeItem('savedPassword')
+      localStorage.removeItem('savedExpireTime')
+    }
+  }
+})
 
 const handleLogin = async () => {
   try {
@@ -108,6 +133,20 @@ const handleLogin = async () => {
     userStore.setUser((response as any).user)
     userStore.setToken((response as any).token)
     
+    // 根据是否勾选记住密码来保存或清除登录信息
+    if (loginForm.value.remember) {
+      // 保存到 localStorage，设置7天过期时间
+      const expireTime = Date.now() + (7 * 24 * 60 * 60 * 1000) // 7天后过期
+      localStorage.setItem('savedUsername', loginForm.value.username)
+      localStorage.setItem('savedPassword', loginForm.value.password)
+      localStorage.setItem('savedExpireTime', expireTime.toString())
+    } else {
+      // 清除保存的信息
+      localStorage.removeItem('savedUsername')
+      localStorage.removeItem('savedPassword')
+      localStorage.removeItem('savedExpireTime')
+    }
+    
     router.push('/dashboard')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '登录失败'
@@ -119,6 +158,8 @@ const closeErrorDialog = () => {
   showErrorDialog.value = false
   errorMessage.value = ''
 }
+
+
 </script>
 
 <style scoped>

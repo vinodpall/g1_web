@@ -56,7 +56,8 @@
                           </div>
                         </div>
                       </div>
-                      <div class="task-name">正在执行：<span class="route-name">{{ currentRouteName }}</span></div>
+                      <div class="task-name" v-if="isTaskActive">正在执行：<span class="route-name">{{ currentRouteName }}</span></div>
+                      <div class="task-name" v-else>当前无任务</div>
                     </div>
                     <div class="task-progress-divider"></div>
                     <div class="task-progress-actions-btns">
@@ -888,7 +889,6 @@ const executeRemoteDebug = async (method: string, params: any = {}) => {
     // 类型断言处理响应
     const responseData = response as any
     if (responseData.success === true) {
-      console.log(`远程调试命令 ${method} 执行成功`)
       // 执行成功后刷新设备状态
       await refreshStatus()
     } else {
@@ -940,34 +940,34 @@ const sidebarTabs = [
 const currentTab = ref('plane')
 
 // 航线任务相关计算属性
+const isTaskActive = computed(() => {
+  const status = waylineProgress.value?.status
+  return status === 'in_progress' || status === 'paused' || status === 'sent'
+})
+
 const progressPercent = computed(() => {
+  const status = waylineProgress.value?.status
   const progress = waylineProgress.value?.progress
-  
-  if (!progress) {
+
+  // 任务未进行中/暂停/已下发时，不展示历史进度
+  if (!status || !progress || (status !== 'in_progress' && status !== 'paused' && status !== 'sent')) {
     return 0
   }
   
-  // 使用current_waypoint_index和total_waypoints计算进度
   const currentWaypoint = progress.current_waypoint_index || 0
   const totalWaypoints = progress.total_waypoints || 1
-  
-  // 计算百分比并取整数
   const percent = Math.round((currentWaypoint / totalWaypoints) * 100)
-  
-  // 确保百分比在0-100范围内
-  const result = Math.max(0, Math.min(100, percent))
-  return result
+  return Math.max(0, Math.min(100, percent))
 })
 
 const currentRouteName = computed(() => {
-  const result = waylineJobDetail.value?.name || '暂无任务'
-  return result
+  if (!isTaskActive.value) return ''
+  return waylineJobDetail.value?.name || ''
 })
 
 const waylineTaskStatus = computed(() => {
   const status = waylineProgress.value?.status
-  if (!status) return 'waiting'
-  
+  if (!status) return 'idle'
   const statusMap: Record<string, string> = {
     'canceled': 'failed',
     'failed': 'failed',
@@ -979,8 +979,7 @@ const waylineTaskStatus = computed(() => {
     'sent': 'waiting',
     'timeout': 'failed'
   }
-  
-  return statusMap[status] || 'waiting'
+  return statusMap[status] || 'idle'
 })
 const waylineTaskStatusText = computed(() => {
   const status = waylineProgress.value?.status
@@ -1119,32 +1118,12 @@ const droneMarkers = ref<any[]>([])
 const droneHeadingSectors = ref<any[]>([])
 // 为了避免因纬度变化导致米-度转换变化而引起扇形形状抖动，这里在创建扇形时固定转换系数
 const sectorDegPerMeter = ref<{ degLatPerMeter: number; degLngPerMeter: number } | null>(null)
-// 扇形更新节流与阈值控制
+// 扇形更新状态（用于跟踪上次更新的位置和航向）
 const sectorUpdateState = ref({
-  lastUpdateMs: 0,
   lastHeading: 0,
-  lastCenter: [0, 0] as [number, number]
+  lastCenter: [0, 0] as [number, number],
+  lastUpdateTime: 0 // 添加时间戳，用于防抖
 })
-const SECTOR_UPDATE_MIN_INTERVAL_MS = 150
-const SECTOR_UPDATE_MIN_HEADING_DIFF = 2 // 度
-const SECTOR_UPDATE_MIN_CENTER_DIFF_DEG = 0.00003 // 约3米量级（随纬度略有误差）
-
-const shouldUpdateSector = (center: [number, number], heading: number) => {
-  const now = Date.now()
-  if (now - sectorUpdateState.value.lastUpdateMs < SECTOR_UPDATE_MIN_INTERVAL_MS) return false
-  const dHeading = Math.abs(heading - sectorUpdateState.value.lastHeading)
-  const dLng = Math.abs(center[0] - sectorUpdateState.value.lastCenter[0])
-  const dLat = Math.abs(center[1] - sectorUpdateState.value.lastCenter[1])
-  const moved = dLng > SECTOR_UPDATE_MIN_CENTER_DIFF_DEG || dLat > SECTOR_UPDATE_MIN_CENTER_DIFF_DEG
-  const rotated = dHeading > SECTOR_UPDATE_MIN_HEADING_DIFF
-  if (moved || rotated) {
-    sectorUpdateState.value.lastUpdateMs = now
-    sectorUpdateState.value.lastHeading = heading
-    sectorUpdateState.value.lastCenter = center
-    return true
-  }
-  return false
-}
 
 // 无人机动画相关状态
 const droneAnimationState = ref({
@@ -1152,7 +1131,7 @@ const droneAnimationState = ref({
   targetPosition: { longitude: 0, latitude: 0, height: 0 },
   isAnimating: false,
   animationStartTime: 0,
-  animationDuration: 1200, // 缩短动画时长，减少路径更新可见性
+  animationDuration: 800, // 进一步缩短动画时长，让扇形和无人机移动更同步
   lastUpdateTime: 0
 })
 
@@ -1194,15 +1173,27 @@ const updateDronePositionAnimation = () => {
       ;(droneMarker as any).setRotation(heading)
     }
   }
-  // 动画过程中同步更新扇形位置（若存在）
+  // 动画过程中同步更新扇形位置（若存在）- 确保扇形和无人机完全同步
   try {
     const heading = getCurrentGimbalYaw()
     const poly = (droneHeadingSectors as any)?.value?.[0]
     if (poly) {
       const center: [number, number] = [interpolatedPos.longitude, interpolatedPos.latitude]
-      if (shouldUpdateSector(center, heading)) {
-        const path = computeSectorPath(center, heading)
-        poly.setPath(path)
+      
+      // 优化：减少动画过程中的扇形更新频率，避免闪烁
+      // 只在动画的关键帧更新扇形，而不是每一帧都更新
+      const animationProgress = progress
+      const shouldUpdateSector = animationProgress % 0.1 < 0.05 // 每10%的进度更新一次
+      
+      if (shouldUpdateSector) {
+        // 使用路径更新方法，与首页保持一致
+        try {
+          const path = computeSectorPath(center, heading)
+          if (path.length) {
+            poly.setPath(path)
+          }
+        } catch (error) {
+        }
       }
     }
   } catch {}
@@ -1232,10 +1223,10 @@ const startDronePositionAnimation = (newPosition: any) => {
     Math.pow(targetPos.latitude - currentPos.latitude, 2)
   )
 
-  // 根据距离调整动画时长，距离越远动画时间越长，但不超过3秒
-  const baseDuration = 1000 // 基础1秒
-  const distanceFactor = Math.min(distance * 10000, 2) // 距离因子，最大2秒
-  const animationDuration = Math.min(baseDuration + distanceFactor * 1000, 3000)
+  // 优化动画时长计算，让移动更流畅，扇形和无人机同步性更好
+  const baseDuration = 600 // 基础0.6秒
+  const distanceFactor = Math.min(distance * 8000, 1.5) // 距离因子，最大1.5秒
+  const animationDuration = Math.min(baseDuration + distanceFactor * 1000, 2000) // 最大不超过2秒
 
   droneAnimationState.value = {
     currentPosition: { ...currentPos },
@@ -1361,7 +1352,6 @@ const initGeocoder = () => {
     // 确保插件已就绪
     AMap.plugin('AMap.Geocoder', () => {
       geocoder = new AMap.Geocoder({})
-      console.log('[Geocoder] 初始化完成')
       // 初始化完成后，如果有挂起的坐标，立刻触发一次请求
       if (pendingReverseCoords) {
         const [plng, plat] = pendingReverseCoords
@@ -1373,7 +1363,6 @@ const initGeocoder = () => {
     // 兜底：直接尝试实例化（在已通过loader加载plugins的情况下可用）
     try {
       geocoder = new AMap.Geocoder({})
-      console.log('[Geocoder] 直接实例化完成')
     } catch {}
   }
 }
@@ -1395,7 +1384,7 @@ const updateAddressByCoord = (lng: number, lat: number) => {
     if (!amapApiRef.value) return
     if (!geocoder) {
       // 若此刻刚初始化，下一轮再请求
-      console.log('[Geocoder] 尚未就绪，稍后重试')
+      
       pendingReverseCoords = [lng, lat]
       setTimeout(() => updateAddressByCoord(lng, lat), 600)
       return
@@ -1408,14 +1397,13 @@ const updateAddressByCoord = (lng: number, lat: number) => {
     }
     
     // 使用原始坐标（无人机返回的已经是GCJ02坐标系）
-    console.log('[Geocoder] 坐标:', lng, lat)
+    
     geocoder.getAddress([lng, lat], (status: string, result: any) => {
-      console.log('[Geocoder] 返回: ', status, result)
+      
       if (status === 'complete' && result?.regeocode?.formattedAddress) {
         // 直接使用高德返回的完整地址，不做额外处理
         reverseGeocode.address = result.regeocode.formattedAddress
-        console.log('[Geocoder] 完整地址:', result.regeocode.formattedAddress)
-        console.log('[Geocoder] 地址组件详情:', JSON.stringify(result.regeocode.addressComponent, null, 2))
+        
       } else if (result?.info) {
         reverseGeocode.address = '' // 保持获取中显示
       }
@@ -1608,7 +1596,6 @@ const toggleRemote = async () => {
     // 类型断言处理响应
     const responseData = response as any
     if (responseData.success === true) {
-      console.log(`远程调试模式${remoteEnabled.value ? '关闭' : '开启'}成功`)
       // 立即更新本地状态，实现实时切换
       remoteEnabled.value = !remoteEnabled.value
       // 执行成功后刷新设备状态，确保与机场系统状态同步
@@ -1727,12 +1714,46 @@ const addDockMarker = (longitude: number, latitude: number, dockInfo: any) => {
   dockMarkers.value.push(marker)
 }
 
+// 坐标验证函数
+const isValidCoordinate = (coord: [number, number]): boolean => {
+  if (!coord || !Array.isArray(coord) || coord.length !== 2) return false
+  const [lng, lat] = coord
+  return typeof lng === 'number' && typeof lat === 'number' && 
+         Number.isFinite(lng) && Number.isFinite(lat) &&
+         lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90
+}
+
+// 航向验证函数
+const isValidHeading = (heading: number): boolean => {
+  return typeof heading === 'number' && Number.isFinite(heading) && heading >= 0 && heading <= 360
+}
+
+// 路径验证函数
+const isValidPath = (path: [number, number][]): boolean => {
+  if (!path || !Array.isArray(path) || path.length === 0) return false
+  return path.every(point => isValidCoordinate(point))
+}
+
+// 规范化航向角到 [0, 360) 区间
+const normalizeHeading = (deg: number): number => {
+  if (typeof deg !== 'number' || !Number.isFinite(deg)) return 0
+  let v = deg % 360
+  if (v < 0) v += 360
+  return v
+}
+
 // 计算扇形顶点（返回经纬度数组）
 const computeSectorPath = (center: [number, number], headingDeg: number, radiusMeters = 60, halfAngleDeg = 25) => {
   if (!amapApiRef.value) return []
+  
+  // 验证输入参数
+  if (!isValidCoordinate(center) || !isValidHeading(headingDeg)) {
+    return []
+  }
+  
   const AMap = amapApiRef.value
   const path: [number, number][] = []
-  const steps = 16
+  const steps = 8 // 减少顶点数量，从16减少到8，减少渲染负担
   const start = headingDeg - halfAngleDeg
   const end = headingDeg + halfAngleDeg
   // 中心点
@@ -1745,9 +1766,23 @@ const computeSectorPath = (center: [number, number], headingDeg: number, radiusM
     const baseDegLngPerMeter = sectorDegPerMeter.value?.degLngPerMeter ?? (1 / (111320 * Math.cos((center[1] * Math.PI) / 180)))
     const dLat = radiusMeters * degLatPerMeter * Math.cos(rad)
     const dLng = radiusMeters * baseDegLngPerMeter * Math.sin(rad)
-    path.push([center[0] + dLng, center[1] + dLat])
+    
+    // 验证计算出的坐标
+    const newPoint: [number, number] = [center[0] + dLng, center[1] + dLat]
+    if (isValidCoordinate(newPoint)) {
+      path.push(newPoint)
+    }
   }
   return path
+}
+
+// 更新现有扇形（若不存在返回null）
+const updateHeadingSector = (center: [number, number], headingDeg: number) => {
+  const sector = (droneHeadingSectors as any).value?.[0]
+  if (!sector || !amapApiRef.value) return null
+  const path = computeSectorPath(center, headingDeg)
+  sector.setPath(path)
+  return sector
 }
 
 // 创建无人机朝向扇形
@@ -1755,13 +1790,14 @@ const createHeadingSector = (center: [number, number], headingDeg: number) => {
   if (!amapApiRef.value) return null
   const AMap = amapApiRef.value
   // 在首次创建时固定转换系数，减少形状因纬度变化而抖动
-  const latRad = (center[1] * Math.PI) / 180
-  sectorDegPerMeter.value = {
-    degLatPerMeter: 1 / 111320,
-    degLngPerMeter: 1 / (111320 * Math.cos(latRad))
+  // 验证输入参数
+  if (!isValidCoordinate(center) || !isValidHeading(headingDeg)) {
+    return null
   }
+  
   const path = computeSectorPath(center, headingDeg)
   if (!path.length) return null
+  
   return new AMap.Polygon({
     path,
     strokeColor: '#ff9900',
@@ -1775,20 +1811,18 @@ const createHeadingSector = (center: [number, number], headingDeg: number) => {
 // 获取当前云台偏航角（优先设备状态，其次视觉WS，最后回退机体航向）
 const getCurrentGimbalYaw = (): number => {
   const a = (droneStatus.value?.gimbalYaw ?? null) as number | null
-  if (typeof a === 'number' && Number.isFinite(a)) return a
+  if (typeof a === 'number' && Number.isFinite(a)) {
+    return normalizeHeading(a)
+  }
   const b = (latestVisionData.value as any)?.device_properties?.gimbal?.yaw
-  if (typeof b === 'number' && Number.isFinite(b)) return b
-  return (droneStatus.value?.attitude?.head ?? 0) as number
+  if (typeof b === 'number' && Number.isFinite(b)) {
+    return normalizeHeading(b)
+  }
+  const c = (droneStatus.value?.attitude?.head ?? 0) as number
+  return normalizeHeading(c)
 }
 
-// 更新现有扇形（若不存在返回null）
-const updateHeadingSector = (center: [number, number], headingDeg: number) => {
-  const sector = (droneHeadingSectors as any)?.value?.[0]
-  if (!sector || !amapApiRef.value) return null
-  const path = computeSectorPath(center, headingDeg)
-  sector.setPath(path)
-  return sector
-}
+
 
 // 添加无人机标记到地图
 const addDroneMarker = (longitude: number, latitude: number, droneInfo: any) => {
@@ -1973,20 +2007,15 @@ const updateMapMarkers = (shouldCenter = false) => {
         if (droneStatus.value?.isOnline) {
           const heading = getCurrentGimbalYaw()
           const center: [number, number] = [droneLongitude, droneLatitude]
+          
           let sector = (droneHeadingSectors as any)?.value?.[0]
           if (sector) {
-            if (shouldUpdateSector(center, heading)) {
-              sector = updateHeadingSector(center, heading)
-            }
+            updateHeadingSector(center, heading)
           } else {
             const newSector = createHeadingSector(center, heading)
             if (newSector) {
               amapInstance.value?.add(newSector)
               ;(droneHeadingSectors as any).value = [newSector]
-              // 初始化更新状态
-              sectorUpdateState.value.lastUpdateMs = Date.now()
-              sectorUpdateState.value.lastHeading = heading
-              sectorUpdateState.value.lastCenter = center
             }
           }
         } else {
@@ -1996,7 +2025,9 @@ const updateMapMarkers = (shouldCenter = false) => {
             ;(droneHeadingSectors as any).value = []
           }
         }
-      } catch {}
+      } catch (error) {
+        console.error('扇形更新出错:', error)
+      }
     }
     
     // 只在初始加载或明确要求时才设置地图中心
@@ -2442,7 +2473,6 @@ const startVideoPlayback = () => {
     // 重试机制
     if (retryCount < maxRetries) {
       retryCount++
-      console.log(`视频播放失败，${retryCount}/${maxRetries} 次重试...`)
       setTimeout(() => {
         startVideoPlayback()
       }, 2000) // 2秒后重试
@@ -2936,17 +2966,12 @@ const initVisionWebSocket = () => {
   // 显示配置信息
   logVisionConfig()
   
-  console.log('Vision WebSocket 初始化参数:')
-  console.log('- 缓存的机场SN:', cachedDockSns)
-  console.log('- 最终使用的设备SN:', targetDeviceSn)
-  
   // 连接视觉WebSocket
   connectVision(targetDeviceSn)
   
   // 订阅默认算法并设置最快推送频率
   setTimeout(() => {
     if (visionConnected.value) {
-      console.log('Vision WebSocket 连接成功，订阅算法', visionConfig.defaultAlgorithms)
       subscribeAlgorithms(visionConfig.defaultAlgorithms)
       
       // 设置为最快推送频率
@@ -2962,7 +2987,6 @@ let lastDataTime = 0
 let dataCount = 0
 watch(latestVisionData, (newData) => {
   if (newData && visionCanvas.value && videoElement.value) {
-    console.log('收到视觉数据:', newData) // 新增：打印每帧视觉数据
     const now = performance.now()
     
     // 统计数据接收频率
@@ -2970,7 +2994,7 @@ watch(latestVisionData, (newData) => {
     if (now - lastDataTime >= 1000) {
       const dataRate = Math.round(dataCount * 1000 / (now - lastDataTime))
       dataReceiveRate.value = dataRate
-      console.log(`📊 数据接收频率: ${dataRate} 次/秒`)
+      
       dataCount = 0
       lastDataTime = now
     }
@@ -2993,7 +3017,7 @@ watch(latestVisionData, (newData) => {
         }
       })
     }
-    console.log(`🎯 当前帧检测到 ${totalDetections} 个目标`)
+    
     
     scheduleVisionDataDraw(newData)
   }
@@ -3263,7 +3287,6 @@ const reconnectVision = () => {
   
   // 构建新的WebRTC URL
   const newWebRtcUrl = `${config.video.webrtcDomain}/live/cam_rtsp_${dockSn}`
-  console.log('新的WebRTC URL:', newWebRtcUrl)
   
   // 获取现有的video_streams缓存
   const existingVideoStreamsStr = localStorage.getItem('video_streams')
@@ -3308,7 +3331,6 @@ const reconnectVision = () => {
   
   // 更新缓存
   localStorage.setItem('video_streams', JSON.stringify(updatedVideoStreams))
-  console.log('已更新video_streams缓存:', updatedVideoStreams)
   
   // 更新当前视频流地址
   videoStreamUrl.value = newWebRtcUrl
@@ -3323,7 +3345,6 @@ const reconnectVision = () => {
 const updatePushInterval = () => {
   if (visionConnected.value) {
     configurePushInterval(currentPushInterval.value)
-    console.log(`🎛️ 更新推送频率: ${currentPushInterval.value}ms (${Math.round(1000/currentPushInterval.value)}fps)`)
   }
 }
 
@@ -3577,13 +3598,9 @@ const clearWaylineDisplay = () => {
 }
 // 显示航点和航线
 const displayWayline = async () => {
-  console.log('displayWayline 开始执行')
-  console.log('amapInstance:', !!amapInstance.value)
-  console.log('amapApiRef:', !!amapApiRef.value)
-  console.log('waylineJobDetail:', waylineJobDetail.value)
+  
   
   if (!amapInstance.value || !amapApiRef.value || !waylineJobDetail.value) {
-    console.log('displayWayline 条件不满足，退出')
     return
   }
   
@@ -3591,46 +3608,42 @@ const displayWayline = async () => {
   clearWaylineDisplay()
   
   try {
-    console.log('waylineJobDetail完整数据:', waylineJobDetail.value)
+    
     
     // 检查是否有waylines数据
     let waylines = waylineJobDetail.value.waylines
-    console.log('waylines:', waylines)
     
     // 如果没有waylines数据，尝试通过file_id获取航线文件详情
     if (!waylines || waylines.length === 0) {
-      console.log('没有找到waylines数据，尝试通过file_id获取航线文件详情')
+      
       const workspaceId = getCachedWorkspaceId()
       const fileId = waylineJobDetail.value.file_id
       
       if (workspaceId && fileId) {
-        console.log('获取航线文件详情 - workspaceId:', workspaceId, 'fileId:', fileId)
+        
         try {
           const waylineDetail = await fetchWaylineDetail(workspaceId, fileId)
-          console.log('航线文件详情:', waylineDetail)
           waylines = waylineDetail.waylines
-          console.log('从文件详情获取的waylines:', waylines)
+          
         } catch (error) {
           console.error('获取航线文件详情失败:', error)
           return
         }
       } else {
-        console.log('缺少workspaceId或fileId，无法获取航线文件详情')
+        
         return
       }
     }
     
     if (!waylines || waylines.length === 0) {
-      console.log('仍然没有找到waylines数据')
+      
       return
     }
     
     const wayline = waylines[0] // 取第一个航线
     const waypoints = wayline.waypoints || []
-    console.log('waypoints:', waypoints)
     
     if (waypoints.length === 0) {
-      console.log('没有找到waypoints数据')
       return
     }
     
@@ -3638,16 +3651,15 @@ const displayWayline = async () => {
     const markers: any[] = []
     const path: [number, number][] = []
     
-    console.log('开始创建航点标记，共', waypoints.length, '个航点')
+    
     
     waypoints.forEach((waypoint: any, index: number) => {
       const [wgsLng, wgsLat] = waypoint.coordinates || [0, 0]
-      console.log(`航点 ${index + 1}:`, { wgsLng, wgsLat })
+      
       
       if (wgsLng && wgsLat) {
         // 将WGS84坐标转换为GCJ-02坐标
         const gcjCoords = transformWGS84ToGCJ02(wgsLng, wgsLat)
-        console.log(`航点 ${index + 1} 转换后坐标:`, gcjCoords)
         
         // 创建航点标记
         const marker = new amapApiRef.value.Marker({
@@ -3668,17 +3680,15 @@ const displayWayline = async () => {
         markers.push(marker)
         amapInstance.value.add(marker)
         path.push([gcjCoords.longitude, gcjCoords.latitude])
-        console.log(`航点 ${index + 1} 已添加到地图`)
       } else {
-        console.log(`航点 ${index + 1} 坐标无效，跳过`)
+        
       }
     })
     
     waylineMarkers.value = markers
-    console.log('航点标记创建完成，共', markers.length, '个标记')
     
     // 创建航线
-    console.log('准备创建航线，路径点数:', path.length)
+    
     if (path.length > 1) {
       waylinePolyline.value = new amapApiRef.value.Polyline({
         path: path,
@@ -3688,9 +3698,8 @@ const displayWayline = async () => {
         strokeStyle: 'solid'
       })
       amapInstance.value.add(waylinePolyline.value)
-      console.log('航线已添加到地图')
     } else {
-      console.log('路径点数不足，无法创建航线')
+      
     }
     
     // 显示当前航点
@@ -3914,7 +3923,7 @@ onMounted(async () => {
           }, 1000)
       })
     }).catch(error => {
-      console.error('AMap加载失败:', error)
+      
     })
     
     // 启动统一的设备状态轮询（包含条件轮询）
@@ -3993,7 +4002,7 @@ const authorityInterval = setInterval(checkAuthorityStatus, 10000)
       await nextTick()
       await initVideoPlayer()
     } catch (error) {
-      console.error('无人机控制页面 - 视频播放器初始化失败，但不影响其他功能:', error)
+      
       // 视频播放器初始化失败不应该影响设备状态获取
     }
     
@@ -4048,50 +4057,80 @@ const authorityInterval = setInterval(checkAuthorityStatus, 10000)
       updateMapMarkers()
     }
     
-    // 设置地图标记更新定时器（每3秒更新一次地图，使用useDevicePolling中的航线进度数据）
-    const mapUpdateTimer = setInterval(async () => {
-      // 设备状态更新后，更新地图标记
-      if (amapInstance.value) {
-        updateMapMarkers()
-        // 更新无人机追踪位置
-        updateDroneTracking()
-        // 更新航线显示（只在状态或任务变化时重新绘制）
-        const currentTaskStatus = waylineTaskStatus.value
-        const currentJobId = waylineProgress.value?.job_id
-        // 执行中/暂停/已下发(等待)都显示航线
-        const shouldShowWayline = Boolean(currentJobId) && (
-          currentTaskStatus === 'running' ||
-          currentTaskStatus === 'paused' ||
-          currentTaskStatus === 'waiting'
-        )
-        
-        // 检查是否需要重新绘制航线
-        const hasWaylineDisplay = waylineMarkers.value.length > 0 || waylinePolyline.value
-        const stateChanged = waylineDisplayState.value.lastJobId !== currentJobId || 
-                           waylineDisplayState.value.lastTaskStatus !== currentTaskStatus
-        
-        if (shouldShowWayline && (!hasWaylineDisplay || stateChanged)) {
-          console.log('航线显示检查 - 任务状态:', currentTaskStatus, '原始状态:', waylineProgress.value?.status)
-          console.log('航线显示检查 - 任务详情:', waylineJobDetail.value)
-          console.log('开始显示航线')
-          await displayWayline()
-          // 更新状态跟踪
-          waylineDisplayState.value.isDisplayed = true
-          waylineDisplayState.value.lastJobId = currentJobId
-          waylineDisplayState.value.lastTaskStatus = currentTaskStatus
-        } else if (!shouldShowWayline && hasWaylineDisplay) {
-          console.log('清除航线显示')
-          clearWaylineDisplay()
-          // 更新状态跟踪
-          waylineDisplayState.value.isDisplayed = false
-          waylineDisplayState.value.lastJobId = null
-          waylineDisplayState.value.lastTaskStatus = null
-        }
+    // 设置地图标记更新定时器（根据无人机在线状态动态调整更新频率）
+    const startMapUpdateTimer = () => {
+      // 清除现有定时器
+      if (mapUpdateTimerRef) {
+        clearInterval(mapUpdateTimerRef)
       }
-    }, 3000) // 改为3秒间隔，减少频率
+      
+      // 根据无人机在线状态决定更新频率
+      const isDroneOnline = droneStatus.value?.isOnline
+      const updateInterval = isDroneOnline ? 2000 : 8000 // 在线时2秒，离线时8秒
+      
+      
+      
+      const mapUpdateTimer = setInterval(async () => {
+        
+        // 设备状态更新后，更新地图标记
+        if (amapInstance.value) {
+          updateMapMarkers()
+          // 更新无人机追踪位置
+          updateDroneTracking()
+          // 更新航线显示（只在状态或任务变化时重新绘制）
+          const currentTaskStatus = waylineTaskStatus.value
+          const currentJobId = waylineProgress.value?.job_id
+          // 仅在执行中/暂停/已下发(等待)显示航线
+          const shouldShowWayline = Boolean(currentJobId) && (
+            currentTaskStatus === 'running' ||
+            currentTaskStatus === 'paused' ||
+            currentTaskStatus === 'waiting'
+          )
+          
+          // 检查是否需要重新绘制航线
+          const hasWaylineDisplay = waylineMarkers.value.length > 0 || waylinePolyline.value
+          const stateChanged = waylineDisplayState.value.lastJobId !== currentJobId || 
+                             waylineDisplayState.value.lastTaskStatus !== currentTaskStatus
+          
+          if (shouldShowWayline && (!hasWaylineDisplay || stateChanged)) {
+            
+            await displayWayline()
+            // 更新状态跟踪
+            waylineDisplayState.value.isDisplayed = true
+            waylineDisplayState.value.lastJobId = currentJobId
+            waylineDisplayState.value.lastTaskStatus = currentTaskStatus
+          } else if (!shouldShowWayline && hasWaylineDisplay) {
+            
+            clearWaylineDisplay()
+            // 更新状态跟踪
+            waylineDisplayState.value.isDisplayed = false
+            waylineDisplayState.value.lastJobId = null
+            waylineDisplayState.value.lastTaskStatus = null
+          }
+        }
+      }, updateInterval)
+      
+      // 保存定时器引用以便清理
+      mapUpdateTimerRef = mapUpdateTimer as unknown as number
+    }
     
-    // 保存定时器引用以便清理
-    mapUpdateTimerRef = mapUpdateTimer as unknown as number
+    // 启动地图更新定时器
+    startMapUpdateTimer()
+    
+    // 监听无人机状态变化，动态调整地图更新频率
+    watch(droneStatus, (newStatus) => {
+      if (amapInstance.value) {
+        
+        
+        // 立即更新地图标记，响应状态变化
+        updateMapMarkers()
+        
+        // 重新启动定时器
+        startMapUpdateTimer()
+      }
+    }, { deep: true })
+    
+
     
     loadTodayFlightStatistics()
   } catch (error) {
@@ -4117,9 +4156,9 @@ const loadWaylineProgress = async () => {
     
     // 如果有job_id，获取详细信息
     if (progressData?.job_id) {
-      console.log('loadWaylineProgress - 获取任务详情，job_id:', progressData.job_id)
+      
       const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
-      console.log('loadWaylineProgress - jobDetail:', jobDetail)
+      
       waylineJobDetail.value = jobDetail
     } else {
       waylineJobDetail.value = null
@@ -4599,7 +4638,7 @@ const checkAuthorityStatus = async () => {
       // 调试信息：显示最终控制权状态
       // console.log(`控制权状态 - 飞行: ${hasFlightAuthority}, 载荷: ${hasPayloadAuthority}, 云台控制: ${isGimbalControlEnabled.value}`)
       if (isControlledByOthers.value) {
-        console.log(`设备被其他用户控制 - 飞行: ${controlAuthorityStatus.value.flightAuthorityOwner?.username || '无'}, 载荷: ${controlAuthorityStatus.value.payloadAuthorityOwner?.username || '无'}`)
+        
       }
       
     }

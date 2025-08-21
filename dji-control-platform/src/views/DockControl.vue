@@ -270,12 +270,16 @@ const {
 // 格式化函数（从useDeviceStatus中提取）
 const formatVoltage = (value: number | undefined) => {
   if (value === undefined || value === null) return '--'
-  return `${value.toFixed(1)}V`
+  // 电压通常以毫伏为单位，转换为伏特
+  const voltageInVolts = value / 1000
+  return `${voltageInVolts.toFixed(1)}V`
 }
 
 const formatCurrent = (value: number | undefined) => {
   if (value === undefined || value === null) return '--'
-  return `${value.toFixed(2)}A`
+  // 电流通常以毫安为单位，转换为安培
+  const currentInAmps = value / 1000
+  return `${currentInAmps.toFixed(2)}A`
 }
 
 const formatTemperature = (value: number | undefined) => {
@@ -300,7 +304,12 @@ const formatRainfall = (value: number | undefined) => {
 
 const formatNetworkRate = (value: number | undefined) => {
   if (value === undefined || value === null) return '--'
-  return `${value}Mbps`
+  // 网络速率通常以Kbps为单位，转换为Mbps
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}Mbps`
+  } else {
+    return `${value}Kbps`
+  }
 }
 
 const formatAccTime = (value: number | undefined) => {

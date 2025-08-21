@@ -44,8 +44,9 @@
                 <div class="custom-select-wrapper">
                   <select v-model="filter.level" class="mission-select">
                     <option value="">全部等级</option>
-                    <option value="1">普通</option>
-                    <option value="2">严重</option>
+                    <option value="0">通知</option>
+                    <option value="1">提醒</option>
+                    <option value="2">警告</option>
                   </select>
                   <span class="custom-select-arrow">
                     <svg width="12" height="12" viewBox="0 0 12 12">
@@ -54,8 +55,6 @@
                   </span>
                 </div>
               </div>
-              <button class="mission-btn mission-btn-pause" @click="handleSearch">查询</button>
-              <button class="mission-btn mission-btn-reset" @click="handleReset">重置</button>
             </div>
           </div>
           <!-- 列表区 -->
@@ -416,7 +415,12 @@ const getAlertType = (module: number) => {
 
 // 获取等级文本
 const getLevelText = (level: number) => {
-  return level === 1 ? '普通' : '严重'
+  const map: Record<number, string> = {
+    0: '通知',
+    1: '提醒',
+    2: '警告'
+  }
+  return map[level] ?? `等级${level}`
 }
 
 // 格式化时间
@@ -597,15 +601,20 @@ onMounted(() => {
   font-size: 12px;
   font-weight: 500;
 }
-.level-1 {
-  background: rgba(103, 213, 253, 0.2);
+.level-0 {
+  background: rgba(103, 213, 253, 0.15);
   color: #67d5fd;
   border: 1px solid rgba(103, 213, 253, 0.3);
 }
+.level-1 {
+  background: rgba(250, 173, 20, 0.18);
+  color: #faad14;
+  border: 1px solid rgba(250, 173, 20, 0.35);
+}
 .level-2 {
-  background: rgba(255, 107, 107, 0.2);
+  background: rgba(255, 107, 107, 0.22);
   color: #ff6b6b;
-  border: 1px solid rgba(255, 107, 107, 0.3);
+  border: 1px solid rgba(255, 107, 107, 0.35);
 }
 
 /* 重置按钮样式 */

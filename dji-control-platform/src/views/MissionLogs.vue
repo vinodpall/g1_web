@@ -23,72 +23,13 @@
               <span class="mission-top-title">任务日志</span>
             </div>
             <div class="mission-top-row">
-              <span class="mission-lib-label">设备筛选</span>
+              <span class="mission-lib-label">状态筛选</span>
               <div class="mission-top-selects">
                 <div style="position: relative; display: inline-block;">
                   <select
-                    v-model="filters.device_sn"
-                    class="mission-select treeselect-track"
-                    style="width: 120px;"
-                    @change="onFilterChange"
-                  >
-                    <option value="">全部设备</option>
-                    <option v-for="device in deviceList" :key="device" :value="device">{{ device }}</option>
-                  </select>
-                  <span
-                    class="custom-select-arrow"
-                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2;"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                    </svg>
-                  </span>
-                </div>
-                <div style="position: relative; display: inline-block; margin-left: 8px;">
-                  <select
-                    v-model="filters.job_id"
-                    class="mission-select treeselect-track"
-                    style="width: 120px;"
-                    @change="onFilterChange"
-                  >
-                    <option value="">全部任务</option>
-                    <option v-for="job in jobList" :key="job" :value="job">{{ job }}</option>
-                  </select>
-                  <span
-                    class="custom-select-arrow"
-                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2;"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                    </svg>
-                  </span>
-                </div>
-                <div style="position: relative; display: inline-block; margin-left: 8px;">
-                  <select
-                    v-model="filters.alert_level"
-                    class="mission-select treeselect-track"
-                    style="width: 90px;"
-                    @change="onFilterChange"
-                  >
-                    <option value="">全部等级</option>
-                    <option value="LOW">低</option>
-                    <option value="MEDIUM">中</option>
-                    <option value="HIGH">高</option>
-                  </select>
-                  <span
-                    class="custom-select-arrow"
-                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2;"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                    </svg>
-                  </span>
-                </div>
-                <div style="position: relative; display: inline-block; margin-left: 8px;">
-                  <select
                     v-model="filters.status"
                     class="mission-select treeselect-track"
-                    style="width: 90px;"
+                    style="width: 120px;"
                     @change="onFilterChange"
                   >
                     <option value="">全部状态</option>
@@ -105,7 +46,6 @@
                     </svg>
                   </span>
                 </div>
-                <button class="mission-btn mission-btn-pause" @click="loadAlerts">搜索</button>
               </div>
             </div>
           </div>
@@ -119,6 +59,7 @@
               <div class="mission-th">目标数量</div>
               <div class="mission-th">算法名称</div>
               <div class="mission-th">检测时间</div>
+              <div class="mission-th">操作</div>
             </div>
             <div class="mission-table-body">
               <div class="mission-tr" v-for="(alert, idx) in alerts" :key="alert.id">
@@ -161,6 +102,16 @@
                 <div class="mission-td">{{ alert.target_count }}</div>
                 <div class="mission-td">{{ getAlgorithmName(alert.target_type) }}</div>
                 <div class="mission-td">{{ formatTime(alert.detection_time) }}</div>
+                <div class="mission-td">
+                  <button 
+                    class="status-btn"
+                    :class="getStatusBtnClass(alert.status)"
+                    @click="handleStatusClick(alert)"
+                    :title="getStatusBtnTitle(alert.status)"
+                  >
+                    {{ getStatusBtnText(alert.status) }}
+                  </button>
+                </div>
               </div>
             </div>
             <!-- 分页组件 -->
@@ -246,6 +197,94 @@
       </div>
     </div>
   </div>
+
+  <!-- 状态处理弹窗 -->
+  <div v-if="showStatusDialog" class="status-dialog-mask">
+    <div class="status-dialog-content">
+      <div class="status-dialog-header">
+        <h3>处理告警</h3>
+        <button class="status-dialog-close" @click="closeStatusDialog">×</button>
+      </div>
+      <div class="status-dialog-body">
+        <div class="status-form">
+          <div class="form-row">
+            <label>处理方式：</label>
+            <div class="radio-group">
+              <label class="radio-item">
+                <input 
+                  type="radio" 
+                  v-model="statusForm.handleType" 
+                  value="false_alarm" 
+                  name="handleType"
+                />
+                <span>误报</span>
+              </label>
+              <label class="radio-item">
+                <input 
+                  type="radio" 
+                  v-model="statusForm.handleType" 
+                  value="real_alarm" 
+                  name="handleType"
+                />
+                <span>非误报</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>处理描述：</label>
+            <textarea 
+              v-model="statusForm.handleNote" 
+              class="handle-note-input"
+              placeholder="请输入处理描述"
+              :class="{ 'required': statusForm.handleType === 'real_alarm' }"
+            ></textarea>
+          </div>
+        </div>
+        <div class="status-dialog-actions">
+          <button class="status-btn status-btn-cancel" @click="closeStatusDialog">取消</button>
+          <button 
+            class="status-btn status-btn-submit" 
+            @click="submitStatus"
+            :disabled="!canSubmit"
+          >
+            提交
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 详情弹窗 -->
+  <div v-if="showDetailDialog" class="detail-dialog-mask">
+    <div class="detail-dialog-content">
+      <div class="detail-dialog-header">
+        <h3>处理详情</h3>
+        <button class="detail-dialog-close" @click="closeDetailDialog">×</button>
+      </div>
+      <div class="detail-dialog-body">
+        <div class="detail-info">
+          <div class="detail-row">
+            <span class="detail-label">处理结果：</span>
+            <span class="detail-value" :class="selectedAlert?.status ? getStatusColorClass(selectedAlert.status) : ''">
+              {{ selectedAlert?.status ? getStatusText(selectedAlert.status) : '--' }}
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">处理内容：</span>
+            <span class="detail-value">{{ selectedAlert?.handle_note || '--' }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">处理人：</span>
+            <span class="detail-value">{{ selectedAlert?.handler_name || '--' }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">处理时间：</span>
+            <span class="detail-value">{{ selectedAlert?.handle_time ? formatTime(selectedAlert.handle_time) : '--' }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -294,9 +333,6 @@ const handleTabClick = (tab: any) => {
 
 // 筛选条件
 const filters = ref({
-  device_sn: '',
-  job_id: '',
-  alert_level: '',
   status: ''
 })
 
@@ -309,8 +345,7 @@ const pageInput = ref('')
 
 // 数据列表
 const alerts = ref<VisionAlert[]>([])
-const deviceList = ref<string[]>([])
-const jobList = ref<string[]>([])
+// 已移除设备和任务筛选
 
 // 获取workspaceId
 const getWorkspaceId = () => {
@@ -336,15 +371,7 @@ const loadAlerts = async () => {
     alerts.value = response.alerts
     total.value = response.total
     
-    // 更新设备列表和任务列表（去重）
-    const devices = new Set<string>()
-    const jobs = new Set<string>()
-    response.alerts.forEach((alert: VisionAlert) => {
-      devices.add(alert.device_sn)
-      jobs.add(alert.job_id)
-    })
-    deviceList.value = Array.from(devices)
-    jobList.value = Array.from(jobs)
+    // 保留简单数据加载，不再维护设备/任务列表
     
     // 异步下载图片
     downloadImages(response.alerts)
@@ -416,6 +443,43 @@ const getStatusText = (status: string) => {
     case 'HANDLED': return '已处理'
     case 'IGNORED': return '已忽略'
     default: return status
+  }
+}
+
+// 状态按钮相关函数
+const getStatusBtnText = (status: string) => {
+  switch (status) {
+    case 'PENDING': return '待处理'
+    case 'HANDLED': return '已处理'
+    case 'IGNORED': return '已忽略'
+    default: return status
+  }
+}
+
+const getStatusBtnClass = (status: string) => {
+  switch (status) {
+    case 'PENDING': return 'status-btn-pending'
+    case 'HANDLED': return 'status-btn-handled'
+    case 'IGNORED': return 'status-btn-ignored'
+    default: return 'status-btn-default'
+  }
+}
+
+const getStatusBtnTitle = (status: string) => {
+  switch (status) {
+    case 'PENDING': return '点击处理告警'
+    case 'HANDLED': return '点击查看详情'
+    case 'IGNORED': return '点击查看详情'
+    default: return '点击操作'
+  }
+}
+
+const getStatusColorClass = (status: string) => {
+  switch (status) {
+    case 'PENDING': return 'status-pending'
+    case 'HANDLED': return 'status-handled'
+    case 'IGNORED': return 'status-ignored'
+    default: return 'status-default'
   }
 }
 
@@ -619,6 +683,91 @@ const showLocationModal = ref(false)
 const selectedAlert = ref<VisionAlert | null>(null)
 const selectedAddress = ref<string>('')
 let locationMapInstance: any = null
+
+// 状态管理相关
+const showStatusDialog = ref(false)
+const showDetailDialog = ref(false)
+const statusForm = ref({
+  handleType: 'false_alarm', // false_alarm: 误报, real_alarm: 非误报
+  handleNote: ''
+})
+
+// 计算是否可以提交
+const canSubmit = computed(() => {
+  if (statusForm.value.handleType === 'real_alarm') {
+    return statusForm.value.handleNote.trim().length > 0
+  }
+  return true
+})
+
+// 状态处理相关函数
+const handleStatusClick = (alert: VisionAlert) => {
+  selectedAlert.value = alert
+  
+  if (alert.status === 'PENDING') {
+    // 待处理状态，显示处理弹窗
+    console.log('显示状态处理弹窗')
+    showStatusDialog.value = true
+    // 重置表单
+    statusForm.value.handleType = 'false_alarm'
+    statusForm.value.handleNote = ''
+  } else {
+    // 已处理或已忽略状态，显示详情弹窗
+    console.log('显示详情弹窗')
+    showDetailDialog.value = true
+  }
+}
+
+const closeStatusDialog = () => {
+  console.log('关闭状态弹窗')
+  showStatusDialog.value = false
+  selectedAlert.value = null
+  // 重置表单
+  statusForm.value.handleType = 'false_alarm'
+  statusForm.value.handleNote = ''
+}
+
+const closeDetailDialog = () => {
+  showDetailDialog.value = false
+  selectedAlert.value = null
+}
+
+const submitStatus = async () => {
+  if (!selectedAlert.value) return
+  
+  try {
+    const workspaceId = getWorkspaceId()
+    const alertId = selectedAlert.value.id
+    
+    // 根据处理方式确定状态
+    let status: 'HANDLED' | 'IGNORED'
+    if (statusForm.value.handleType === 'false_alarm') {
+      status = 'IGNORED' // 误报标记为已忽略
+    } else {
+      status = 'HANDLED' // 非误报标记为已处理
+    }
+    
+    const requestData = {
+      status: status,
+      handle_note: statusForm.value.handleNote
+    }
+    
+    // 调用API更新状态
+    await visionApi.updateAlertStatus(workspaceId, alertId, requestData)
+    
+    // 关闭弹窗
+    closeStatusDialog()
+    
+    // 重新加载数据
+    await loadAlerts()
+    
+    // 显示成功提示
+    alert('状态更新成功')
+  } catch (error) {
+    console.error('更新状态失败:', error)
+    alert('状态更新失败，请重试')
+  }
+}
 
 // 显示位置预览
 const showLocationPreview = (alert: VisionAlert) => {
@@ -1183,5 +1332,326 @@ const transformLng = (lng: number, lat: number) => {
   border-radius: 8px;
   box-shadow: 0 4px 24px #000a;
   background: #fff;
+}
+
+/* 状态按钮样式 */
+.status-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+}
+
+.status-btn-pending {
+  background: #faad14;
+  color: #fff;
+}
+
+.status-btn-pending:hover {
+  background: #d48806;
+}
+
+.status-btn-handled {
+  background: #52c41a;
+  color: #fff;
+}
+
+.status-btn-handled:hover {
+  background: #389e0d;
+}
+
+.status-btn-ignored {
+  background: #666;
+  color: #fff;
+}
+
+.status-btn-ignored:hover {
+  background: #4d4d4d;
+}
+
+.status-btn-default {
+  background: #666;
+  color: #fff;
+}
+
+.status-btn-default:hover {
+  background: #4d4d4d;
+}
+
+/* 状态弹窗样式 */
+.status-dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: pointer;
+}
+
+.status-dialog-content {
+  background: #172233;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px #0008;
+  width: 90%;
+  max-width: 500px;
+  max-height: 85vh;
+  overflow: hidden;
+  border: 1px solid #18344a;
+  cursor: default;
+}
+
+.status-dialog-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #18344a;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-dialog-header h3 {
+  margin: 0;
+  color: #67d5fd;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.status-dialog-close {
+  background: none;
+  border: none;
+  color: #67d5fd;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.status-dialog-close:hover {
+  background: rgba(103, 213, 253, 0.1);
+}
+
+.status-dialog-body {
+  padding: 24px;
+}
+
+.status-form {
+  margin-bottom: 20px;
+}
+
+.form-row {
+  margin-bottom: 16px;
+}
+
+.form-row label {
+  display: block;
+  margin-bottom: 8px;
+  color: #b8c7d9;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 14px;
+}
+
+.radio-item input[type="radio"] {
+  accent-color: #67d5fd;
+  cursor: pointer;
+}
+
+.handle-note-input {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px;
+  border: 1px solid #164159;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+  resize: vertical;
+  box-shadow: 0 0 0 1px #164159 inset;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.handle-note-input:focus {
+  outline: none;
+  border: 1.5px solid #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.handle-note-input.required {
+  border-color: #faad14;
+  box-shadow: 0 0 0 1px #faad14 inset;
+}
+
+.status-dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.status-btn-cancel {
+  background: #666;
+  color: #fff;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.status-btn-cancel:hover {
+  background: #4d4d4d;
+}
+
+.status-btn-submit {
+  background: #67d5fd;
+  color: #fff;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.status-btn-submit:hover {
+  background: #4db8e8;
+}
+
+.status-btn-submit:disabled {
+  background: #666;
+  cursor: not-allowed;
+}
+
+/* 详情弹窗样式 */
+.detail-dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: pointer;
+}
+
+.detail-dialog-content {
+  background: #172233;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px #0008;
+  width: 90%;
+  max-width: 500px;
+  max-height: 85vh;
+  overflow: hidden;
+  border: 1px solid #18344a;
+  cursor: default;
+}
+
+.detail-dialog-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #18344a;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-dialog-header h3 {
+  margin: 0;
+  color: #67d5fd;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.detail-dialog-close {
+  background: none;
+  border: none;
+  color: #67d5fd;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.detail-dialog-close:hover {
+  background: rgba(103, 213, 253, 0.1);
+}
+
+.detail-dialog-body {
+  padding: 24px;
+}
+
+.detail-info {
+  color: #fff;
+}
+
+.detail-row {
+  display: flex;
+  margin-bottom: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #18344a;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  min-width: 100px;
+  color: #b8c7d9;
+  font-size: 14px;
+}
+
+.detail-value {
+  flex: 1;
+  color: #fff;
+  font-size: 14px;
+}
+
+.status-pending {
+  color: #faad14;
+}
+
+.status-handled {
+  color: #52c41a;
+}
+
+.status-ignored {
+  color: #666;
+}
+
+.status-default {
+  color: #666;
 }
 </style>

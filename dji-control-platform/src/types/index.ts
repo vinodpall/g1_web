@@ -189,7 +189,8 @@ export interface VisionAlert {
   altitude?: number
   status: 'PENDING' | 'HANDLED' | 'IGNORED'
   handler_id: string | null
-  handle_time: string | null
+  handler_name?: string
+  handle_time: number | null
   handle_note: string | null
   detection_time: number
   create_time: number

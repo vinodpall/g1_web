@@ -318,7 +318,7 @@ export const systemApi = {
 // 设备管理接口
 export const deviceApi = {
   // 获取设备列表
-  getDevices: (params?: { skip?: number; limit?: number }) => {
+  getDevices: (params?: { skip?: number; limit?: number; keyword?: string }) => {
     console.log('设备API调用 - 参数:', params)
     console.log('当前ApiClient状态 - 检查Authorization头')
     return apiClient.get<Device[]>('/devices/', params)
@@ -843,6 +843,14 @@ export const waylineApi = {
     }>(`/wayline/workspaces/${workspaceId}/files/${waylineId}`)
   },
 
+  // 删除航线文件
+  deleteWaylineFile: (workspaceId: string, waylineId: string) => {
+    return apiClient.delete<{
+      code: number
+      message: string
+    }>(`/wayline/workspaces/${workspaceId}/files/${waylineId}`)
+  },
+
   // 创建任务
   createJob: (workspaceId: string, data: {
     name: string
@@ -1116,5 +1124,13 @@ export const visionApi = {
     handle_note?: string
   }) => {
     return apiClient.put<VisionAlert>(`/workspaces/${workspaceId}/vision/alerts/${alertId}`, data)
+  },
+
+  // 更新报警状态（使用正确的API地址）
+  updateAlertStatus: (workspaceId: string, alertId: string, data: {
+    status: 'HANDLED' | 'IGNORED'
+    handle_note?: string
+  }) => {
+    return apiClient.put<VisionAlert>(`/workspaces/${workspaceId}/vision/alerts/${alertId}/status`, data)
   }
 } 

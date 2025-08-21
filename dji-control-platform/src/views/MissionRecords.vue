@@ -23,37 +23,7 @@
               <span class="mission-top-title">任务记录</span>
             </div>
             <div class="mission-top-row">
-              <span class="mission-lib-label">航线库</span>
               <div class="mission-top-selects">
-                <div style="position: relative; display: inline-block;">
-                  <select
-                    v-model="selectedWaylineFile"
-                    ref="recordTrackSelectRef"
-                    class="mission-select treeselect-track"
-                    style="width: 90px;"
-                    @mousedown="onRecordTrackSelectMousedown"
-                    @keydown="onRecordTrackSelectKeydown"
-                    @blur="onRecordTrackSelectBlur"
-                    @focus="onRecordTrackSelectFocus"
-                    @change="onRecordTrackSelectChange"
-                    :disabled="waylineFileLoading"
-                  >
-                    <option value="">全部航线</option>
-                    <option v-for="file in waylineFiles" :key="file.wayline_id" :value="file.wayline_id">
-                      {{ file.name }}
-                    </option>
-                  </select>
-                  <span
-                    class="custom-select-arrow"
-                    @click="openRecordTrackSelect"
-                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2;"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <polygon v-if="!isRecordTrackSelectOpen" points="2,4 6,8 10,4" fill="#fff"/>
-                      <polygon v-else points="2,8 6,4 10,8" fill="#fff"/>
-                    </svg>
-                  </span>
-                </div>
                 <!-- 任务状态筛选 -->
                 <div style="position: relative; display: inline-block;">
                   <select
@@ -89,7 +59,6 @@
                     <option value="">全部类型</option>
                     <option value="0">立即任务</option>
                     <option value="1">定时任务</option>
-                    <option value="2">条件任务</option>
                   </select>
                   <span class="custom-select-arrow" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2;">
                     <svg width="12" height="12" viewBox="0 0 12 12">
@@ -97,7 +66,6 @@
                     </svg>
                   </span>
                 </div>
-                <button class="mission-btn mission-btn-pause" @click="onFilterChange">搜索</button>
               </div>
             </div>
           </div>
@@ -394,12 +362,10 @@ const router = useRouter()
 const route = useRoute()
 
 // 使用任务记录API
-const { jobs, waylineFiles, loading, error, pagination, fetchJobs, fetchWaylineFiles, clearJobs } = useWaylineJobs()
+const { jobs, loading, error, pagination, fetchJobs, clearJobs } = useWaylineJobs()
 const { getCachedWorkspaceId } = useDevices()
 
-// 航线文件相关
-const selectedWaylineFile = ref('')
-const waylineFileLoading = ref(false)
+// 航线文件筛选已移除
 // 筛选：任务状态与任务类型
 const selectedStatus = ref<string | number>('')
 const selectedTaskType = ref<string | number>('')
@@ -650,26 +616,7 @@ const downloadMediaFile = async (fileId: string, fileName: string) => {
   }
 }
 
-// 加载航线文件列表
-const loadWaylineFiles = async () => {
-  const workspaceId = getCachedWorkspaceId()
-  if (!workspaceId) {
-    console.error('未找到workspace_id，无法加载航线文件')
-    return
-  }
-  
-  waylineFileLoading.value = true
-  try {
-    await fetchWaylineFiles(workspaceId, {
-      page: 1,
-      page_size: 100
-    })
-  } catch (err) {
-    console.error('加载航线文件失败:', err)
-  } finally {
-    waylineFileLoading.value = false
-  }
-}
+// 航线文件加载逻辑已移除
 
 const sidebarTabs = [
   { key: 'list', label: '航线管理', icon: trackListIcon, path: '/dashboard/mission' },
@@ -753,7 +700,7 @@ const loadJobRecords = async () => {
   console.log('获取到的workspace_id:', workspaceId)
   console.log('localStorage中的workspace_id:', localStorage.getItem('workspace_id'))
   console.log('localStorage中的user:', localStorage.getItem('user'))
-  console.log('当前选中的航线文件:', selectedWaylineFile.value)
+  // 航线筛选已移除
   
   // 先清空现有数据
   clearJobs()
@@ -771,7 +718,6 @@ const loadJobRecords = async () => {
           await fetchJobs(userData.workspace_id, {
             page: currentPage.value,
             page_size: pageSize.value,
-            file_id: selectedWaylineFile.value || undefined,
             status: selectedStatus.value === '' ? undefined : Number(selectedStatus.value),
             task_type: selectedTaskType.value === '' ? undefined : Number(selectedTaskType.value)
           })
@@ -791,7 +737,6 @@ const loadJobRecords = async () => {
   await fetchJobs(workspaceId, {
     page: currentPage.value,
     page_size: pageSize.value,
-    file_id: selectedWaylineFile.value || undefined,
     status: selectedStatus.value === '' ? undefined : Number(selectedStatus.value),
     task_type: selectedTaskType.value === '' ? undefined : Number(selectedTaskType.value)
   })
@@ -810,10 +755,7 @@ onMounted(async () => {
   // 初始化分页输入框
   pageInput.value = currentPage.value.toString()
   
-  await Promise.all([
-    loadWaylineFiles(),
-    loadJobRecords()
-  ])
+  await loadJobRecords()
   // 点击页面空白关闭
   window.addEventListener('click', closeErrorTooltip)
 })
@@ -870,38 +812,7 @@ const handleDeleteJob = (job: any) => {
     })
 }
 
-const recordTrackSelectRef = ref<HTMLSelectElement | null>(null)
-const isRecordTrackSelectOpen = ref(false)
-function openRecordTrackSelect() {
-  if (recordTrackSelectRef.value) {
-    recordTrackSelectRef.value.focus()
-    recordTrackSelectRef.value.click && recordTrackSelectRef.value.click()
-    isRecordTrackSelectOpen.value = true
-  }
-}
-function onRecordTrackSelectBlur() {
-  isRecordTrackSelectOpen.value = false
-}
-function onRecordTrackSelectFocus() {
-  isRecordTrackSelectOpen.value = true
-}
-function onRecordTrackSelectChange() {
-  isRecordTrackSelectOpen.value = false
-  // 航线切换时清空当前数据并刷新任务列表
-  console.log('航线切换，当前选中:', selectedWaylineFile.value)
-  onFilterChange()
-}
-function onRecordTrackSelectMousedown() {
-  isRecordTrackSelectOpen.value = true
-}
-function onRecordTrackSelectKeydown(e: KeyboardEvent) {
-  if ([" ", "Enter", "ArrowDown"].includes(e.key)) {
-    isRecordTrackSelectOpen.value = true
-  }
-  if (["Escape", "Esc"].includes(e.key)) {
-    isRecordTrackSelectOpen.value = false
-  }
-}
+// 航线下拉交互逻辑已移除
 </script>
 
 <style>

@@ -23,9 +23,6 @@
               <span class="mission-top-title">角色管理</span>
             </div>
             <div class="role-top-row">
-              <label class="role-label">角色名称：</label>
-              <input v-model="filter.roleName" class="role-input" placeholder="请输入角色名" />
-              <button class="mission-btn mission-btn-pause" @click="onSearch">查询</button>
               <button class="mission-btn mission-btn-pause" @click="showAddRoleDialog = true">新增角色</button>
             </div>
           </div>
@@ -515,6 +512,7 @@ const toggleSectionAll = (section: any) => {
   gap: 12px;
   margin-top: 8px;
   flex-wrap: wrap;
+  justify-content: flex-start;
 }
 .role-label {
   color: #b6b6b6;

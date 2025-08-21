@@ -23,25 +23,6 @@
               <span class="mission-top-title">{{ currentTab === 'user' ? '用户管理' : '角色管理' }}</span>
             </div>
             <div class="user-top-row">
-              <label class="user-label">用户名：</label>
-              <input v-model="filter.username" class="user-input" placeholder="请输入用户名" />
-              <label class="user-label">姓名：</label>
-              <input v-model="filter.name" class="user-input" placeholder="请输入姓名" />
-              <label class="user-label">角色：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="filter.role" class="user-select">
-                  <option value="">请选择角色</option>
-                  <option v-for="role in roleList" :key="role.id" :value="role.role_name">
-                    {{ role.role_name }}
-                  </option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                  </svg>
-                </span>
-              </div>
-              <button class="mission-btn mission-btn-pause" @click="onSearch">查询</button>
               <button 
                 class="mission-btn mission-btn-pause" 
                 @click="handleAddUser"
@@ -510,7 +491,7 @@ onMounted(async () => {
   margin-top: 8px;
   flex-wrap: wrap; /* 支持自动换行 */
   overflow-x: visible; /* 避免横向滚动条 */
-  padding-bottom: 8px;
+  padding-bottom: 0;
 }
 .user-label {
   color: #b6b6b6;

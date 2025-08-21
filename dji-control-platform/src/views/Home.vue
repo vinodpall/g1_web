@@ -82,7 +82,7 @@
                   <img src="@/assets/source_data/svg_data/stars.svg" alt="搜星" />
                   <span class="label">搜星</span>
                 </div>
-                <span class="value">{{ gpsStatus?.gpsNumber || 0 }}</span>
+                <span class="value">{{ gpsStatus?.rtkNumber || 0 }}</span>
               </div>
             </div>
           </div>
@@ -327,6 +327,22 @@
                     <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
                   </svg>
                 </button>
+                <!-- 清晰度设置按钮 -->
+                <div class="quality-btn-wrapper" style="display: inline-block;">
+                  <button class="quality-btn" @click.stop="toggleQualityMenu" title="设置清晰度">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                    </svg>
+                  </button>
+                </div>
+                <!-- 清晰度菜单 -->
+                <div v-if="showQualityMenu" class="quality-menu" :style="qualityMenuStyle">
+                  <div class="quality-menu-item" @click="handleQualityChange(0)">自适应</div>
+                  <div class="quality-menu-item" @click="handleQualityChange(1)">流畅</div>
+                  <div class="quality-menu-item" @click="handleQualityChange(2)">标清</div>
+                  <div class="quality-menu-item" @click="handleQualityChange(3)">高清</div>
+                  <div class="quality-menu-item" @click="handleQualityChange(4)">超清</div>
+                </div>
                 <!-- 云台切换按钮放在全屏按钮右侧 -->
                 <div class="gimbal-control">
                   <button 
@@ -361,7 +377,7 @@
                       @click.stop="switchGimbal('drone_infrared')"
                       :class="{ 'active': currentVideoType === 'drone_infrared' }"
                     >
-                      无人机红外
+                      无人机辅助相机
                     </div>
                   </div>
                 </div>
@@ -370,12 +386,6 @@
             <div class="center-controls">
             </div>
             <div class="right-controls" @click="toggleScreenMenu">
-              <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
-              <i class="el-icon dropdown-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-                  <path fill="currentColor" d="m192 384 320 384 320-384z"></path>
-                </svg>
-              </i>
               <!-- 分屏选择菜单 -->
               <div class="screen-menu" v-if="showScreenMenu">
                 <div class="menu-item" @click="selectScreenMode('一分屏')">一分屏</div>
@@ -728,7 +738,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHmsAlerts, useDevices, useWaylineJobs } from '../composables/useApi'
-import { controlApi, waylineApi } from '../api/services'
+import { controlApi, waylineApi, livestreamApi } from '../api/services'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
 import { config } from '../config/environment'
 import { getVideoStreams, getVideoStream, getDefaultVideoType } from '../utils/videoCache'
@@ -1118,6 +1128,9 @@ const switchGimbal = async (videoType: 'dock' | 'drone_visible' | 'drone_infrare
     currentVideoType.value = videoType
     
     console.log(`已切换到${getVideoTypeName(videoType)}视频流`)
+    
+    // 选择视频后关闭菜单
+    gimbalMenuVisible.value = false
   } finally {
     videoLoading.value = false
   }
@@ -1327,6 +1340,23 @@ const closeMenus = () => {
   gimbalMenuVisible.value = false
 }
 
+// 全局点击事件处理函数
+const handleGlobalClick = (event: Event) => {
+  const target = event.target as HTMLElement
+  // 如果点击的不是云台按钮或其菜单内的元素，则关闭菜单
+  if (!target.closest('.gimbal-control')) {
+    gimbalMenuVisible.value = false
+  }
+  // 如果点击的不是分屏按钮或其菜单内的元素，则关闭分屏菜单
+  if (!target.closest('.right-controls')) {
+    showScreenMenu.value = false
+  }
+  // 点击非清晰度菜单区域时关闭清晰度菜单
+  if (!target.closest('.quality-btn') && !target.closest('.quality-menu')) {
+    showQualityMenu.value = false
+  }
+}
+
 // 切换云台菜单
 const toggleGimbalMenu = (event: Event) => {
   const button = event.currentTarget as HTMLElement
@@ -1354,6 +1384,8 @@ let taskPieChart2: echarts.ECharts | null = null
 
 // 航线报表图表实例
 let lineChart: echarts.ECharts | null = null
+// 图表动画定时器
+let chartAnimationTimer: number | null = null
 
 // 图表容器引用
 const alarmTrendChartRef = ref<HTMLElement | null>(null)
@@ -1463,6 +1495,65 @@ const videoElement = ref<HTMLVideoElement | null>(null)
 const currentVideoType = ref<'dock' | 'drone_visible' | 'drone_infrared'>('dock')
 const videoLoading = ref(false)
 const gimbalMenuVisible = ref(false)
+
+// 清晰度设置相关状态
+const showQualityMenu = ref(false)
+const currentQuality = ref<number>(0)
+const qualityChanging = ref(false)
+
+// 清晰度菜单样式计算属性
+const qualityMenuStyle = computed(() => {
+  if (!showQualityMenu.value) return {}
+  const button = document.querySelector('.quality-btn') as HTMLElement
+  if (!button) return {}
+  const rect = button.getBoundingClientRect()
+  return {
+    top: `${rect.bottom + 4}px`,
+    right: `${window.innerWidth - rect.right}px`
+  }
+})
+
+// 切换清晰度菜单
+const toggleQualityMenu = () => {
+  showQualityMenu.value = !showQualityMenu.value
+}
+
+// 处理清晰度切换
+const handleQualityChange = async (quality: number) => {
+  if (qualityChanging.value) return
+  try {
+    const { dockSns } = getCachedDeviceSns()
+    if (!dockSns || dockSns.length === 0) {
+      alert('未找到可用的机场设备')
+      return
+    }
+
+    // 从缓存的视频流中推断当前流的 device_sn/camera_index/video_index
+    const streams = getVideoStreams()
+    const active = streams.find(s => s.type === currentVideoType.value)
+    if (!active) {
+      alert('未找到当前视频流信息，无法设置清晰度')
+      return
+    }
+
+    const videoId = `${active.device_sn}/${active.camera_index}/${active.video_index}`
+
+    qualityChanging.value = true
+    showQualityMenu.value = false
+    const dockSn = dockSns[0]
+    const result = await livestreamApi.setQuality(dockSn, { video_id: videoId, video_quality: quality })
+    if ((result as any)?.message && (result as any).message.includes('Set livestream quality command sent')) {
+      currentQuality.value = quality
+    } else {
+      const msg = (result as any)?.detail || (result as any)?.message || '清晰度设置失败'
+      alert(msg)
+    }
+  } catch (err: any) {
+    alert(err?.message || '清晰度设置失败')
+  } finally {
+    qualityChanging.value = false
+  }
+}
 
 // WGS84坐标转GCJ-02坐标的转换函数
 const transformWGS84ToGCJ02 = (wgsLng: number, wgsLat: number) => {
@@ -2756,10 +2847,14 @@ const initTaskPieCharts = () => {
   // 初始动画
   animateCharts();
   
-  // 每隔一段时间刷新动画效果
-  setInterval(() => {
+  // 每隔一段时间刷新动画效果（记录并可在卸载时清理）
+  if (chartAnimationTimer) {
+    clearInterval(chartAnimationTimer)
+    chartAnimationTimer = null
+  }
+  chartAnimationTimer = setInterval(() => {
     animateCharts();
-  }, 10000);
+  }, 10000) as unknown as number;
 }
 
 // 初始化航线报表图表
@@ -3026,6 +3121,9 @@ onMounted(async () => {
     }, 100)
   })
 
+  // 添加全局点击事件监听器，用于点击空白处关闭菜单
+  document.addEventListener('click', handleGlobalClick)
+
   window.addEventListener('resize', () => {
     alarmTrendChart?.resize()
     taskPieChart1?.resize()
@@ -3097,13 +3195,9 @@ onMounted(async () => {
     })
   }
   
-  // 设置机场状态自动刷新（每5秒）
+  // 设置机场状态自动刷新（每5秒）- 仅刷新状态，不重复刷新地图
   statusRefreshTimer = setInterval(async () => {
     await loadDockStatus()
-    // 更新地图标记
-    if (amapInstance) {
-      updateMapMarkers()
-    }
   }, 5000)
   
   // 设置无人机状态自动刷新（每2秒）
@@ -3123,6 +3217,9 @@ onMounted(async () => {
 
 // 组件卸载时清理
 onUnmounted(() => {
+  // 移除全局点击事件监听器
+  document.removeEventListener('click', handleGlobalClick)
+  
   // 清理机场状态刷新定时器
   if (statusRefreshTimer) {
     clearInterval(statusRefreshTimer)
@@ -3139,6 +3236,11 @@ onUnmounted(() => {
   if (waylineProgressTimer.value) {
     clearInterval(waylineProgressTimer.value)
     waylineProgressTimer.value = null
+  }
+  // 清理图表动画定时器
+  if (chartAnimationTimer) {
+    clearInterval(chartAnimationTimer)
+    chartAnimationTimer = null
   }
   
   // 清理地图标记
@@ -3597,35 +3699,37 @@ const centerToDroneMarker = () => {
   overflow: hidden;
   width: 90%;
   max-width: 500px;
-  margin: 10px auto;
+  margin: 2vh auto;
   position: relative;
   border: 1px solid #18344a;
+  max-height: 85vh;
 }
 
 .dispatch-task-modal-content {
   flex: 1;
-  padding: 32px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   background: #172233;
+  overflow-y: auto;
 }
 
 .dispatch-task-title {
   font-size: 24px;
   font-weight: 600;
   color: #67d5fd;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   text-align: center;
 }
 
 .dispatch-task-form {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .dispatch-task-row {
   display: flex;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   gap: 12px;
 }
 
@@ -4628,6 +4732,55 @@ const centerToDroneMarker = () => {
   background: rgba(0, 12, 23, .8);
   position: relative;
   z-index: 3;
+}
+
+/* 清晰度设置按钮样式（与无人机控制页一致） */
+.quality-btn {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: #67d5fd;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quality-btn:hover {
+  color: #59c0fc;
+}
+
+.quality-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 清晰度菜单样式（与无人机控制页一致） */
+.quality-menu {
+  position: fixed;
+  background: rgba(20, 30, 40, 0.95);
+  border: 1px solid rgba(89, 192, 252, 0.3);
+  border-radius: 6px;
+  padding: 4px 0;
+  z-index: 99999;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 60px;
+}
+
+.quality-menu-item {
+  padding: 4px 8px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.quality-menu-item:hover {
+  background: rgba(89, 192, 252, 0.1);
+  color: #59C0FC;
 }
 
 .svg-icon {

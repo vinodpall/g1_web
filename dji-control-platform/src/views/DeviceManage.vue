@@ -28,22 +28,8 @@
                 <span class="device-top-title">设备管理</span>
               </div>
               <div class="device-top-row">
-                <input v-model="filter.name" class="device-input" placeholder="请输入设备名称" />
-                <input v-model="filter.sn" class="device-input" placeholder="请输入设备SN" />
-                <div class="custom-select-wrapper">
-                  <select v-model="filter.type" class="mission-select">
-                    <option value="">全部</option>
-                    <option value="dock">机巢</option>
-                    <option value="drone">无人机</option>
-                  </select>
-                  <span class="custom-select-arrow">
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                    </svg>
-                  </span>
-                </div>
+                <input v-model="filter.keyword" class="device-input" placeholder="请输入关键字搜索" />
                 <button class="device-btn" @click="handleSearch">查询</button>
-                <button class="device-btn device-btn-reset" @click="handleReset">重置</button>
                 <button class="device-btn device-btn-add" @click="handleAddDevice">添加设备</button>
               </div>
             </div>
@@ -244,12 +230,15 @@ const handleTabClick = (key: string) => {
   }
 }
 
-const filter = ref({ name: '', sn: '', type: '' })
-const handleSearch = () => {
-  // 查询逻辑
-}
-const handleReset = () => {
-  filter.value = { name: '', sn: '', type: '' }
+const filter = ref<{ keyword: string }>({ keyword: '' })
+const handleSearch = async () => {
+  try {
+    // GET 方式传参，透传到URL query
+    const keyword = filter.value.keyword.trim()
+    await fetchDevices({ skip: 0, limit: 100, keyword: keyword || undefined })
+  } catch (err) {
+    console.error('查询失败:', err)
+  }
 }
 const handleDelete = (id: string) => {
   // 删除设备逻辑

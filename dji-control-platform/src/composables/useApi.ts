@@ -910,14 +910,14 @@ export function useDevices() {
   }
 
   // 获取设备列表
-  const fetchDevices = async () => {
+  const fetchDevices = async (params?: { skip?: number; limit?: number; keyword?: string }) => {
     loading.value = true
     error.value = null
     
     console.log('useDevices - 开始获取设备列表')
     
     try {
-      const response = await deviceApi.getDevices({ skip: 0, limit: 100 })
+      const response = await deviceApi.getDevices(params || { skip: 0, limit: 100 })
       console.log('useDevices - 设备列表获取成功:', response)
       devices.value = response
       

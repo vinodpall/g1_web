@@ -29,8 +29,8 @@
                   <select
                     v-model="selectedTrack"
                     ref="trackSelectRef"
-                    class="mission-select treeselect-track"
-                    style="width: 90px;"
+                    class="mission-select treeselect-track track-select-wide"
+                    style="width: 200px;"
                     @mousedown="onTrackSelectMousedown"
                     @keydown="onTrackSelectKeydown"
                     @blur="onTrackSelectBlur"
@@ -194,7 +194,6 @@
                 <select v-model="dispatchTaskDialog.form.task_type" class="mission-select">
                   <option :value="0">立即任务</option>
                   <option :value="1">定时任务</option>
-                  <option :value="2">条件任务</option>
                 </select>
                 <span class="custom-select-arrow">
                   <svg width="12" height="12" viewBox="0 0 12 12">
@@ -203,17 +202,46 @@
                 </span>
               </div>
             </div>
-            <div v-if="dispatchTaskDialog.form.task_type === 1 || dispatchTaskDialog.form.task_type === 2" class="dispatch-task-row">
+            <div v-if="dispatchTaskDialog.form.task_type === 1" class="dispatch-task-row">
               <label>开始时间：</label>
               <input 
                 v-model="dispatchTaskDialog.form.begin_time" 
                 type="datetime-local" 
                 class="dispatch-task-input"
-                :min="getMinDateTime()"
+                :min="getMinLocalDateTime()"
               />
-              <div v-if="dispatchTaskDialog.form.task_type === 1" class="time-tip">
-                提示：定时任务的开始时间必须在当前时间4分钟及以后
+              <div v-if="dispatchTaskDialog.form.task_type === 1" class="time-tip">提示：定时任务的开始时间必须在当前时间4分钟及以后</div>
+            </div>
+            <div v-if="dispatchTaskDialog.form.task_type === 1" class="dispatch-task-row">
+              <label>周期任务：</label>
+              <div class="dispatch-switch-wrapper">
+                <div
+                  class="switch-container"
+                  :class="{ active: dispatchTaskDialog.form.enable_recurrence }"
+                  @click="dispatchTaskDialog.form.enable_recurrence = !dispatchTaskDialog.form.enable_recurrence"
+                >
+                  <div class="switch-toggle"></div>
+                </div>
+                <span class="dispatch-switch-label">{{ dispatchTaskDialog.form.enable_recurrence ? '开启' : '关闭' }}</span>
               </div>
+            </div>
+            <div v-if="dispatchTaskDialog.form.task_type === 1 && dispatchTaskDialog.form.enable_recurrence" class="dispatch-task-row">
+              <label>开始日期：</label>
+              <input 
+                v-model="dispatchTaskDialog.form.recurrence_start_date" 
+                type="date" 
+                class="dispatch-task-input"
+                :min="getTodayDate()"
+              />
+            </div>
+            <div v-if="dispatchTaskDialog.form.task_type === 1 && dispatchTaskDialog.form.enable_recurrence" class="dispatch-task-row">
+              <label>结束日期：</label>
+              <input 
+                v-model="dispatchTaskDialog.form.recurrence_end_date" 
+                type="date" 
+                class="dispatch-task-input"
+                :min="getTodayDate()"
+              />
             </div>
             <div class="dispatch-task-row">
               <label>返航高度：</label>
@@ -271,6 +299,7 @@ import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
 import { useWaylineJobs, useDevices } from '../composables/useApi'
+import { waylineApi } from '@/api/services'
 import { useDeviceStatus } from '../composables/useDeviceStatus'
 import icon360Photo from '@/assets/source_data/svg_data/task_line_svg/360_photo.svg'
 import iconAbsPhoto from '@/assets/source_data/svg_data/task_line_svg/abs_photo.svg'
@@ -448,11 +477,45 @@ function onConfirmDialogOk() {
 function onConfirmDialogCancel() {
   confirmDialog.value.visible = false
 }
-function handleDeleteTrack() {
-  const trackName = selectedTrack.value ? waylineFiles.value.find(f => f.wayline_id === selectedTrack.value)?.name : '未知航线'
-  showConfirmDialog(`确定要删除航线'${trackName}'吗？`, () => {
-    // 执行删除航线逻辑
-    console.log('删除航线')
+async function handleDeleteTrack() {
+  const current = waylineFiles.value.find(f => f.wayline_id === selectedTrack.value)
+  const trackName = current?.name || '未知航线'
+  if (!current) {
+    alert('请先选择要删除的航线')
+    return
+  }
+  showConfirmDialog(`确定要删除航线'${trackName}'吗？`, async () => {
+    try {
+      const workspaceId = getCachedWorkspaceId()
+      if (!workspaceId) {
+        alert('未找到workspace_id')
+        return
+      }
+      await waylineApi.deleteWaylineFile(workspaceId, current.wayline_id)
+      alert('删除成功')
+      // 刷新列表并重置选择
+      await fetchWaylineFiles(workspaceId, { page: 1, page_size: 100 })
+      if (waylineFiles.value.length > 0) {
+        selectedTrack.value = waylineFiles.value[0].wayline_id
+        await loadWaylineDetail(selectedTrack.value)
+      } else {
+        selectedTrack.value = ''
+      }
+    } catch (err) {
+      console.error('删除航线失败:', err)
+      let message = '删除失败，请重试'
+      if (typeof err === 'string') {
+        message = err
+      } else if (err && typeof err === 'object') {
+        const anyErr = err as any
+        if (typeof anyErr.detail === 'string' && anyErr.detail) {
+          message = anyErr.detail
+        } else if (typeof anyErr.message === 'string' && anyErr.message) {
+          message = anyErr.message
+        }
+      }
+      alert(message)
+    }
   })
 }
 const uploadDialog = ref({
@@ -490,17 +553,49 @@ const dispatchTaskDialog = ref({
     execute_time: null as string | null,
     enable_vision: false, // 新增算法开关
     vision_algorithms: [] as number[], // 新增算法选择
-    vision_threshold: 0.5 // 新增算法阈值
+    vision_threshold: 0.5, // 新增算法阈值
+    // 周期任务相关
+    enable_recurrence: false,
+    recurrence_start_date: '' as string,
+    recurrence_end_date: '' as string
   }
 })
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-// 获取最小时间（当前时间 + 4分钟）
-function getMinDateTime() {
+// 返回当前本地时间+4分钟（到分钟）的最小值，供 datetime-local 作为最小值
+const getMinLocalDateTime = () => {
   const now = new Date()
-  const minTime = new Date(now.getTime() + 4 * 60 * 1000) // 当前时间 + 4分钟
-  return minTime.toISOString().slice(0, 16) // 格式化为 datetime-local 需要的格式
+  now.setMinutes(now.getMinutes() + 4)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const y = now.getFullYear()
+  const m = pad(now.getMonth() + 1)
+  const d = pad(now.getDate())
+  const hh = pad(now.getHours())
+  const mm = pad(now.getMinutes())
+  return `${y}-${m}-${d}T${hh}:${mm}`
+}
+
+// 返回今天的日期，格式为 YYYY-MM-DD
+const getTodayDate = () => {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const y = now.getFullYear()
+  const m = pad(now.getMonth() + 1)
+  const d = pad(now.getDate())
+  return `${y}-${m}-${d}`
+}
+
+// 格式化本地日期时间为 YYYY-MM-DDTHH:mm:ss 格式
+const formatLocalDateTime = (date: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const y = date.getFullYear()
+  const m = pad(date.getMonth() + 1)
+  const d = pad(date.getDate())
+  const hh = pad(date.getHours())
+  const mm = pad(date.getMinutes())
+  const ss = pad(date.getSeconds())
+  return `${y}-${m}-${d}T${hh}:${mm}:${ss}`
 }
 
 function showUploadDialog() {
@@ -677,7 +772,10 @@ async function handleDispatchTask() {
     execute_time: null,
     enable_vision: false, // 新增算法开关
     vision_algorithms: [] as number[], // 新增算法选择
-    vision_threshold: 0.5 // 新增算法阈值
+    vision_threshold: 0.5, // 新增算法阈值
+    enable_recurrence: false,
+    recurrence_start_date: '',
+    recurrence_end_date: ''
   }
   
   dispatchTaskDialog.value.visible = true
@@ -692,19 +790,41 @@ async function onDispatchTaskConfirm() {
     return
   }
   
-  if ((form.task_type === 1 || form.task_type === 2) && !form.begin_time) {
-    alert('定时任务和条件任务需要设置开始时间')
+  if (form.task_type === 1 && !form.begin_time) {
+    alert('定时任务需要设置开始时间')
     return
   }
   
-  // 验证定时任务的时间（必须在4分钟及以后）
+  // 验证定时任务的时间（必须在当前时间4分钟及以后）
   if (form.task_type === 1 && form.begin_time) {
     const selectedTime = new Date(form.begin_time)
     const currentTime = new Date()
-    const minTime = new Date(currentTime.getTime() + 4 * 60 * 1000) // 当前时间 + 4分钟
-    
+    const minTime = new Date(currentTime.getTime() + 4 * 60 * 1000)
     if (selectedTime < minTime) {
       alert('定时任务的开始时间必须在当前时间4分钟及以后')
+      return
+    }
+  }
+  
+  // 验证周期任务的日期
+  if (form.task_type === 1 && form.enable_recurrence) {
+    if (!form.recurrence_start_date || !form.recurrence_end_date) {
+      alert('周期任务需要设置开始日期和结束日期')
+      return
+    }
+    
+    const startDate = new Date(form.recurrence_start_date)
+    const endDate = new Date(form.recurrence_end_date)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    if (startDate < today || endDate < today) {
+      alert('周期任务的开始日期和结束日期不能早于今天')
+      return
+    }
+    
+    if (startDate > endDate) {
+      alert('开始日期不能晚于结束日期')
       return
     }
   }
@@ -729,13 +849,24 @@ async function onDispatchTaskConfirm() {
       wayline_precision_type: form.wayline_precision_type || 1
     }
     
+    // 如果选择了周期任务，将task_type改为3
+    if (form.task_type === 1 && form.enable_recurrence) {
+      taskData.task_type = 3
+      // 添加周期配置
+      taskData.recurrence_config = {
+        recurrence_type: 'date_range',
+        start_date: form.recurrence_start_date,
+        end_date: form.recurrence_end_date
+      }
+    }
+    
     // 根据任务类型设置execute_time
     if (form.task_type === 0) {
       // 立即任务：设置当前时间作为execute_time
-      taskData.execute_time = new Date().toISOString()
+      taskData.execute_time = formatLocalDateTime(new Date())
     } else if (form.task_type === 1 && form.begin_time) {
       // 定时任务：使用begin_time作为execute_time
-      taskData.execute_time = new Date(form.begin_time).toISOString()
+      taskData.execute_time = formatLocalDateTime(new Date(form.begin_time))
     }
     
     // 创建任务
@@ -793,35 +924,37 @@ onMounted(async () => {
   overflow: hidden;
   width: 90%;
   max-width: 500px;
-  margin: 10px auto;
+  margin: 2vh auto;
   position: relative;
   border: 1px solid #18344a;
+  max-height: 85vh;
 }
 
 .dispatch-task-modal-content {
   flex: 1;
-  padding: 32px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   background: #172233;
+  overflow-y: auto;
 }
 
 .dispatch-task-title {
   font-size: 24px;
   font-weight: 600;
   color: #67d5fd;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   text-align: center;
 }
 
 .dispatch-task-form {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .dispatch-task-row {
   display: flex;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   gap: 12px;
 }
 
@@ -959,7 +1092,7 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   gap: 16px;
-  margin-top: 24px;
+  margin-top: 16px;
 }
 
 .dispatch-task-actions .mission-btn {
@@ -1080,10 +1213,10 @@ onMounted(async () => {
 .dispatch-algorithm-options {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 120px;
+  gap: 6px;
+  max-height: 100px;
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
   border: 1px solid rgba(103, 213, 253, 0.2);
@@ -1120,15 +1253,12 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  padding: 4px 0;
+  padding: 2px 0;
   transition: all 0.2s;
 }
 
 .dispatch-algorithm-option:hover {
-  background: rgba(103, 213, 253, 0.1);
-  border-radius: 4px;
-  padding: 4px 8px;
-  margin: 0 -8px;
+  /* 移除动态效果 */
 }
 
 .dispatch-algorithm-checkbox {
@@ -1285,5 +1415,19 @@ onMounted(async () => {
   border: 1px solid rgba(255, 165, 0, 0.3);
   border-radius: 4px;
   line-height: 1.4;
+}
+
+/* 周期任务开关样式 */
+.dispatch-switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.dispatch-switch-label {
+  font-size: 14px;
+  color: #b8c7d9;
+  user-select: none;
 }
 </style>
