@@ -8,6 +8,7 @@ export function debugPermissions() {
   
   console.log('=== 权限调试信息 ===')
   console.log('当前用户:', userStore.user)
+  console.log('用户角色信息:', userStore.user?.roles)
   console.log('用户权限列表:', permissionStore.userPermissions)
   console.log('所有权限配置:', permissionStore.allPermissions)
   

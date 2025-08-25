@@ -23,7 +23,7 @@
               <span class="mission-top-title">{{ currentTab === 'user' ? '用户管理' : '角色管理' }}</span>
             </div>
             <div class="user-top-row">
-              <PermissionGuard permission="device_management.device.create">
+              <PermissionGuard permission="system_management.user.create">
                 <button 
                   class="mission-btn mission-btn-pause" 
                   @click="handleAddUser"
@@ -57,10 +57,10 @@
                 <div class="mission-td">{{ formatTime(user.created_time) }}</div>
                 <div class="mission-td">
                   <div class="user-action-btns">
-                    <PermissionGuard permission="device_management.device.create">
+                    <PermissionGuard permission="system_management.user.edit">
                       <button class="icon-btn" title="编辑" @click="openEditUserDialog(user)"><img :src="editIcon" /></button>
                     </PermissionGuard>
-                    <PermissionGuard permission="device_management.device.delete">
+                    <PermissionGuard permission="system_management.user.delete">
                       <button class="icon-btn" title="删除" @click="openDeleteUserDialog(user)"><img :src="deleteIcon" /></button>
                     </PermissionGuard>
                   </div>

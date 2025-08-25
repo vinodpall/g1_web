@@ -120,6 +120,7 @@
                   <div
                     class="switch-container"
                     :class="{ active: getRemoteDebugStatus() }"
+                    v-permission-click-dialog="'drone_control.remote_debug'"
                     @click="toggleRemote"
                   >
                     <div class="switch-toggle"></div>
@@ -132,7 +133,7 @@
                       <div class="remote-card-title">{{ droneStatus?.isOnline ? '开机' : '关机' }}</div>
                       <div class="remote-card-sub">飞行器电源</div>
                     </div>
-                    <button class="remote-card-btn" :disabled="!remoteEnabled" @click="handleDronePower">
+                    <button class="remote-card-btn" :disabled="!remoteEnabled" v-permission-click-dialog="'drone_control.drone.control'" @click="handleDronePower">
                       {{ droneStatus?.isOnline ? '关机' : '开机' }}
                     </button>
                   </div>
@@ -142,7 +143,7 @@
                       <div class="remote-card-title">{{ droneStatus?.chargeText || '未知' }}</div>
                       <div class="remote-card-sub">飞行器充电</div>
                     </div>
-                    <button class="remote-card-btn" :disabled="!remoteEnabled" @click="handleDroneCharge">
+                    <button class="remote-card-btn" :disabled="!remoteEnabled" v-permission-click-dialog="'drone_control.drone.control'" @click="handleDroneCharge">
                       {{ droneStatus?.chargeState === 1 ? '停止' : '开始' }}
                     </button>
                   </div>
@@ -152,7 +153,7 @@
                       <div class="remote-card-title">{{ getSupplementLightText() }}</div>
                       <div class="remote-card-sub">补光灯</div>
                     </div>
-                    <button class="remote-card-btn" :disabled="!remoteEnabled" @click="handleSupplementLight">
+                    <button class="remote-card-btn" :disabled="!remoteEnabled" v-permission-click-dialog="'drone_control.drone.control'" @click="handleSupplementLight">
                       {{ getSupplementLightButtonText() }}
                     </button>
                   </div>
@@ -252,7 +253,7 @@
                       </button>
                       <!-- 清晰度设置按钮 -->
                       <div class="quality-btn-wrapper" style="display: inline-block;">
-                        <button class="quality-btn" @click="toggleQualityMenu" title="设置清晰度">
+                        <button class="quality-btn" v-permission-click-dialog="'drone_control.drone.control'" @click="toggleQualityMenu" title="设置清晰度">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
                           </svg>
@@ -262,6 +263,7 @@
                       <div class="split-btn-wrapper" style="display: inline-block;">
                         <button 
                           class="split-btn" 
+                          v-permission-click-dialog="'drone_control.drone.control'"
                           @click="toggleSplitMenu"
                           :disabled="!canUseScreenSplit"
                           :class="{ 'disabled': !canUseScreenSplit }"
@@ -379,6 +381,7 @@
                     class="drc-mode-btn" 
                     :class="{ 'active': isDrcModeActive, 'disabled': !drcStatus.ready }"
                     :disabled="!drcStatus.ready"
+                    v-permission-click-dialog="'drone_control.drone.control'"
                     @click="handleToggleDrcMode"
                   >
                     {{ isDrcModeActive ? '退出' : 'DRC' }}
@@ -468,6 +471,7 @@
                   </button>
                   <div class="authority-btn-wrapper">
                     <button 
+                      v-permission-click-dialog="'drone_control.drone.control'"
                       @click="handleToggleControlAuthority"
                       :disabled="controlAuthorityStatus.isLoading"
                       :class="{ 'authority-granted': hasControlAuthority }"
@@ -489,7 +493,7 @@
                       <div class="authority-tooltip-content">
                         <div class="authority-tooltip-message">{{ authorityTooltip.message }}</div>
                         <div class="authority-tooltip-actions">
-                          <button class="authority-tooltip-btn authority-confirm-btn" @click="confirmSeizeAuthority">
+                          <button class="authority-tooltip-btn authority-confirm-btn" v-permission-click-dialog="'drone_control.drone.control'" @click="confirmSeizeAuthority">
                             抢夺控制权
                           </button>
                           <button class="authority-tooltip-btn authority-cancel-btn" @click="cancelSeizeAuthority">
@@ -500,11 +504,11 @@
                       <div class="authority-tooltip-arrow"></div>
                     </div>
                   </div>
-                  <button @click="openTakeoffModal" :disabled="takeoffLoading">
+                  <button v-permission-click-dialog="'drone_control.drone.control'" @click="openTakeoffModal" :disabled="takeoffLoading">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_fly.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">{{ takeoffLoading ? '起飞中...' : '一键起飞' }}</span>
                   </button>
-                  <button @click="handleReturnHome">
+                  <button v-permission-click-dialog="'drone_control.drone.control'" @click="handleReturnHome">
                     <span class="drone-btn-iconbox"><img src="@/assets/source_data/svg_data/drone_control_svg/drone_land.svg" class="drone-btn-icon" /></span>
                     <span class="drone-btn-label">一键返航</span>
                   </button>
@@ -571,13 +575,13 @@
                     <button :disabled="!isGimbalControlEnabled" @click="handleGimbalReset(3)">俯仰向下</button>
                   </div>
                   <div class="gimbal-func-row">
-                    <button :disabled="!isGimbalControlEnabled || !canUseScreenSplit" @click="handleScreenSplit(true)">开启分屏</button>
+                    <button v-permission-click-dialog="'drone_control.drone.control'" :disabled="!isGimbalControlEnabled || !canUseScreenSplit" @click="handleScreenSplit(true)">开启分屏</button>
                     <button :disabled="!isGimbalControlEnabled" @click="handleZoom('in')">放大</button>
                     <button :disabled="!isGimbalControlEnabled" @click="handleCameraRecordingStart">开始录像</button>
                     <button :disabled="!isGimbalControlEnabled" @click="handleCameraPhoto">拍照</button>
                   </div>
                   <div class="gimbal-func-row">
-                    <button :disabled="!isGimbalControlEnabled || !canUseScreenSplit" @click="handleScreenSplit(false)">关闭分屏</button>
+                    <button v-permission-click-dialog="'drone_control.drone.control'" :disabled="!isGimbalControlEnabled || !canUseScreenSplit" @click="handleScreenSplit(false)">关闭分屏</button>
                     <button :disabled="!isGimbalControlEnabled" @click="handleZoom('out')">缩小</button>
                     <button :disabled="!isGimbalControlEnabled" @click="handleCameraRecordingStop">停止录像</button>
                     <button :disabled="!isGimbalControlEnabled">夜景模式</button>

@@ -1,11 +1,8 @@
 import { usePermissionStore } from '../stores/permission'
-import { usePermissions } from '../composables/useApi'
-import { mapBackendToFrontendPermissions } from './permissionMapper'
 
 // 初始化用户权限
 export async function initUserPermissions() {
   const permissionStore = usePermissionStore()
-  const { fetchUserPermissions } = usePermissions()
   
   try {
     // 获取当前用户信息
@@ -21,22 +18,46 @@ export async function initUserPermissions() {
       return
     }
     
-    // 获取用户权限
-    const backendPermissions = await fetchUserPermissions(user.id)
+    // 从用户信息中提取权限
+    const frontendPermissions: string[] = []
     
-    // 获取所有权限配置用于映射
-    const allPermissions = await fetchAllPermissions()
+
     
-    // 将后端权限代码映射为前端权限键值
-    const frontendPermissions = mapBackendToFrontendPermissions(backendPermissions, allPermissions)
+    // 处理方式1：从顶层的permissions数组中提取（/users/me接口返回的数据结构）
+    if (user.permissions && Array.isArray(user.permissions)) {
+      console.log('从顶层permissions数组提取权限:', user.permissions)
+      user.permissions.forEach((permission: any) => {
+        if (permission.code) {
+          frontendPermissions.push(permission.code)
+        }
+      })
+    }
+    
+    // 处理方式2：从roles数组中提取（用户列表接口返回的数据结构）
+    if (user.roles && Array.isArray(user.roles)) {
+      console.log('从roles数组提取权限:', user.roles)
+      user.roles.forEach((role: any) => {
+        if (role.permissions && Array.isArray(role.permissions)) {
+          role.permissions.forEach((permission: any) => {
+            // 支持两种字段名：permission_code 和 code
+            const permissionCode = permission.permission_code || permission.code
+            if (permissionCode) {
+              frontendPermissions.push(permissionCode)
+            }
+          })
+        }
+      })
+    }
+    
+    // 去重权限列表
+    const uniquePermissions = [...new Set(frontendPermissions)]
+    
+    console.log('最终提取的权限列表:', uniquePermissions)
     
     // 设置用户权限到Store
-    permissionStore.setUserPermissions(frontendPermissions)
+    permissionStore.setUserPermissions(uniquePermissions)
     
-    console.log('后端权限:', backendPermissions)
-    console.log('映射后的前端权限:', frontendPermissions)
-    
-    console.log('用户权限初始化完成:', frontendPermissions)
+
   } catch (err) {
     console.error('初始化用户权限失败:', err)
   }
@@ -45,16 +66,11 @@ export async function initUserPermissions() {
 // 初始化所有权限配置
 export async function initAllPermissions() {
   const permissionStore = usePermissionStore()
-  const { fetchAllPermissions } = usePermissions()
   
   try {
-    // 获取所有权限列表
-    const allPermissions = await fetchAllPermissions()
-    
-    // 设置权限列表到Store
-    permissionStore.setAllPermissions(allPermissions)
-    
-    console.log('权限配置初始化完成:', allPermissions.length, '个权限')
+    // 由于我们直接从用户信息中获取权限，这里可以跳过获取所有权限配置
+    // 或者如果需要，可以从用户信息中构建权限配置
+
   } catch (err) {
     console.error('初始化权限配置失败:', err)
   }

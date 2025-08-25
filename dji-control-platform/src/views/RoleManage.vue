@@ -23,7 +23,7 @@
               <span class="mission-top-title">角色管理</span>
             </div>
             <div class="role-top-row">
-              <PermissionGuard permission="device_management.device.create">
+              <PermissionGuard permission="role_management.role.create">
                 <button class="mission-btn mission-btn-pause" @click="showAddRoleDialog = true">新增角色</button>
               </PermissionGuard>
             </div>
@@ -44,13 +44,13 @@
                 <div class="mission-td">{{ formatTime(role.created_time) }}</div>
                 <div class="mission-td">
                   <div class="role-action-btns">
-                    <PermissionGuard permission="device_management.device.create">
+                    <PermissionGuard permission="role_management.permission.set">
                       <button class="icon-btn" title="查看" @click="openPermissionDialog(role)"><img :src="permissionIcon" /></button>
                     </PermissionGuard>
-                    <PermissionGuard permission="device_management.device.create">
+                    <PermissionGuard permission="role_management.role.edit">
                       <button class="icon-btn" title="编辑" @click="openEditRoleDialog(role)"><img :src="editIcon" /></button>
                     </PermissionGuard>
-                    <PermissionGuard permission="device_management.device.delete">
+                    <PermissionGuard permission="role_management.role.delete">
                       <button class="icon-btn" title="删除" @click="openDeleteRoleDialog(role)"><img :src="deleteIcon" /></button>
                     </PermissionGuard>
                   </div>

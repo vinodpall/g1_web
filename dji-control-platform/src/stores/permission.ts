@@ -14,6 +14,7 @@ export const usePermissionStore = defineStore('permission', () => {
   
   // 权限检查函数
   const hasPermission = (permission: string): boolean => {
+    console.log('权限检查:', permission, '用户权限列表:', userPermissions.value)
     return userPermissions.value.includes(permission)
   }
   

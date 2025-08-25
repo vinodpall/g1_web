@@ -54,9 +54,9 @@
                   </span>
                 </div>
                 <div class="mission-top-btns">
-                  <button class="mission-btn mission-btn-pause" @click="handleDeleteTrack">删除航线</button>
-                  <button class="mission-btn mission-btn-pause" @click="handleAddTrack">新增航线</button>
-                  <button class="mission-btn mission-btn-pause" @click="handleDispatchTask">下发任务</button>
+                                  <button class="mission-btn mission-btn-pause" v-permission-click-dialog="'wayline_management.wayline.delete'" @click="handleDeleteTrack">删除航线</button>
+                <button class="mission-btn mission-btn-pause" v-permission-click-dialog="'wayline_management.wayline.create'" @click="handleAddTrack">新增航线</button>
+                <button class="mission-btn mission-btn-pause" v-permission-click-dialog="'wayline_management.task.issue'" @click="handleDispatchTask">下发任务</button>
                 </div>
               </div>
             </div>

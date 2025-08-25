@@ -2,7 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
-import { permission, permissionAll } from './directives/permission'
+import { permission, permissionAll, permissionClick, permissionClickDialog } from './directives/permission'
 import { useAuth } from './composables/useApi'
 import { apiClient } from './api/config'
 import { logEnvironmentConfig } from './config/environment'
@@ -16,6 +16,8 @@ app.use(router)
 // 注册权限指令
 app.directive('permission', permission)
 app.directive('permission-all', permissionAll)
+app.directive('permission-click', permissionClick)
+app.directive('permission-click-dialog', permissionClickDialog)
 
 // 显示当前环境配置
 logEnvironmentConfig()

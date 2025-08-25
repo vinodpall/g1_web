@@ -149,7 +149,7 @@
                 <span class="dock-title-text">机场控制</span>
                 <span class="remote-switch-wrap" style="font-size:13px;font-weight:400;">
                   远程调试
-                  <span class="switch-container" :class="{ active: getRemoteDebugStatus() }" @click="toggleRemote"><span class="switch-toggle"></span></span>
+                  <span class="switch-container" :class="{ active: getRemoteDebugStatus() }" v-permission-click-dialog="'dock_control.remote_debug'" @click="toggleRemote"><span class="switch-toggle"></span></span>
                 </span>
               </div>
               <div class="dock-card-list">
@@ -160,7 +160,7 @@
                       <div class="dock-card-title">{{ getDockModeText(osdData?.mode_code) }}</div>  
                       <div class="dock-card-sub">机场系统</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleDockSystem">设置</button>
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" v-permission-click-dialog="'dock_control.remote_debug'" @click="handleDockSystem">设置</button>
                   </div>
                   <div class="dock-card-item">
                     <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_box.svg" alt="box" />
@@ -168,7 +168,7 @@
                       <div class="dock-card-title">{{ getCoverStateText(osdData?.cover_state) }}</div>
                       <div class="dock-card-sub">舱盖状态</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleCoverControl">
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" v-permission-click-dialog="'dock_control.remote_debug'" @click="handleCoverControl">
                       {{ osdData?.cover_state === 0 ? '开启' : '关闭' }}
                     </button>
                   </div>
@@ -178,7 +178,7 @@
                       <div class="dock-card-title">{{ osdData?.air_conditioner?.air_conditioner_state === 1 ? '运行中' : '空闲中' }}</div>
                       <div class="dock-card-sub">空调</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleAirConditioner">
+                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" v-permission-click-dialog="'dock_control.remote_debug'" @click="handleAirConditioner">
                       {{ osdData?.air_conditioner?.air_conditioner_state === 1 ? '停止' : '启动' }}
                     </button>
                   </div>

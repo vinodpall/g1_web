@@ -8,6 +8,9 @@
           <img src="@/assets/source_data/bg_data/card_logo.png" alt="" />
           无人机状态
         </div>
+        
+
+        
         <div class="on1-bottom">
           <div class="b-top">
             <div class="b-top-left">
@@ -204,10 +207,11 @@
                 </span>
               </div>
               <div class="button-group">
-                <span class="span" @click="handleDispatchTask">下发任务</span>
+                <span class="span" v-permission-click-dialog="'home.task.issue'" @click="handleDispatchTask">下发任务</span>
                 <span 
-                  :class="['span1', { 'disabled': !canCancelTask }]" 
-                  @click="canCancelTask ? handleCancelTask() : null"
+                  class="span1" 
+                  v-permission-click-dialog="'home.task.cancel'"
+                  @click="handleCancelTask"
                 >
                   取消任务
                 </span>
@@ -216,26 +220,30 @@
             <!-- 修改第二行的结构 -->
             <div class="control-row second-row">
               <span 
-                :class="['span', { 'disabled': !canPauseRoute }]" 
-                @click="canPauseRoute ? handlePauseRoute() : null"
+                class="span" 
+                v-permission-click-dialog="'home.wayline.pause'"
+                @click="handlePauseRoute"
               >
                 航线暂停
               </span>
               <span 
-                :class="['span', { 'disabled': !canResumeRoute }]" 
-                @click="canResumeRoute ? handleResumeRoute() : null"
+                class="span" 
+                v-permission-click-dialog="'home.wayline.resume'"
+                @click="handleResumeRoute"
               >
                 航线恢复
               </span>
               <span 
-                :class="['span', { 'disabled': !canReturnHome }]" 
-                @click="canReturnHome ? handleReturnHome() : null"
+                class="span" 
+                v-permission-click-dialog="'home.drone.return'"
+                @click="handleReturnHome"
               >
                 一键返航
               </span>
               <span 
-                :class="['span1', { 'disabled': !canCancelReturnHome }]" 
-                @click="canCancelReturnHome ? handleCancelReturnHome() : null"
+                class="span1" 
+                v-permission-click-dialog="'home.drone.cancel_return'"
+                @click="handleCancelReturnHome"
               >
                 取消返航
               </span>
@@ -750,6 +758,7 @@ import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
 import droneArrowIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_arrow.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
 import droneBatteryChargeIcon from '@/assets/source_data/svg_data/drone_battery_charge.svg'
+
 
 const router = useRouter()
 
@@ -3574,6 +3583,12 @@ const centerToDroneMarker = () => {
     amapInstance.setCenter(markerPos);
   }
 }
+
+
+
+
+
+
 </script>
 
 <style scoped>

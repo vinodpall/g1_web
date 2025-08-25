@@ -41,7 +41,20 @@ const permissionNameMapping: Record<string, string> = {
   // 设备管理权限
   '设备管理-页面查看': 'device_management.view',
   '设备管理-添加设备': 'device_management.device.create',
-  '设备管理-删除设备': 'device_management.device.delete'
+  '设备管理-删除设备': 'device_management.device.delete',
+  
+  // 系统管理权限
+  '系统管理-页面查看': 'system_management.view',
+  '系统管理-添加用户': 'system_management.user.create',
+  '系统管理-编辑用户': 'system_management.user.edit',
+  '系统管理-删除用户': 'system_management.user.delete',
+  
+  // 角色管理权限
+  '角色管理-页面查看': 'role_management.view',
+  '角色管理-添加角色': 'role_management.role.create',
+  '角色管理-编辑角色': 'role_management.role.edit',
+  '角色管理-删除角色': 'role_management.role.delete',
+  '角色管理-分配权限': 'role_management.permission.set'
 }
 
 // 前端权限配置结构
@@ -129,6 +142,27 @@ export function mapPermissionsToSections(permissions: Permission[]): PermissionS
       permissions: [
         { key: 'device_management.device.create', label: '添加设备' },
         { key: 'device_management.device.delete', label: '删除设备' }
+      ]
+    },
+    {
+      key: 'system_management',
+      title: '系统管理',
+      viewPermission: 'system_management.view',
+      permissions: [
+        { key: 'system_management.user.create', label: '添加用户' },
+        { key: 'system_management.user.edit', label: '编辑用户' },
+        { key: 'system_management.user.delete', label: '删除用户' }
+      ]
+    },
+    {
+      key: 'role_management',
+      title: '角色管理',
+      viewPermission: 'role_management.view',
+      permissions: [
+        { key: 'role_management.role.create', label: '添加角色' },
+        { key: 'role_management.role.edit', label: '编辑角色' },
+        { key: 'role_management.role.delete', label: '删除角色' },
+        { key: 'role_management.permission.set', label: '分配权限' }
       ]
     }
   ]

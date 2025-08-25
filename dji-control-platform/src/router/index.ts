@@ -94,7 +94,7 @@ const router = createRouter({
           component: () => import('../views/AlarmLog.vue'),
           meta: { 
             requiresAuth: true,
-            permission: 'alarm_log:view'
+            permission: 'alarm_log.view'
           }
         },
         {
@@ -103,7 +103,7 @@ const router = createRouter({
           component: () => import('../views/UserManage.vue'),
           meta: { 
             requiresAuth: true,
-            permission: 'device_management.view'
+            permission: 'system_management.view'
           }
         },
         {
@@ -112,7 +112,7 @@ const router = createRouter({
           component: () => import('../views/RoleManage.vue'),
           meta: { 
             requiresAuth: true,
-            permission: 'device_management.view'
+            permission: 'role_management.view'
           }
         }
       ]
@@ -148,6 +148,13 @@ router.beforeEach((to, _from, next) => {
     if (to.meta.permission) {
       const permissionStore = usePermissionStore()
       const hasPermission = permissionStore.hasPermission(to.meta.permission as string)
+      
+      // 添加调试信息
+      console.log('=== 路由权限检查 ===')
+      console.log('访问路径:', to.path)
+      console.log('需要权限:', to.meta.permission)
+      console.log('用户权限列表:', permissionStore.userPermissions)
+      console.log('是否有权限:', hasPermission)
       
       if (!hasPermission) {
         // 如果没有权限，检查是否正在访问首页

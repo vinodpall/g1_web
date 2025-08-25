@@ -43,9 +43,7 @@
         <div class="task-completion-actions">
           <button 
             class="task-completion-btn task-completion-btn-primary" 
-            :class="{ 'disabled': !canHandle }"
-            :disabled="!canHandle"
-            @click="goToMissionLogs"
+            @click="handleGoToMissionLogs"
           >
             处理
           </button>
@@ -55,6 +53,14 @@
         </div>
       </div>
     </div>
+    
+    <!-- 权限拒绝提示 -->
+    <PermissionDenied 
+      :show="showPermissionDenied"
+      :required-permission="requiredPermission"
+      @close="closePermissionDenied"
+      @contact-admin="contactAdmin"
+    />
   </div>
 </template>
 
@@ -62,9 +68,18 @@
 import { computed } from 'vue'
 import { useTaskProgressStore } from '../stores/taskProgress'
 import { useUserStore } from '../stores/user'
+import { usePermission } from '../composables/usePermission'
+import PermissionDenied from './PermissionDenied.vue'
 
 const taskProgressStore = useTaskProgressStore()
 const userStore = useUserStore()
+const { 
+  showPermissionDenied, 
+  requiredPermission, 
+  closePermissionDenied, 
+  contactAdmin,
+  checkPermission 
+} = usePermission()
 
 // 计算属性
 const showTaskCompletionDialog = computed(() => {
@@ -80,18 +95,16 @@ const statusTextClass = computed(() => {
   return taskCompletionData.value?.status === 'completed' ? 'success-text' : 'error-text'
 })
 
-// 判断是否可以处理（异常数量大于0）
-const canHandle = computed(() => {
-  return (taskCompletionData.value?.alertCount || 0) > 0
-})
-
 // 方法
 const closeDialog = () => {
   taskProgressStore.closeTaskCompletionDialog()
 }
 
-const goToMissionLogs = () => {
-  taskProgressStore.goToMissionLogs()
+const handleGoToMissionLogs = () => {
+  // 检查是否有查看任务日志的权限
+  if (checkPermission('task_logs.view', '查看任务日志')) {
+    taskProgressStore.goToMissionLogs()
+  }
 }
 </script>
 

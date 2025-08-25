@@ -157,15 +157,15 @@ const handleLogin = async () => {
       console.log('权限初始化完成，准备跳转到dashboard')
       
       // 权限初始化完成后，输出调试信息
-      setTimeout(() => {
-        debugPermissions()
-      }, 500)
+      debugPermissions()
+      
+      // 权限初始化完成后再跳转
+      router.push('/dashboard')
     } catch (err) {
       console.error('权限初始化失败:', err)
       // 即使权限初始化失败，也允许用户进入系统
+      router.push('/dashboard')
     }
-    
-    router.push('/dashboard')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '登录失败'
     showErrorDialog.value = true
