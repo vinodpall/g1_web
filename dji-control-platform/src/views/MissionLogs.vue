@@ -20,7 +20,9 @@
           <div class="mission-top-card card">
             <div class="mission-top-header">
               <img class="mission-top-logo" src="@/assets/source_data/bg_data/card_logo.png" alt="logo" />
-              <span class="mission-top-title">任务日志</span>
+              <span class="mission-top-title">
+                {{ filters.job_id ? `任务日志 - 任务ID: ${filters.job_id}` : '任务日志' }}
+              </span>
             </div>
             <div class="mission-top-row">
               <span class="mission-lib-label">状态筛选</span>
@@ -333,7 +335,8 @@ const handleTabClick = (tab: any) => {
 
 // 筛选条件
 const filters = ref({
-  status: ''
+  status: '',
+  job_id: ''
 })
 
 // 分页参数
@@ -653,6 +656,14 @@ const getThumbnailUrl = async (thumbPath: string) => {
 
 // 页面加载时获取数据
 onMounted(() => {
+  // 检查URL参数中是否有job_id
+  const urlParams = new URLSearchParams(window.location.search)
+  const jobId = urlParams.get('job_id')
+  if (jobId) {
+    filters.value.job_id = jobId
+    console.log('从URL参数获取到job_id:', jobId)
+  }
+  
   loadAlerts()
   pageInput.value = currentPage.value.toString()
   // 监听从地图缩略图触发的大图打开事件

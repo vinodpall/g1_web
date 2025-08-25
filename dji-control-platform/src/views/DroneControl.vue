@@ -681,6 +681,7 @@ import { useDevicePolling } from '../composables/useDevicePolling'
 import { useWaylineJobs, useDevices } from '../composables/useApi'
 import { useVisionWebSocket } from '../composables/useVisionWebSocket'
 import { visionConfig, logVisionConfig } from '@/config/vision'
+import { parseErrorMessage } from '../utils/errorCodes'
 import { config, refreshEnvironmentConfig } from '@/config/environment'
 import { getVideoStream, updateVideoStream } from '../utils/videoCache'
 import planeIcon from '@/assets/source_data/svg_data/plane.svg'
@@ -4416,7 +4417,8 @@ const handleToggleControlAuthority = async () => {
       }
     }
   } catch (error: any) {
-    alert(`控制权操作失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`控制权操作失败: ${errorMsg}`)
   }
 }
 
@@ -4449,7 +4451,8 @@ const confirmSeizeAuthority = async () => {
   try {
     await acquireControlAuthority()
   } catch (error: any) {
-    alert(`抢夺控制权失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`抢夺控制权失败: ${errorMsg}`)
   }
 }
 
@@ -4514,7 +4517,8 @@ const acquireControlAuthority = async () => {
     }
     
   } catch (error: any) {
-    alert(`获取控制权失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`获取控制权失败: ${errorMsg}`)
   } finally {
     controlAuthorityStatus.value.isLoading = false
   }
@@ -4568,7 +4572,8 @@ const releaseControlAuthority = async () => {
     }
     
   } catch (error: any) {
-    alert(`释放控制权失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`释放控制权失败: ${errorMsg}`)
   } finally {
     controlAuthorityStatus.value.isLoading = false
   }
@@ -4680,7 +4685,8 @@ const handleGimbalControl = async (direction: 'up' | 'down' | 'left' | 'right') 
     }
     
   } catch (error: any) {
-    alert(`云台${direction}控制失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`云台${direction}控制失败: ${errorMsg}`)
   }
 }
 
@@ -4748,7 +4754,8 @@ const handleReturnHome = async () => {
     }
     
   } catch (error: any) {
-    alert(`一键返航失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`一键返航失败: ${errorMsg}`)
   }
 }
 
@@ -4832,7 +4839,8 @@ const confirmTakeoff = async () => {
     }
     
   } catch (error: any) {
-    alert(`起飞失败: ${error.message || '请稍后重试'}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`起飞失败: ${errorMsg}`)
   } finally {
     takeoffLoading.value = false
   }
@@ -4907,7 +4915,8 @@ const handleZoom = async (direction: 'in' | 'out') => {
     
   } catch (error: any) {
     const action = direction === 'in' ? '放大' : '缩小'
-    alert(`${action}失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`${action}失败: ${errorMsg}`)
   }
 }
 
@@ -4934,7 +4943,8 @@ const handleToggleDrcMode = async () => {
         alert(`退出DRC模式失败: ${result.message}`)
       }
     } catch (error: any) {
-      alert(`退出DRC模式失败: ${error.message || error}`)
+      const errorMsg = parseErrorMessage(error)
+    alert(`退出DRC模式失败: ${errorMsg}`)
     }
   } else {
     // 检查DRC是否就绪
@@ -4956,7 +4966,8 @@ const handleToggleDrcMode = async () => {
         alert(`进入DRC模式失败: ${result.message}`)
       }
     } catch (error: any) {
-      alert(`进入DRC模式失败: ${error.message || error}`)
+      const errorMsg = parseErrorMessage(error)
+      alert(`进入DRC模式失败: ${errorMsg}`)
     }
   }
 }
@@ -4986,7 +4997,8 @@ const handleEnterDrcMode = async () => {
     }
     
   } catch (error: any) {
-    alert(`进入DRC模式失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`进入DRC模式失败: ${errorMsg}`)
   }
 }
 
@@ -5192,7 +5204,8 @@ const handleGimbalReset = async (resetMode: number) => {
       alert(`云台复位操作失败: ${result.message}`)
     }
   } catch (error: any) {
-    alert(`云台复位操作失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`云台复位操作失败: ${errorMsg}`)
   }
 }
 
@@ -5214,7 +5227,8 @@ const handleCameraPhoto = async () => {
       alert(`拍照失败: ${result.message}`)
     }
   } catch (error: any) {
-    alert(`拍照失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`拍照失败: ${errorMsg}`)
   }
 }
 
@@ -5236,7 +5250,8 @@ const handleCameraRecordingStart = async () => {
       alert(`开始录像失败: ${result.message}`)
     }
   } catch (error: any) {
-    alert(`开始录像失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`开始录像失败: ${errorMsg}`)
   }
 }
 
@@ -5258,7 +5273,8 @@ const handleCameraRecordingStop = async () => {
       alert(`停止录像失败: ${result.message}`)
     }
   } catch (error: any) {
-    alert(`停止录像失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`停止录像失败: ${errorMsg}`)
   }
 }
 </script>

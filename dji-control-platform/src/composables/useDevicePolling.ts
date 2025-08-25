@@ -1,6 +1,7 @@
 import { ref, onUnmounted, readonly, computed, onMounted } from 'vue'
 import { useDeviceStatus } from './useDeviceStatus'
-import { useWaylineJobs } from './useApi'
+import { useWaylineJobs, useHmsAlerts } from './useApi'
+import { useAlertNotificationStore } from '../stores/alertNotification'
 
 // 全局轮询实例管理，防止多个页面同时启动轮询
 let globalPollingInstance: ReturnType<typeof createPollingInstance> | null = null
@@ -22,6 +23,8 @@ function createPollingInstance() {
   } = useDeviceStatus()
 
   const { fetchWaylineProgress, fetchWaylineJobDetail } = useWaylineJobs()
+  const { fetchDeviceHms } = useHmsAlerts()
+  const alertNotificationStore = useAlertNotificationStore()
 
   // 统一的轮询定时器
   const unifiedPollingTimer = ref<number | null>(null)
@@ -40,17 +43,23 @@ function createPollingInstance() {
     deviceStatus: null as any,
     droneStatus: null as any,
     waylineProgress: null as any,
+    hmsAlerts: [] as any[],
     lastUpdate: 0
   })
 
   // 条件轮询状态
   const waylineProgressTimer = ref<number | null>(null)
   const isWaylinePolling = ref(false)
+  
+  // 报警轮询状态
+  const alertPollingTimer = ref<number | null>(null)
+  const isAlertPolling = ref(false)
 
   // 页面可见性状态
   const isPageVisible = ref(true)
   const wasPollingBeforeHidden = ref(false)
   const wasWaylinePollingBeforeHidden = ref(false)
+  const wasAlertPollingBeforeHidden = ref(false)
 
   /**
    * 计算当前应该使用的轮询间隔
@@ -85,6 +94,36 @@ function createPollingInstance() {
   })
 
   /**
+   * 获取缓存的设备信息
+   */
+  const getCachedDeviceSns = () => {
+    try {
+      const dockSns = JSON.parse(localStorage.getItem('cached_dock_sns') || '[]')
+      const droneSns = JSON.parse(localStorage.getItem('cached_drone_sns') || '[]')
+      return { dockSns, droneSns }
+    } catch (error) {
+      console.error('获取缓存设备信息失败:', error)
+      return { dockSns: [], droneSns: [] }
+    }
+  }
+
+  /**
+   * 获取缓存的workspaceId
+   */
+  const getCachedWorkspaceId = () => {
+    try {
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        const user = JSON.parse(userStr)
+        return user.workspace_id
+      }
+    } catch (error) {
+      console.error('获取缓存workspaceId失败:', error)
+    }
+    return null
+  }
+
+  /**
    * 处理页面可见性变化
    */
   const handleVisibilityChange = () => {
@@ -93,6 +132,7 @@ function createPollingInstance() {
       isPageVisible.value = false
       wasPollingBeforeHidden.value = isPolling.value
       wasWaylinePollingBeforeHidden.value = isWaylinePolling.value
+      wasAlertPollingBeforeHidden.value = isAlertPolling.value
       
       // 暂停所有轮询
       if (isPolling.value) {
@@ -103,6 +143,10 @@ function createPollingInstance() {
       if (isWaylinePolling.value) {
         console.log('👁️ 页面不可见，暂停航线进度轮询')
         stopWaylineProgressPolling(false) // 不重置状态，只是暂停
+      }
+      
+      if (isAlertPolling.value) {
+        stopAlertPolling(false) // 不重置状态，只是暂停
       }
     } else {
       // 页面变为可见
@@ -117,6 +161,10 @@ function createPollingInstance() {
       if (wasWaylinePollingBeforeHidden.value) {
         console.log('👁️ 页面可见，恢复航线进度轮询')
         startWaylineProgressPolling()
+      }
+      
+      if (wasAlertPollingBeforeHidden.value) {
+        startAlertPolling()
       }
     }
   }
@@ -239,6 +287,102 @@ function createPollingInstance() {
   }
 
   /**
+   * 启动报警轮询
+   */
+  const startAlertPolling = () => {
+    if (alertPollingTimer.value) {
+      stopAlertPolling()
+    }
+    
+    isAlertPolling.value = true
+    
+    const pollAlerts = async () => {
+      try {
+        // 轮询HMS报警
+        await pollHmsAlerts()
+      } catch (error) {
+        console.error('轮询报警失败:', error)
+      }
+    }
+    
+    // 立即执行一次
+    pollAlerts()
+    
+    // 设置定时器，每10秒轮询一次报警
+    alertPollingTimer.value = setInterval(pollAlerts, 10000) as unknown as number
+  }
+
+  /**
+   * 停止报警轮询
+   */
+  const stopAlertPolling = (resetState = true) => {
+    if (alertPollingTimer.value) {
+      clearInterval(alertPollingTimer.value)
+      alertPollingTimer.value = null
+      
+      if (resetState) {
+        isAlertPolling.value = false
+      }
+    }
+  }
+
+  /**
+   * 轮询HMS报警
+   */
+  const pollHmsAlerts = async () => {
+    const { dockSns, droneSns } = getCachedDeviceSns()
+    const allDevices = [...dockSns, ...droneSns]
+    
+    if (allDevices.length === 0) {
+      return
+    }
+    
+    const newAlerts: any[] = []
+    const currentTime = Date.now() // 当前时间戳（毫秒）
+    const timeThreshold = 15000 // 15秒内的时间阈值（毫秒）
+    
+    // 获取所有设备的HMS报警
+    for (const deviceSn of allDevices) {
+      try {
+        const alerts = await fetchDeviceHms(deviceSn)
+        if (alerts && alerts.length > 0) {
+          // 过滤出15秒内且level=2的警告报警
+          const recentWarningAlerts = alerts.filter(alert => {
+            const timeDiff = currentTime - alert.create_time
+            return timeDiff <= timeThreshold && alert.level === 2
+          })
+          
+          // 为每个报警添加设备类型信息
+          const alertsWithDeviceType = recentWarningAlerts.map(alert => ({
+            ...alert,
+            deviceType: dockSns.includes(deviceSn) ? '机场' : '无人机'
+          }))
+          
+          newAlerts.push(...alertsWithDeviceType)
+        }
+      } catch (error) {
+        console.error(`获取设备 ${deviceSn} HMS报警失败:`, error)
+      }
+    }
+    
+    // 检查是否有符合条件的警告报警
+    if (newAlerts.length > 0) {
+      // 按创建时间排序，获取最新的一条
+      const latestWarningAlert = newAlerts.sort((a, b) => 
+        (b.create_time || 0) - (a.create_time || 0)
+      )[0]
+      
+      // 触发报警弹窗
+      alertNotificationStore.triggerAlertDialog(latestWarningAlert)
+    }
+    
+    // 更新缓存
+    pollingCache.value.hmsAlerts = newAlerts
+  }
+
+
+
+  /**
    * 启动统一轮询（支持动态间隔调整）
    */
   const startUnifiedPolling = () => {
@@ -273,6 +417,9 @@ function createPollingInstance() {
     
     // 启动条件轮询
     startWaylineProgressPolling()
+    
+    // 启动报警轮询
+    startAlertPolling()
   }
 
   /**
@@ -291,6 +438,9 @@ function createPollingInstance() {
     
     // 同时停止航线进度轮询
     stopWaylineProgressPolling(resetState)
+    
+    // 同时停止报警轮询
+    stopAlertPolling(resetState)
   }
 
   /**
@@ -329,12 +479,14 @@ function createPollingInstance() {
   const getPollingStatus = () => ({
     isPolling: isPolling.value,
     isWaylinePolling: isWaylinePolling.value,
+    isAlertPolling: isAlertPolling.value,
     lastPollTime: lastPollTime.value,
     currentInterval: currentPollingInterval.value,
     shouldPollWayline: shouldPollWayline.value,
     isPageVisible: isPageVisible.value,
     wasPollingBeforeHidden: wasPollingBeforeHidden.value,
     wasWaylinePollingBeforeHidden: wasWaylinePollingBeforeHidden.value,
+    wasAlertPollingBeforeHidden: wasAlertPollingBeforeHidden.value,
     cache: pollingCache.value,
     baseInterval: BASE_POLLING_INTERVAL
   })
@@ -375,6 +527,7 @@ function createPollingInstance() {
     // 状态
     isPolling: readonly(isPolling),
     isWaylinePolling: readonly(isWaylinePolling),
+    isAlertPolling: readonly(isAlertPolling),
     lastPollTime: readonly(lastPollTime),
     pollingCache: readonly(pollingCache),
     waylineProgress: getWaylineProgress,
@@ -391,6 +544,8 @@ function createPollingInstance() {
     stopUnifiedPolling,
     startWaylineProgressPolling,
     stopWaylineProgressPolling,
+    startAlertPolling,
+    stopAlertPolling,
     refreshStatus,
     refreshWaylineProgress,
     getPollingStatus,

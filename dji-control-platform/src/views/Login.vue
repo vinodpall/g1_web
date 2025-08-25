@@ -83,6 +83,8 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { useAuth } from '../composables/useApi'
+import { initUserPermissions, initAllPermissions } from '../utils/initPermissions'
+import { debugPermissions } from '../utils/permissionDebug'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -145,6 +147,22 @@ const handleLogin = async () => {
       localStorage.removeItem('savedUsername')
       localStorage.removeItem('savedPassword')
       localStorage.removeItem('savedExpireTime')
+    }
+    
+    // 登录成功后立即初始化权限
+    try {
+      console.log('开始初始化权限...')
+      await initAllPermissions()
+      await initUserPermissions()
+      console.log('权限初始化完成，准备跳转到dashboard')
+      
+      // 权限初始化完成后，输出调试信息
+      setTimeout(() => {
+        debugPermissions()
+      }, 500)
+    } catch (err) {
+      console.error('权限初始化失败:', err)
+      // 即使权限初始化失败，也允许用户进入系统
     }
     
     router.push('/dashboard')

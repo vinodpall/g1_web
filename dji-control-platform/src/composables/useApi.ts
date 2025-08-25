@@ -1,8 +1,8 @@
 import { ref, reactive, readonly } from 'vue'
-import { authApi, userApi, dockApi, droneApi, missionApi, alertApi, systemApi, deviceApi, roleApi, hmsApi, livestreamApi, waylineApi, controlApi } from '../api/services'
+import { authApi, userApi, dockApi, droneApi, missionApi, alertApi, systemApi, deviceApi, roleApi, hmsApi, livestreamApi, waylineApi, controlApi, permissionApi } from '../api/services'
 import { apiClient } from '../api/config'
 import { config, refreshEnvironmentConfig } from '../config/environment'
-import type { User, Dock, Drone, Mission, Alert, Device, Role, HmsAlert } from '../types'
+import type { User, Dock, Drone, Mission, Alert, Device, Role, HmsAlert, Permission } from '../types'
 import { useDeviceStore } from '../stores/device'
 import { setVideoStreams, setDefaultVideoType, cleanupOldVideoCache } from '../utils/videoCache'
 
@@ -1025,6 +1025,38 @@ export function useUsers() {
     }
   }
 
+  // 为用户分配角色
+  const assignUserRole = async (userId: number, roleId: number) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await userApi.assignRole(userId, roleId)
+      return response
+    } catch (err: any) {
+      error.value = err.message || '分配角色失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 删除用户角色
+  const removeUserRole = async (userId: number, roleId: number) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await userApi.removeRole(userId, roleId)
+      return response
+    } catch (err: any) {
+      error.value = err.message || '删除角色失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   // 更新用户
   const updateUser = async (id: string, userData: Partial<User>) => {
     loading.value = true
@@ -1084,7 +1116,9 @@ export function useUsers() {
     createUser,
     updateUser,
     deleteUser,
-    getUser
+    getUser,
+    assignUserRole,
+    removeUserRole
   }
 } 
 
@@ -1203,12 +1237,8 @@ export function useHmsAlerts() {
     loading.value = true
     error.value = null
     
-    console.log('HMS API调用 - 设备SN:', deviceSn)
-    console.log('HMS API URL:', `/hms/devices/${deviceSn}/hms`)
-    
     try {
       const response = await hmsApi.getDeviceHms(deviceSn)
-      console.log('HMS API响应:', response)
       hmsAlerts.value = response
       return response
     } catch (err: any) {
@@ -1231,6 +1261,56 @@ export function useHmsAlerts() {
     error: readonly(error),
     fetchDeviceHms,
     setAllAlerts
+  }
+}
+
+// 权限相关的组合式API
+export function usePermissions() {
+  const permissions = ref<Permission[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  // 获取所有权限
+  const fetchAllPermissions = async () => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await permissionApi.getAllPermissions()
+      permissions.value = response
+      return response
+    } catch (err: any) {
+      console.error('获取权限列表失败:', err)
+      error.value = err.message || '获取权限列表失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 获取用户权限
+  const fetchUserPermissions = async (userId: number) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await permissionApi.getUserPermissions(userId)
+      return response
+    } catch (err: any) {
+      console.error('获取用户权限失败:', err)
+      error.value = err.message || '获取用户权限失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return {
+    permissions: readonly(permissions),
+    loading: readonly(loading),
+    error: readonly(error),
+    fetchAllPermissions,
+    fetchUserPermissions
   }
 }
 
@@ -1367,7 +1447,8 @@ export function useWaylineJobs() {
     } catch (err) {
       // console.error('获取航线任务进度失败:', err)
       error.value = err instanceof Error ? err.message : '获取航线任务进度失败'
-      throw err
+      // 返回null而不是抛出异常，让调用方处理
+      return null
     } finally {
       loading.value = false
     }
@@ -1385,7 +1466,8 @@ export function useWaylineJobs() {
     } catch (err) {
       // console.error('获取航线任务详情失败:', err)
       error.value = err instanceof Error ? err.message : '获取航线任务详情失败'
-      throw err
+      // 返回null而不是抛出异常，让调用方处理
+      return null
     } finally {
       loading.value = false
     }

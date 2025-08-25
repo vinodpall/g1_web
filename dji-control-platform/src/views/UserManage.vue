@@ -23,10 +23,12 @@
               <span class="mission-top-title">{{ currentTab === 'user' ? '用户管理' : '角色管理' }}</span>
             </div>
             <div class="user-top-row">
-              <button 
-                class="mission-btn mission-btn-pause" 
-                @click="handleAddUser"
-              >新增用户</button>
+              <PermissionGuard permission="device_management.device.create">
+                <button 
+                  class="mission-btn mission-btn-pause" 
+                  @click="handleAddUser"
+                >新增用户</button>
+              </PermissionGuard>
             </div>
           </div>
           <div class="mission-table-card card">
@@ -46,15 +48,21 @@
                 <div class="mission-td">{{ idx + 1 }}</div>
                 <div class="mission-td">{{ user.username }}</div>
                 <div class="mission-td">{{ user.userfullname || '-' }}</div>
-                <div class="mission-td">{{ formatUserRole(user) }}</div>
+                <div class="mission-td">
+                  <UserRoleDisplay :user="user" />
+                </div>
                 <div class="mission-td">{{ '-' }}</div>
                 <div class="mission-td">{{ '-' }}</div>
                 <div class="mission-td">{{ '-' }}</div>
                 <div class="mission-td">{{ formatTime(user.created_time) }}</div>
                 <div class="mission-td">
                   <div class="user-action-btns">
-                    <button class="icon-btn" title="编辑" @click="openEditUserDialog(user)"><img :src="editIcon" /></button>
-                    <button class="icon-btn" title="删除" @click="openDeleteUserDialog(user)"><img :src="deleteIcon" /></button>
+                    <PermissionGuard permission="device_management.device.create">
+                      <button class="icon-btn" title="编辑" @click="openEditUserDialog(user)"><img :src="editIcon" /></button>
+                    </PermissionGuard>
+                    <PermissionGuard permission="device_management.device.delete">
+                      <button class="icon-btn" title="删除" @click="openDeleteUserDialog(user)"><img :src="deleteIcon" /></button>
+                    </PermissionGuard>
                   </div>
                 </div>
               </div>
@@ -205,6 +213,9 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUsers, useRoles } from '../composables/useApi'
+import { UserRoleManager } from '../utils/userRoleManager'
+import UserRoleDisplay from '../components/UserRoleDisplay.vue'
+import PermissionGuard from '../components/PermissionGuard.vue'
 import userIcon from '@/assets/source_data/svg_data/user.svg'
 import roleIcon from '@/assets/source_data/svg_data/role.svg'
 import editIcon from '@/assets/source_data/svg_data/edit.svg'
@@ -214,7 +225,7 @@ const router = useRouter()
 const route = useRoute()
 
 // 使用用户管理API
-const { users, loading, error, fetchUsers, createUser, updateUser, deleteUser } = useUsers()
+const { users, loading, error, fetchUsers, createUser, updateUser, deleteUser, assignUserRole, removeUserRole } = useUsers()
 
 // 使用角色管理API
 const { roles: roleList, fetchRoles } = useRoles()
@@ -255,6 +266,7 @@ const showDeleteUserDialog = ref(false)
 const showPermissionDenied = ref(false)
 const requiredPermission = ref('')
 
+
 const addUserForm = ref({
   username: '',
   name: '',
@@ -284,11 +296,21 @@ const editUserForm = ref({
 
 const currentUser = ref<any>(null)
 
-// 模拟权限检查函数
+// 权限检查函数
 const hasPermission = (permission: string) => {
-  // 这里可以连接真实的权限系统
-  // 暂时返回true允许操作
-  return true
+  // 从权限Store获取用户权限
+  const userStr = localStorage.getItem('user')
+  if (!userStr) return false
+  
+  try {
+    const user = JSON.parse(userStr)
+    // 这里可以根据用户角色获取权限，暂时返回true
+    // 后续可以连接真实的权限API
+    return true
+  } catch (err) {
+    console.error('解析用户信息失败:', err)
+    return false
+  }
 }
 
 const handleAddUser = () => {
@@ -340,7 +362,22 @@ const onAddUserConfirm = async () => {
       user_type: 1
     }
     
-    await createUser(apiUserData)
+    // 创建用户
+    const newUser = await createUser(apiUserData)
+    
+    // 如果选择了角色，为用户分配角色
+    if (selectedRole && newUser) {
+      const roleId = UserRoleManager.getRoleIdByName(selectedRole.role_name, roleList.value)
+      if (roleId) {
+        const result = await UserRoleManager.assignRole(newUser.id, roleId, assignUserRole)
+        if (result.success) {
+          console.log(`用户 ${newUser.username} 已分配角色 ${selectedRole.role_name}`)
+        } else {
+          console.error('分配角色失败:', result.error)
+        }
+      }
+    }
+    
     showAddUserDialog.value = false
     addUserForm.value = { 
       username: '', 
@@ -403,7 +440,29 @@ const onEditUserConfirm = async () => {
         user_type: 1
       }
       
+      // 更新用户信息
       await updateUser(currentUser.value.id.toString(), apiUserData)
+      
+      // 处理角色分配
+      if (selectedRole) {
+        const roleId = UserRoleManager.getRoleIdByName(selectedRole.role_name, roleList.value)
+        if (roleId) {
+          const currentUserRoles = currentUser.value.roles || []
+          const result = await UserRoleManager.updateUserRole(
+            currentUser.value.id,
+            currentUserRoles,
+            roleId,
+            assignUserRole,
+            removeUserRole
+          )
+          if (result.success) {
+            console.log(`用户 ${currentUser.value.username} 角色已更新为 ${selectedRole.role_name}`)
+          } else {
+            console.error('更新角色失败:', result.error)
+          }
+        }
+      }
+      
       showEditUserDialog.value = false
       editUserForm.value = { 
         username: '', 
@@ -445,12 +504,21 @@ const onDeleteUserConfirm = async () => {
 const formatUserRole = (user: any) => {
   // 如果用户有角色信息，显示角色名称
   if (user.roles && user.roles.length > 0) {
-    return user.roles.map((role: any) => role.role_name).join(', ')
+    const roleNames = user.roles.map((role: any) => {
+      // 如果role是对象，取role_name；如果是字符串，直接使用
+      return typeof role === 'object' ? role.role_name : role
+    }).filter(Boolean) // 过滤掉空值
+    
+    if (roleNames.length > 0) {
+      return roleNames.join(', ')
+    }
   }
+  
   // 如果没有角色信息，根据is_superuser判断
   if (user.is_superuser === '1') {
     return '超级管理员'
   }
+  
   return '普通用户'
 }
 
@@ -472,6 +540,8 @@ onMounted(async () => {
       fetchUsers({ skip: 0, limit: 100 }),
       fetchRoles({ skip: 0, limit: 100 })
     ])
+    
+
   } catch (err) {
     console.error('获取数据失败:', err)
   }
@@ -743,5 +813,16 @@ onMounted(async () => {
   font-size: 15px;
   line-height: 1.5;
   flex: 1;
+}
+
+/* 角色显示列样式 */
+.mission-td .user-role-display {
+  justify-content: center;
+  min-height: 24px;
+}
+
+.mission-td .role-tag {
+  font-size: 11px;
+  padding: 1px 6px;
 }
 </style>

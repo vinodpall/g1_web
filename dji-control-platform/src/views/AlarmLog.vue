@@ -164,17 +164,13 @@ const getDeviceTypeOptions = () => {
 
 // 初始化：从本地缓存获取设备并加载所有设备的报警数据
 const initDevice = () => {
-  console.log('AlarmLog组件开始初始化')
   const cachedDevices = getCachedDevices()
-  console.log('AlarmLog组件初始化，缓存设备列表:', cachedDevices)
   
   if (cachedDevices.length === 0) {
-    console.log('没有缓存设备，尝试从设备管理页面获取设备列表')
     // 如果没有缓存设备，尝试获取设备列表
     loadDevicesAndAlarmData()
   } else {
     // 默认显示所有设备的报警数据
-    console.log('有缓存设备，开始加载报警数据')
     loadAllAlarmData()
   }
 }
@@ -182,18 +178,13 @@ const initDevice = () => {
 // 加载设备列表并获取报警数据
 const loadDevicesAndAlarmData = async () => {
   try {
-    console.log('开始获取设备列表')
     const devices = await fetchDevices()
-    console.log('设备列表获取成功:', devices)
     
     // 重新获取缓存设备并加载报警数据
     const cachedDevices = getCachedDevices()
-    console.log('重新获取缓存设备:', cachedDevices)
     
     if (cachedDevices.length > 0) {
       loadAllAlarmData()
-    } else {
-      console.log('仍然没有设备数据')
     }
   } catch (err) {
     console.error('获取设备列表失败:', err)
@@ -202,7 +193,6 @@ const loadDevicesAndAlarmData = async () => {
 
 // 设备类型选择变化
 const handleDeviceTypeChange = async () => {
-  console.log('设备类型选择变化:', selectedDeviceType.value)
   if (selectedDeviceType.value === '') {
     // 选择全部设备，显示所有设备的报警数据
     loadAllAlarmData()
@@ -219,7 +209,6 @@ const handleDeviceTypeChange = async () => {
 
 // 查询
 const handleSearch = async () => {
-  console.log('执行查询，当前设备类型:', selectedDeviceType.value)
   if (selectedDeviceType.value === '') {
     loadAllAlarmData()
   } else if (selectedDeviceType.value === 'dock') {
@@ -234,7 +223,6 @@ const handleSearch = async () => {
 
 // 重置
 const handleReset = () => {
-  console.log('执行重置')
   filter.value = { level: '' }
   selectedDeviceType.value = ''
   loadAllAlarmData()
@@ -243,10 +231,8 @@ const handleReset = () => {
 // 加载所有设备的报警数据
 const loadAllAlarmData = async () => {
   const cachedDevices = getCachedDevices()
-  console.log('开始加载所有设备的报警数据，设备数量:', cachedDevices.length)
   
   if (cachedDevices.length === 0) {
-    console.log('没有缓存设备，跳过加载报警数据')
     return
   }
   
@@ -256,7 +242,6 @@ const loadAllAlarmData = async () => {
     
     for (const device of cachedDevices) {
       try {
-        console.log('加载设备报警数据:', device.device_sn)
         const response = await fetchDeviceHms(device.device_sn)
         if (response && response.length > 0) {
           allAlerts.push(...response)
@@ -267,7 +252,6 @@ const loadAllAlarmData = async () => {
       }
     }
     
-    console.log('所有设备报警数据加载完成，总数:', allAlerts.length)
     setAllAlerts(allAlerts)
     updateAlarmList()
   } catch (err) {
@@ -280,10 +264,7 @@ const loadDockAlarmData = async () => {
   const cachedDevices = getCachedDevices()
   const dockDevices = cachedDevices.filter((device: any) => device.device_type === '3-3-0')
   
-  console.log('开始加载机场的报警数据，机场数量:', dockDevices.length)
-  
   if (dockDevices.length === 0) {
-    console.log('没有缓存机场，跳过加载报警数据')
     return
   }
   
@@ -293,7 +274,6 @@ const loadDockAlarmData = async () => {
     
     for (const device of dockDevices) {
       try {
-        console.log('加载机场报警数据:', device.device_sn)
         const response = await fetchDeviceHms(device.device_sn)
         if (response && response.length > 0) {
           allAlerts.push(...response)
@@ -304,7 +284,6 @@ const loadDockAlarmData = async () => {
       }
     }
     
-    console.log('所有机场报警数据加载完成，总数:', allAlerts.length)
     setAllAlerts(allAlerts)
     updateAlarmList()
   } catch (err) {
@@ -317,10 +296,7 @@ const loadDroneAlarmData = async () => {
   const cachedDevices = getCachedDevices()
   const droneDevices = cachedDevices.filter((device: any) => device.device_type === '0-100-0')
   
-  console.log('开始加载无人机的报警数据，无人机数量:', droneDevices.length)
-  
   if (droneDevices.length === 0) {
-    console.log('没有缓存无人机，跳过加载报警数据')
     return
   }
   
@@ -330,7 +306,6 @@ const loadDroneAlarmData = async () => {
     
     for (const device of droneDevices) {
       try {
-        console.log('加载无人机报警数据:', device.device_sn)
         const response = await fetchDeviceHms(device.device_sn)
         if (response && response.length > 0) {
           allAlerts.push(...response)
@@ -341,7 +316,6 @@ const loadDroneAlarmData = async () => {
       }
     }
     
-    console.log('所有无人机报警数据加载完成，总数:', allAlerts.length)
     setAllAlerts(allAlerts)
     updateAlarmList()
   } catch (err) {
@@ -447,7 +421,6 @@ const columns = [
 
 // 页面加载时初始化
 onMounted(() => {
-  console.log('AlarmLog组件挂载')
   initDevice()
 })
 </script>

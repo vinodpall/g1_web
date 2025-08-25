@@ -568,7 +568,72 @@ export function getErrorMessage(
   return message ?? options?.fallback ?? `未知错误(${code})`
 }
 
+/**
+ * 解析错误对象，提取可读的错误信息
+ * 支持多种错误格式：
+ * - {detail: "错误信息"}
+ * - {message: "错误信息"}
+ * - {error: "错误信息"}
+ * - 字符串错误
+ * - Error对象
+ */
+export function parseErrorMessage(error: any): string {
+  if (!error) return '未知错误'
+  
+  // 如果是字符串，直接返回
+  if (typeof error === 'string') {
+    return error
+  }
+  
+  // 如果是Error对象，返回message
+  if (error instanceof Error) {
+    return error.message
+  }
+  
+  // 如果是对象，尝试提取错误信息
+  if (typeof error === 'object') {
+    // 优先使用detail字段（API错误常用）
+    if (error.detail && typeof error.detail === 'string') {
+      return error.detail
+    }
+    
+    // 使用message字段
+    if (error.message && typeof error.message === 'string') {
+      return error.message
+    }
+    
+    // 使用error字段
+    if (error.error && typeof error.error === 'string') {
+      return error.error
+    }
+    
+    // 使用msg字段
+    if (error.msg && typeof error.msg === 'string') {
+      return error.msg
+    }
+    
+    // 如果是响应对象，尝试从response.data中提取
+    if (error.response && error.response.data) {
+      const responseError = parseErrorMessage(error.response.data)
+      if (responseError !== '未知错误') {
+        return responseError
+      }
+    }
+    
+    // 如果都没有，返回对象的字符串表示
+    try {
+      const errorStr = JSON.stringify(error)
+      return errorStr.length > 100 ? errorStr.substring(0, 100) + '...' : errorStr
+    } catch {
+      return '未知错误'
+    }
+  }
+  
+  return '未知错误'
+}
+
 export default {
   ERROR_CODE_MESSAGES,
   getErrorMessage,
+  parseErrorMessage,
 }

@@ -1,5 +1,5 @@
 import { apiClient, API_BASE_URL, type ApiResponse, type PaginatedResponse } from './config'
-import type { User, Dock, Drone, Mission, MissionRecord, Alert, Role, Device, HmsAlert, VisionAlert, VisionAlertsResponse } from '../types'
+import type { User, Dock, Drone, Mission, MissionRecord, Alert, Role, Device, HmsAlert, VisionAlert, VisionAlertsResponse, Permission } from '../types'
 
 // 认证相关接口
 export const authApi = {
@@ -75,6 +75,16 @@ export const userApi = {
   // 删除用户
   deleteUser: (id: string) => {
     return apiClient.delete(`/users/${id}`)
+  },
+
+  // 为用户分配角色
+  assignRole: (userId: number, roleId: number) => {
+    return apiClient.post(`/users/${userId}/roles/${roleId}`)
+  },
+
+  // 删除用户角色
+  removeRole: (userId: number, roleId: number) => {
+    return apiClient.delete(`/users/${userId}/roles/${roleId}`)
   }
 }
 
@@ -264,7 +274,7 @@ export const alertApi = {
 
 // 角色管理接口
 export const roleApi = {
-  // 获取角色列表
+  // 获取角色列表（包含权限信息）
   getRoles: (params?: { skip?: number; limit?: number; search?: string }) => {
     return apiClient.get<Role[]>('/roles/', params)
   },
@@ -287,6 +297,16 @@ export const roleApi = {
   // 删除角色
   deleteRole: (id: string) => {
     return apiClient.delete(`/roles/${id}`)
+  },
+
+  // 为角色分配权限
+  assignPermission: (roleId: number, permissionId: number) => {
+    return apiClient.post(`/roles/${roleId}/permissions/${permissionId}`)
+  },
+
+  // 删除角色权限
+  removePermission: (roleId: number, permissionId: number) => {
+    return apiClient.delete(`/roles/${roleId}/permissions/${permissionId}`)
   }
 }
 
@@ -422,6 +442,19 @@ export const livestreamApi = {
       message: string
       code: number
     }>(`/control/devices/${deviceSn}/camera/screen-split`, data)
+  }
+}
+
+// 权限管理接口
+export const permissionApi = {
+  // 获取所有权限列表
+  getAllPermissions: () => {
+    return apiClient.get<Permission[]>('/permissions/')
+  },
+
+  // 获取用户权限
+  getUserPermissions: (userId: number) => {
+    return apiClient.get<string[]>(`/users/${userId}/permissions/`)
   }
 }
 

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import type { Permission } from '../types'
 
 export const usePermissionStore = defineStore('permission', () => {
   // 用户权限列表
@@ -7,6 +8,9 @@ export const usePermissionStore = defineStore('permission', () => {
   
   // 当前用户角色
   const currentRole = ref<string>('')
+  
+  // 所有权限列表
+  const allPermissions = ref<Permission[]>([])
   
   // 权限检查函数
   const hasPermission = (permission: string): boolean => {
@@ -39,22 +43,33 @@ export const usePermissionStore = defineStore('permission', () => {
     currentRole.value = ''
   }
   
+  // 设置所有权限列表
+  const setAllPermissions = (permissions: Permission[]) => {
+    allPermissions.value = permissions
+  }
+  
   // 获取用户权限列表
   const getUserPermissions = computed(() => userPermissions.value)
   
   // 获取当前角色
   const getCurrentRole = computed(() => currentRole.value)
   
+  // 获取所有权限列表
+  const getAllPermissions = computed(() => allPermissions.value)
+  
   return {
     userPermissions,
     currentRole,
+    allPermissions,
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
     setUserPermissions,
     setCurrentRole,
     clearPermissions,
+    setAllPermissions,
     getUserPermissions,
-    getCurrentRole
+    getCurrentRole,
+    getAllPermissions
   }
 }) 

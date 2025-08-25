@@ -23,7 +23,9 @@
               <span class="mission-top-title">角色管理</span>
             </div>
             <div class="role-top-row">
-              <button class="mission-btn mission-btn-pause" @click="showAddRoleDialog = true">新增角色</button>
+              <PermissionGuard permission="device_management.device.create">
+                <button class="mission-btn mission-btn-pause" @click="showAddRoleDialog = true">新增角色</button>
+              </PermissionGuard>
             </div>
           </div>
           <div class="mission-table-card card">
@@ -42,9 +44,15 @@
                 <div class="mission-td">{{ formatTime(role.created_time) }}</div>
                 <div class="mission-td">
                   <div class="role-action-btns">
-                    <button class="icon-btn" title="查看" @click="openPermissionDialog(role)"><img :src="permissionIcon" /></button>
-                    <button class="icon-btn" title="编辑" @click="openEditRoleDialog(role)"><img :src="editIcon" /></button>
-                    <button class="icon-btn" title="删除" @click="openDeleteRoleDialog(role)"><img :src="deleteIcon" /></button>
+                    <PermissionGuard permission="device_management.device.create">
+                      <button class="icon-btn" title="查看" @click="openPermissionDialog(role)"><img :src="permissionIcon" /></button>
+                    </PermissionGuard>
+                    <PermissionGuard permission="device_management.device.create">
+                      <button class="icon-btn" title="编辑" @click="openEditRoleDialog(role)"><img :src="editIcon" /></button>
+                    </PermissionGuard>
+                    <PermissionGuard permission="device_management.device.delete">
+                      <button class="icon-btn" title="删除" @click="openDeleteRoleDialog(role)"><img :src="deleteIcon" /></button>
+                    </PermissionGuard>
                   </div>
                 </div>
               </div>
@@ -183,7 +191,11 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useRoles } from '../composables/useApi'
+import { useRoles, usePermissions } from '../composables/useApi'
+import { usePermissionStore } from '../stores/permission'
+import { mapPermissionsToSections, mapFrontendToBackendPermissions, mapBackendToFrontendPermissions, mapBackendPermissionObjectsToFrontend } from '../utils/permissionMapper'
+import type { PermissionSection } from '../utils/permissionMapper'
+import type { Permission } from '../types'
 import userIcon from '@/assets/source_data/svg_data/user.svg'
 import roleIcon from '@/assets/source_data/svg_data/role.svg'
 import permissionIcon from '@/assets/source_data/svg_data/permission.svg'
@@ -195,6 +207,16 @@ const route = useRoute()
 
 // 使用角色管理API
 const { roles, loading, error, fetchRoles, createRole, updateRole, deleteRole } = useRoles()
+
+// 导入roleApi
+import { roleApi } from '../api/services'
+import PermissionGuard from '../components/PermissionGuard.vue'
+
+// 使用权限API
+const { fetchAllPermissions } = usePermissions()
+
+// 使用权限Store
+const permissionStore = usePermissionStore()
 
 const sidebarTabs = [
   { key: 'user', label: '用户管理', icon: userIcon, path: '/dashboard/users' },
@@ -307,9 +329,12 @@ const formatTime = (timeStr: string) => {
 // 页面加载时获取角色列表
 onMounted(async () => {
   try {
+    // 初始化权限配置
+    await initPermissionSections()
+    // 获取角色列表
     await fetchRoles({ skip: 0, limit: 100 })
   } catch (err) {
-    console.error('获取角色列表失败:', err)
+    console.error('页面初始化失败:', err)
   }
 })
 
@@ -319,110 +344,40 @@ const currentRole = ref<any>(null)
 const selectedPermissions = ref<string[]>([])
 const selectAll = ref(false)
 
-// 权限配置
-const permissionSections = ref([
-  {
-    key: 'home',
-    title: '首页',
-    viewPermission: 'home:view',
-    permissions: [
-      { key: 'home:task_dispatch', label: '下发任务' },
-      { key: 'home:cancel_task', label: '取消任务' },
-      { key: 'home:pause_route', label: '航线暂停' },
-      { key: 'home:resume_route', label: '航线恢复' },
-      { key: 'home:one_key_return', label: '一键返航' },
-      { key: 'home:cancel_return', label: '取消返航' },
-      { key: 'home:emergency_stop', label: '急停' }
-    ]
-  },
-  {
-    key: 'drone_control',
-    title: '无人机控制',
-    viewPermission: 'drone_control:view',
-    permissions: [
-      { key: 'drone_control:pause_route', label: '航线暂停' },
-      { key: 'drone_control:stop_route', label: '航线停止' },
-      { key: 'drone_control:remote_debug', label: '远程调试' },
-      { key: 'drone_control:drone_control', label: '无人机控制' },
-      { key: 'drone_control:gimbal_control', label: '云台控制' }
-    ]
-  },
-  {
-    key: 'dock_control',
-    title: '机场控制',
-    viewPermission: 'dock_control:view',
-    permissions: [
-      { key: 'dock_control:remote_debug', label: '远程调试' }
-    ]
-  },
-  {
-    key: 'route_manage',
-    title: '航线管理',
-    viewPermission: 'route_manage:view',
-    permissions: [
-      { key: 'route_manage:delete_folder', label: '删除文件夹' },
-      { key: 'route_manage:delete_route', label: '删除航线' },
-      { key: 'route_manage:add_route', label: '新增航线' },
-      { key: 'route_manage:dispatch_task', label: '下发任务' },
-      { key: 'route_manage:delete_waypoint', label: '删除航点' }
-    ]
-  },
-  {
-    key: 'task_records',
-    title: '任务记录',
-    viewPermission: 'task_records:view',
-    permissions: []
-  },
-  {
-    key: 'task_logs',
-    title: '任务日志',
-    viewPermission: 'task_logs:view',
-    permissions: []
-  },
-  {
-    key: 'device_manage',
-    title: '设备管理',
-    viewPermission: 'device_manage:view',
-    permissions: [
-      { key: 'device_manage:add_device', label: '添加设备' },
-      { key: 'device_manage:delete_device', label: '删除设备' }
-    ]
-  },
-  {
-    key: 'alarm_log',
-    title: '报警日志',
-    viewPermission: 'alarm_log:view',
-    permissions: []
-  },
-  {
-    key: 'system_manage',
-    title: '系统管理',
-    viewPermission: 'system_manage:view',
-    permissions: [
-      { key: 'system_manage:add_user', label: '新增用户' },
-      { key: 'system_manage:edit_user', label: '编辑用户' },
-      { key: 'system_manage:delete_user', label: '删除用户' }
-    ]
-  },
-  {
-    key: 'role_manage',
-    title: '角色管理',
-    viewPermission: 'role_manage:view',
-    permissions: [
-      { key: 'role_manage:add_role', label: '新增角色' },
-      { key: 'role_manage:permission_assign', label: '权限分配' },
-      { key: 'role_manage:edit_role', label: '编辑角色' },
-      { key: 'role_manage:delete_role', label: '删除角色' }
-    ]
+// 权限配置 - 将从API获取的数据动态生成
+const permissionSections = ref<PermissionSection[]>([])
+
+// 初始化权限配置
+const initPermissionSections = async () => {
+  try {
+    const permissions = await fetchAllPermissions()
+    permissionStore.setAllPermissions(permissions)
+    const sections = mapPermissionsToSections(permissions)
+    permissionSections.value = sections
+  } catch (err) {
+    console.error('获取权限配置失败:', err)
   }
-])
+}
 
 // 打开权限管理弹窗
-const openPermissionDialog = (role: any) => {
+const openPermissionDialog = async (role: any) => {
   currentRole.value = role
-  selectedPermissions.value = role.permissions || []
   selectAll.value = false // Reset selectAll when opening dialog
   showPermissionDialog.value = true
+  
+  try {
+    // 角色数据中已经包含权限信息，直接使用
+    const rolePermissions = role.permissions || []
+    // 将后端权限对象转换为前端权限键值
+    const frontendPermissions = mapBackendPermissionObjectsToFrontend(
+      rolePermissions, 
+      permissionStore.getAllPermissions
+    )
+    selectedPermissions.value = frontendPermissions
+  } catch (err) {
+    console.error('获取角色权限失败:', err)
+    selectedPermissions.value = []
+  }
 }
 
 // 处理全选/取消全选
@@ -456,13 +411,39 @@ watch(selectedPermissions, updateSelectAllStatus, { deep: true })
 const onPermissionConfirm = async () => {
   if (currentRole.value) {
     try {
-      // 更新角色的权限
-      const apiRoleData = {
-        permissions: [...selectedPermissions.value]
+      // 获取当前角色的权限ID列表
+      const currentRolePermissions = currentRole.value.permissions || []
+      const currentPermissionIds = currentRolePermissions.map((p: Permission) => p.id)
+      
+      // 将前端权限键值转换为后端权限代码
+      const backendPermissionCodes = mapFrontendToBackendPermissions(selectedPermissions.value, permissionStore.getAllPermissions)
+      
+      // 获取所有权限列表，用于查找权限ID
+      const allPermissions = permissionStore.getAllPermissions
+      const permissionMap = new Map<string, number>()
+      allPermissions.forEach(p => {
+        permissionMap.set(p.permission_code, p.id)
+      })
+      
+      // 计算需要添加和删除的权限
+      const selectedPermissionIds = backendPermissionCodes.map(code => permissionMap.get(code)).filter((id: number | undefined) => id !== undefined) as number[]
+      const permissionsToAdd = selectedPermissionIds.filter((id: number) => !currentPermissionIds.includes(id))
+      const permissionsToRemove = currentPermissionIds.filter((id: number) => !selectedPermissionIds.includes(id))
+      
+      // 批量添加权限
+      for (const permissionId of permissionsToAdd) {
+        await roleApi.assignPermission(currentRole.value.id, permissionId)
       }
       
-      await updateRole(currentRole.value.id.toString(), apiRoleData)
+      // 批量删除权限
+      for (const permissionId of permissionsToRemove) {
+        await roleApi.removePermission(currentRole.value.id, permissionId)
+      }
+      
       showPermissionDialog.value = false
+      
+      // 刷新角色列表以获取最新权限
+      await fetchRoles({ skip: 0, limit: 100 })
     } catch (err) {
       console.error('更新角色权限失败:', err)
     }

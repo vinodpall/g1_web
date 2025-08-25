@@ -2,10 +2,23 @@ import { defineStore } from 'pinia'
 import type { User } from '@/types'
 
 export const useUserStore = defineStore('user', {
-  state: () => ({
-    user: null as User | null,
-    token: localStorage.getItem('token') || ''
-  }),
+  state: () => {
+    // 从localStorage恢复用户信息
+    let user = null
+    try {
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        user = JSON.parse(userStr)
+      }
+    } catch (error) {
+      console.error('解析用户信息失败:', error)
+    }
+    
+    return {
+      user: user as User | null,
+      token: localStorage.getItem('token') || ''
+    }
+  },
   
   getters: {
     isLoggedIn: (state) => !!state.token,
@@ -21,6 +34,7 @@ export const useUserStore = defineStore('user', {
   actions: {
     setUser(user: User) {
       this.user = user
+      localStorage.setItem('user', JSON.stringify(user))
     },
     
     setToken(token: string) {
@@ -32,6 +46,7 @@ export const useUserStore = defineStore('user', {
       this.user = null
       this.token = ''
       localStorage.removeItem('token')
+      localStorage.removeItem('user')
     }
   }
 })

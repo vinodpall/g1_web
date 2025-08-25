@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
+import { usePermissionStore } from '../stores/permission'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -29,7 +30,8 @@ const router = createRouter({
           name: 'Home',
           component: () => import('../views/Home.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'home.view'
           }
         },
         {
@@ -37,7 +39,8 @@ const router = createRouter({
           name: 'DroneControl',
           component: () => import('../views/DroneControl.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'drone_control.view'
           }
         },
         {
@@ -45,7 +48,8 @@ const router = createRouter({
           name: 'DockControl',
           component: () => import('../views/DockControl.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'dock_control.view'
           }
         },
         {
@@ -53,7 +57,8 @@ const router = createRouter({
           name: 'Mission',
           component: () => import('../views/Mission.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'wayline_management.view'
           }
         },
         {
@@ -61,7 +66,8 @@ const router = createRouter({
           name: 'MissionLogs',
           component: () => import('../views/MissionLogs.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'task_logs.view'
           }
         },
         {
@@ -69,7 +75,8 @@ const router = createRouter({
           name: 'MissionRecords',
           component: () => import('../views/MissionRecords.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'task_records.view'
           }
         },
         {
@@ -77,15 +84,17 @@ const router = createRouter({
           name: 'DeviceManage',
           component: () => import('../views/DeviceManage.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'device_management.view'
           }
         },
         {
           path: 'alarm-log',
           name: 'AlarmLog',
-          component: () => import('../views/DeviceManage.vue'),
+          component: () => import('../views/AlarmLog.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'alarm_log:view'
           }
         },
         {
@@ -93,7 +102,8 @@ const router = createRouter({
           name: 'UserManage',
           component: () => import('../views/UserManage.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'device_management.view'
           }
         },
         {
@@ -101,7 +111,8 @@ const router = createRouter({
           name: 'RoleManage',
           component: () => import('../views/RoleManage.vue'),
           meta: { 
-            requiresAuth: true
+            requiresAuth: true,
+            permission: 'device_management.view'
           }
         }
       ]
@@ -111,15 +122,12 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach((to, _from, next) => {
-  console.log('路由跳转:', to.path)
-  
   // 检查是否需要认证
   if (to.meta.requiresAuth) {
     const token = localStorage.getItem('token')
     const user = localStorage.getItem('user')
     
     if (!token || !user) {
-      console.log('未找到认证信息，跳转到登录页')
       next('/login')
       return
     }
@@ -128,14 +136,33 @@ router.beforeEach((to, _from, next) => {
     try {
       const userData = JSON.parse(user)
       if (!userData || !userData.workspace_id) {
-        console.log('用户数据无效，跳转到登录页')
         next('/login')
         return
       }
     } catch (error) {
-      console.log('用户数据解析失败，跳转到登录页')
       next('/login')
       return
+    }
+    
+    // 检查页面权限
+    if (to.meta.permission) {
+      const permissionStore = usePermissionStore()
+      const hasPermission = permissionStore.hasPermission(to.meta.permission as string)
+      
+      if (!hasPermission) {
+        // 如果没有权限，检查是否正在访问首页
+        if (to.path === '/dashboard/home') {
+          // 如果连首页都没有权限，可能是权限还没有初始化完成，允许访问
+          console.warn(`用户没有访问 ${to.path} 的权限，需要权限: ${to.meta.permission}，但允许访问首页`)
+          next()
+          return
+        } else {
+          // 其他页面没有权限，重定向到首页
+          console.warn(`用户没有访问 ${to.path} 的权限，需要权限: ${to.meta.permission}`)
+          next('/dashboard/home')
+          return
+        }
+      }
     }
   }
   

@@ -760,7 +760,7 @@ const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
 
 
 // 使用航线任务API
-const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineProgress, fetchWaylineJobDetail, fetchWaylineDetail, cancelReturnHome, stopJob, pauseJob, resumeJob, executeJob } = useWaylineJobs()
+const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineDetail, cancelReturnHome, stopJob, pauseJob, resumeJob, executeJob } = useWaylineJobs()
 
 // 使用设备状态API
 const { 
@@ -784,6 +784,11 @@ const {
   formatAccTime,
   formatFlightDistance
 } = useDeviceStatus()
+
+// 使用全局任务进度store
+import { useTaskProgressStore } from '../stores/taskProgress'
+import { parseErrorMessage } from '../utils/errorCodes'
+const taskProgressStore = useTaskProgressStore()
 
 // 当前标签页
 const currentTab = ref('device')
@@ -912,10 +917,9 @@ const closeBigImage = () => {
   bigImageUrl.value = ''
 }
 
-// 航线任务相关数据
-const waylineProgress = ref<any>(null)
-const waylineJobDetail = ref<any>(null)
-const waylineProgressTimer = ref<number | null>(null)
+// 使用全局任务进度数据
+const waylineProgress = computed(() => taskProgressStore.waylineProgress)
+const waylineJobDetail = computed(() => taskProgressStore.waylineJobDetail)
 
 // 飞行统计数据
 const flightStatistics = ref<any>(null)
@@ -1146,26 +1150,11 @@ const getVideoTypeName = (type: 'dock' | 'drone_visible' | 'drone_infrared') => 
   return typeMap[type]
 }
 
-// 获取航线任务进度数据
+// 获取航线任务进度数据（现在由全局store管理）
 const loadWaylineProgress = async () => {
   try {
-    const workspaceId = getCachedWorkspaceId()
-    const { dockSns } = getCachedDeviceSns()
-    
-    if (!workspaceId || dockSns.length === 0) {
-      return
-    }
-    
-    // 获取第一个机场的航线任务进度
-    const dockSn = dockSns[0]
-    const progressData = await fetchWaylineProgress(workspaceId, dockSn)
-    waylineProgress.value = progressData
-    
-    // 如果有job_id，获取详细信息
-    if (progressData.job_id) {
-      const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
-      waylineJobDetail.value = jobDetail
-      
+    // 检查全局store中是否有任务数据
+    if (waylineProgress.value?.job_id) {
       // 显示航点和轨迹
       await displayWayline()
     } else {
@@ -1230,38 +1219,11 @@ const waylineCurrentWaypoint = computed(() => {
 })
 
 const waylineTaskStatus = computed(() => {
-  // 优先使用progress返回数据中的status字段
-  const status = waylineProgress.value?.status
-  if (!status) return 'waiting'
-  
-  const statusMap: Record<string, string> = {
-    'canceled': 'failed',
-    'failed': 'failed',
-    'in_progress': 'running',
-    'ok': 'completed',
-    'partially_done': 'completed',
-    'paused': 'paused',
-    'rejected': 'failed',
-    'sent': 'waiting',
-    'timeout': 'failed'
-  }
-  
-  return statusMap[status] || 'waiting'
+  return taskProgressStore.taskStatus
 })
 
 const waylineProgressPercent = computed(() => {
-  const progress = waylineProgress.value?.progress
-  if (!progress) return 0
-  
-  // 使用current_waypoint_index和total_waypoints计算进度
-  const currentWaypoint = progress.current_waypoint_index || 0
-  const totalWaypoints = progress.total_waypoints || 1
-  
-  // 计算百分比并取整数
-  const percent = Math.round((currentWaypoint / totalWaypoints) * 100)
-  
-  // 确保百分比在0-100范围内
-  return Math.max(0, Math.min(100, percent))
+  return taskProgressStore.taskProgressPercent
 })
 
 const waylineTaskStatusText = computed(() => {
@@ -2463,10 +2425,7 @@ const handleCancelTask = async () => {
     await stopJob(workspaceId, waylineProgress.value.job_id)
     alert('任务取消指令已发送')
     
-    // 刷新任务进度
-    setTimeout(() => {
-      loadWaylineProgress()
-    }, 1000)
+    // 任务进度由全局store自动更新
   } catch (err) {
     console.error('取消任务失败:', err)
     alert('取消任务失败')
@@ -2490,10 +2449,7 @@ const handlePauseRoute = async () => {
     await pauseJob(workspaceId, waylineProgress.value.job_id)
     alert('航线暂停指令已发送')
     
-    // 刷新任务进度
-    setTimeout(() => {
-      loadWaylineProgress()
-    }, 1000)
+    // 任务进度由全局store自动更新
   } catch (err) {
     console.error('航线暂停失败:', err)
     alert('航线暂停失败')
@@ -2517,10 +2473,7 @@ const handleResumeRoute = async () => {
     await resumeJob(workspaceId, waylineProgress.value.job_id)
     alert('航线恢复指令已发送')
     
-    // 刷新任务进度
-    setTimeout(() => {
-      loadWaylineProgress()
-    }, 1000)
+    // 任务进度由全局store自动更新
   } catch (err) {
     console.error('航线恢复失败:', err)
     alert('航线恢复失败')
@@ -2549,10 +2502,7 @@ const handleCancelReturnHome = async () => {
     await cancelReturnHome(workspaceId, dockSns[0])
     alert('取消返航指令已发送')
     
-    // 刷新任务进度
-    setTimeout(() => {
-      loadWaylineProgress()
-    }, 1000)
+    // 任务进度由全局store自动更新
   } catch (err) {
     console.error('取消返航失败:', err)
     alert('取消返航失败')
@@ -2590,7 +2540,8 @@ const handleReturnHome = async () => {
     
   } catch (error: any) {
     console.error('一键返航失败:', error)
-    alert(`一键返航失败: ${error.message || error}`)
+    const errorMsg = parseErrorMessage(error)
+    alert(`一键返航失败: ${errorMsg}`)
   }
 }
 
@@ -3103,8 +3054,7 @@ onMounted(async () => {
   // 加载航线文件列表
   await loadWaylineFiles()
   
-  // 加载航线任务进度数据
-  await loadWaylineProgress()
+  // 航线任务进度数据现在由全局store管理，无需本地加载
   
   // 加载飞行统计数据
   await loadFlightStatistics(7)
@@ -3209,10 +3159,7 @@ onMounted(async () => {
     }
   }, 2000)
   
-  // 设置航线任务进度自动刷新（每3秒）
-  waylineProgressTimer.value = setInterval(async () => {
-    await loadWaylineProgress()
-  }, 3000)
+  // 航线任务进度现在由全局store管理，无需本地轮询
 })
 
 // 组件卸载时清理
@@ -3232,11 +3179,7 @@ onUnmounted(() => {
     droneStatusRefreshTimer = null
   }
   
-  // 清理航线任务进度刷新定时器
-  if (waylineProgressTimer.value) {
-    clearInterval(waylineProgressTimer.value)
-    waylineProgressTimer.value = null
-  }
+  // 航线任务进度现在由全局store管理，无需清理本地定时器
   // 清理图表动画定时器
   if (chartAnimationTimer) {
     clearInterval(chartAnimationTimer)

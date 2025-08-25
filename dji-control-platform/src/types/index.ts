@@ -10,7 +10,7 @@ export interface User {
   updated_time: string
   workspace_id: string
   user_type: number
-  roles: any[]
+  roles: Role[] | string[] // 角色可以是Role对象数组或字符串数组
   workspace_name: string | null
 }
 
@@ -89,7 +89,7 @@ export interface Role {
   role_description: string
   created_time: string
   updated_time: string
-  permissions: string[]
+  permissions: Permission[]
 }
 
 export interface Device {
@@ -201,4 +201,13 @@ export interface VisionAlertsResponse {
   alerts: VisionAlert[]
   total: number
   has_more: boolean
+}
+
+export interface Permission {
+  id: number
+  permission_name: string
+  permission_code: string
+  permission_description: string
+  created_time: string
+  updated_time: string
 }
