@@ -3,195 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>权限调试页面</title>
+    <title>权限控制测试 - 报警日志</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
-            background: #1a2332;
-            color: #fff;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
         }
-        .debug-section {
-            background: #2a3a4a;
+        .test-section {
+            background: white;
             padding: 20px;
             margin: 20px 0;
             border-radius: 8px;
-            border: 1px solid #4a5a6a;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .permission-item {
-            background: #3a4a5a;
+            background: #f8f9fa;
             padding: 10px;
-            margin: 5px 0;
+            margin: 10px 0;
             border-radius: 4px;
-            border-left: 4px solid #ff6b6b;
+            border-left: 4px solid #007bff;
         }
-        .permission-item.has-permission {
-            border-left-color: #4caf50;
+        .permission-code {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
         }
-        .test-button {
-            background: #ff6b6b;
-            color: white;
-            border: none;
-            padding: 10px 20px;
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
             border-radius: 4px;
-            cursor: pointer;
-            margin: 5px;
+            font-size: 12px;
+            font-weight: bold;
         }
-        .test-button:hover {
-            background: #ff5252;
+        .status.success {
+            background: #d4edda;
+            color: #155724;
         }
-        .test-button:disabled {
-            background: #666;
-            cursor: not-allowed;
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
         }
     </style>
 </head>
 <body>
-    <h1>权限调试页面</h1>
+    <h1>权限控制测试 - 报警日志页面</h1>
     
-    <div class="debug-section">
-        <h2>用户信息</h2>
-        <div id="userInfo"></div>
+    <div class="test-section">
+        <h2>新增权限信息</h2>
+        <div class="permission-item">
+            <strong>权限名称：</strong>设备管理-报警日志<br>
+            <strong>权限代码：</strong><span class="permission-code">device_management.log.view</span><br>
+            <strong>权限描述：</strong>查看设备报警日志<br>
+            <strong>状态：</strong><span class="status success">已添加</span>
+        </div>
     </div>
-    
-    <div class="debug-section">
-        <h2>权限测试</h2>
-        <button class="test-button" onclick="testPermission('system_management.user.create')">测试添加用户权限</button>
-        <button class="test-button" onclick="testPermission('system_management.user.edit')">测试编辑用户权限</button>
-        <button class="test-button" onclick="testPermission('system_management.user.delete')">测试删除用户权限</button>
-        <button class="test-button" onclick="testPermission('role_management.role.create')">测试添加角色权限</button>
-        <button class="test-button" onclick="testPermission('role_management.role.edit')">测试编辑角色权限</button>
-        <button class="test-button" onclick="testPermission('role_management.role.delete')">测试删除角色权限</button>
-        <button class="test-button" onclick="testPermission('role_management.permission.set')">测试分配权限</button>
+
+    <div class="test-section">
+        <h2>权限映射更新</h2>
+        <p>已在以下文件中添加权限映射：</p>
+        <ul>
+            <li><code>src/utils/permissionMapper.ts</code> - 权限名称映射</li>
+            <li><code>src/router/index.ts</code> - 路由权限配置</li>
+            <li><code>src/views/AlarmLog.vue</code> - 页面权限控制</li>
+            <li><code>PERMISSION_MAPPING.md</code> - 权限文档</li>
+        </ul>
     </div>
-    
-    <div class="debug-section">
-        <h2>权限列表</h2>
-        <div id="permissionList"></div>
+
+    <div class="test-section">
+        <h2>测试步骤</h2>
+        <ol>
+            <li>确保用户已登录系统</li>
+            <li>检查用户权限列表中是否包含 <code>device_management.log.view</code></li>
+            <li>尝试访问报警日志页面 <code>/dashboard/alarm-log</code></li>
+            <li>验证权限控制是否正常工作：
+                <ul>
+                    <li>有权限：显示报警日志页面内容</li>
+                    <li>无权限：显示权限不足提示</li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>权限控制实现</h2>
+        <p>报警日志页面使用了 <code>PermissionGuard</code> 组件进行权限控制：</p>
+        <pre><code>&lt;PermissionGuard permission="device_management.log.view" fallback-text="无权限查看报警日志"&gt;
+  &lt;!-- 页面内容 --&gt;
+&lt;/PermissionGuard&gt;</code></pre>
+    </div>
+
+    <div class="test-section">
+        <h2>后端权限数据</h2>
+        <p>后端已添加对应的权限记录：</p>
+        <div class="permission-item">
+            <strong>ID：</strong>38<br>
+            <strong>权限名称：</strong>设备管理-报警日志<br>
+            <strong>权限代码：</strong><span class="permission-code">device_management.log.view</span><br>
+            <strong>权限描述：</strong>查看设备报警日志<br>
+            <strong>创建时间：</strong>2025-08-25T14:39:20<br>
+            <strong>更新时间：</strong>2025-08-25T14:39:40
+        </div>
     </div>
 
     <script>
-        // 模拟权限检查函数
-        function hasPermission(permission) {
-            const userStr = localStorage.getItem('user');
-            if (!userStr) return false;
+        // 简单的权限检查测试
+        function testPermission() {
+            const testPermission = 'device_management.log.view';
+            console.log('测试权限:', testPermission);
             
-            try {
-                const user = JSON.parse(userStr);
-                const permissions = [];
-                
-                // 从顶层permissions数组提取
-                if (user.permissions && Array.isArray(user.permissions)) {
-                    user.permissions.forEach(permission => {
-                        if (permission.code) {
-                            permissions.push(permission.code);
-                        }
-                    });
-                }
-                
-                // 从roles数组提取
-                if (user.roles && Array.isArray(user.roles)) {
-                    user.roles.forEach(role => {
-                        if (role.permissions && Array.isArray(role.permissions)) {
-                            role.permissions.forEach(permission => {
-                                const permissionCode = permission.permission_code || permission.code;
-                                if (permissionCode) {
-                                    permissions.push(permissionCode);
-                                }
-                            });
-                        }
-                    });
-                }
-                
-                return permissions.includes(permission);
-            } catch (error) {
-                console.error('权限检查失败:', error);
-                return false;
-            }
+            // 这里可以添加实际的权限检查逻辑
+            // 通常从 localStorage 或 store 中获取用户权限列表
+            const userPermissions = JSON.parse(localStorage.getItem('userPermissions') || '[]');
+            const hasPermission = userPermissions.includes(testPermission);
+            
+            console.log('用户权限列表:', userPermissions);
+            console.log('是否有权限:', hasPermission);
+            
+            return hasPermission;
         }
         
-        function testPermission(permission) {
-            const hasPerm = hasPermission(permission);
-            alert(`权限 ${permission}: ${hasPerm ? '有权限' : '无权限'}`);
-        }
-        
-        function displayUserInfo() {
-            const userStr = localStorage.getItem('user');
-            const userInfoDiv = document.getElementById('userInfo');
-            
-            if (!userStr) {
-                userInfoDiv.innerHTML = '<p style="color: #ff6b6b;">未找到用户信息</p>';
-                return;
-            }
-            
-            try {
-                const user = JSON.parse(userStr);
-                userInfoDiv.innerHTML = `
-                    <p><strong>用户ID:</strong> ${user.id || 'N/A'}</p>
-                    <p><strong>用户名:</strong> ${user.username || 'N/A'}</p>
-                    <p><strong>角色:</strong> ${JSON.stringify(user.roles || [])}</p>
-                    <p><strong>权限:</strong> ${JSON.stringify(user.permissions || [])}</p>
-                `;
-            } catch (error) {
-                userInfoDiv.innerHTML = `<p style="color: #ff6b6b;">解析用户信息失败: ${error.message}</p>`;
-            }
-        }
-        
-        function displayPermissions() {
-            const userStr = localStorage.getItem('user');
-            const permissionListDiv = document.getElementById('permissionList');
-            
-            if (!userStr) {
-                permissionListDiv.innerHTML = '<p style="color: #ff6b6b;">未找到用户信息</p>';
-                return;
-            }
-            
-            try {
-                const user = JSON.parse(userStr);
-                const permissions = [];
-                
-                // 从顶层permissions数组提取
-                if (user.permissions && Array.isArray(user.permissions)) {
-                    user.permissions.forEach(permission => {
-                        if (permission.code) {
-                            permissions.push(permission.code);
-                        }
-                    });
-                }
-                
-                // 从roles数组提取
-                if (user.roles && Array.isArray(user.roles)) {
-                    user.roles.forEach(role => {
-                        if (role.permissions && Array.isArray(role.permissions)) {
-                            role.permissions.forEach(permission => {
-                                const permissionCode = permission.permission_code || permission.code;
-                                if (permissionCode) {
-                                    permissions.push(permissionCode);
-                                }
-                            });
-                        }
-                    });
-                }
-                
-                const uniquePermissions = [...new Set(permissions)];
-                
-                permissionListDiv.innerHTML = uniquePermissions.map(permission => {
-                    const hasPerm = hasPermission(permission);
-                    return `<div class="permission-item ${hasPerm ? 'has-permission' : ''}">
-                        <strong>${permission}</strong>: ${hasPerm ? '有权限' : '无权限'}
-                    </div>`;
-                }).join('');
-                
-            } catch (error) {
-                permissionListDiv.innerHTML = `<p style="color: #ff6b6b;">解析权限失败: ${error.message}</p>`;
-            }
-        }
-        
-        // 页面加载时显示信息
-        window.onload = function() {
-            displayUserInfo();
-            displayPermissions();
-        };
+        // 页面加载时执行测试
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('=== 权限控制测试开始 ===');
+            testPermission();
+            console.log('=== 权限控制测试结束 ===');
+        });
     </script>
 </body>
 </html>

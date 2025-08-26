@@ -1,6 +1,7 @@
 <template>
-  <div v-if="show" class="permission-denied-mask">
-    <div class="permission-denied-dialog">
+  <div v-if="show" class="permission-denied-mask" @click="handleMaskClick">
+    <div class="permission-denied-dialog" @click.stop>
+      <button class="permission-close-btn" aria-label="关闭" @click="handleClose">×</button>
       <div class="permission-denied-icon">
         <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
           <circle cx="24" cy="24" r="24" fill="#FF4D4F" opacity="0.1"/>
@@ -12,18 +13,16 @@
       <div class="permission-denied-title">权限不足</div>
       <div class="permission-denied-content">
         <p>您没有执行此操作的权限</p>
-        <p class="permission-detail">所需权限：{{ requiredPermission }}</p>
-        <p class="permission-tip">请联系管理员分配相应权限</p>
-      </div>
-      <div class="permission-denied-actions">
-        <button class="permission-btn permission-btn-primary" @click="handleContactAdmin">联系管理员</button>
-        <button class="permission-btn permission-btn-secondary" @click="handleClose">关闭</button>
+        <p class="permission-detail">所需权限：{{ requiredPermissionName }}</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { usePermissionStore } from '../stores/permission'
+import { mapFrontendToBackendPermissions } from '../utils/permissionMapper'
 
 interface Props {
   show: boolean
@@ -39,12 +38,26 @@ const emit = defineEmits<{
   contactAdmin: []
 }>()
 
+const permissionStore = usePermissionStore()
+
+const requiredPermissionName = computed(() => {
+  const allPermissions = permissionStore.getAllPermissions
+  const frontend = props.requiredPermission ? [props.requiredPermission] : []
+  const backendCodes = mapFrontendToBackendPermissions(frontend as string[], allPermissions as any)
+  if (backendCodes.length > 0) {
+    const match = (allPermissions as any).find((p: any) => p.permission_code === backendCodes[0])
+    if (match) return match.permission_name
+  }
+  return props.requiredPermission || '未知权限'
+})
+
 const handleClose = () => {
   emit('close')
 }
 
-const handleContactAdmin = () => {
-  emit('contactAdmin')
+// 点击遮罩关闭
+const handleMaskClick = () => {
+  emit('close')
 }
 </script>
 
@@ -57,101 +70,75 @@ const handleContactAdmin = () => {
   bottom: 0;
   background: rgba(0, 0, 0, 0.6);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 9999;
   backdrop-filter: blur(4px);
 }
 
 .permission-denied-dialog {
+  margin-top: 28vh;
+}
+
+.permission-denied-dialog {
   background: linear-gradient(135deg, #1a233a 80%, #16213a 100%);
   border-radius: 16px;
-  padding: 32px 40px;
+  padding: 20px 24px;
   box-shadow: 0 8px 40px #000a, 0 2px 16px #ff4d4f33;
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 480px;
-  width: 90%;
+  max-width: 360px;
+  width: 86%;
   border: 1px solid #ff4d4f40;
+  position: relative;
+}
+
+.permission-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: #ff4d4f;
+  font-size: 22px;
+  cursor: pointer;
 }
 
 .permission-denied-icon {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .permission-denied-title {
-  font-size: 20px;
+  font-size: 18px;
   color: #ff4d4f;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   text-align: center;
 }
 
 .permission-denied-content {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
   color: #fff;
 }
 
 .permission-denied-content p {
-  margin: 8px 0;
-  font-size: 14px;
+  margin: 6px 0;
+  font-size: 13px;
   line-height: 1.5;
 }
 
 .permission-detail {
   color: #ff7875;
-  font-size: 13px;
+  font-size: 12px;
   background: rgba(255, 77, 79, 0.1);
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: 4px;
   border: 1px solid rgba(255, 77, 79, 0.2);
-  margin: 12px 0;
+  margin: 10px 0;
 }
 
-.permission-tip {
-  color: #b6b6b6;
-  font-size: 13px;
-}
-
-.permission-denied-actions {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-}
-
-.permission-btn {
-  padding: 10px 24px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-  min-width: 100px;
-}
-
-.permission-btn-primary {
-  background: #ff4d4f;
-  color: #fff;
-}
-
-.permission-btn-primary:hover {
-  background: #ff7875;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 77, 79, 0.3);
-}
-
-.permission-btn-secondary {
-  background: transparent;
-  color: #b6b6b6;
-  border: 1px solid #223a5e;
-}
-
-.permission-btn-secondary:hover {
-  background: rgba(34, 58, 94, 0.3);
-  color: #fff;
-  border-color: #59c0fc;
-}
+.permission-tip { display: none; }
+.permission-denied-actions { display: none; }
 </style> 

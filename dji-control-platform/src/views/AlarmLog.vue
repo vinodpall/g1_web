@@ -1,109 +1,114 @@
 <template>
-  <div class="drone-control-main">
-    <!-- 侧边栏菜单 -->
-    <aside class="sidebar-menu">
-      <div class="sidebar-tabs">
-        <div
-          v-for="tab in sidebarTabs"
-          :key="tab.key"
-          :class="['sidebar-tab', { active: currentTab === tab.key }]"
-          @click="handleTabClick(tab.key)"
-        >
-          <img :src="tab.icon" :alt="tab.label" />
+  <PermissionGuard permission="device_management.log.view" fallback-text="无权限查看报警日志">
+    <div class="drone-control-main">
+      <!-- 侧边栏菜单 -->
+      <aside class="sidebar-menu">
+        <div class="sidebar-tabs">
+          <div
+            v-for="tab in sidebarTabs"
+            :key="tab.key"
+            :class="['sidebar-tab', { active: currentTab === tab.key }]"
+            @click="handleTabClick(tab.key)"
+          >
+            <img :src="tab.icon" :alt="tab.label" />
+          </div>
         </div>
-      </div>
-    </aside>
-    <!-- 主体内容区 -->
-    <main class="main-content">
-      <div class="main-flex">
-        <section class="right-panel">
-          <!-- 筛选区 -->
-          <div class="mission-top-card card">
-            <div class="mission-top-header">
-              <img src="@/assets/source_data/bg_data/card_logo.png" style="width:22px;height:22px;margin-right:8px;vertical-align:middle;" alt="logo" />
-              <span class="mission-top-title">报警日志</span>
-            </div>
-            <div class="mission-top-row">
-              <div class="filter-item">
-                <span class="filter-label">设备选择：</span>
-                <div class="custom-select-wrapper">
-                  <select v-model="selectedDeviceType" class="mission-select" @change="handleDeviceTypeChange">
-                    <option v-for="option in getDeviceTypeOptions()" :key="option.value" :value="option.value">
-                      {{ option.label }}
-                    </option>
-                  </select>
-                  <span class="custom-select-arrow">
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                    </svg>
-                  </span>
-                </div>
+      </aside>
+      <!-- 主体内容区 -->
+      <main class="main-content">
+        <div class="main-flex">
+          <section class="right-panel">
+            <!-- 筛选区 -->
+            <div class="mission-top-card card">
+              <div class="mission-top-header">
+                <img src="@/assets/source_data/bg_data/card_logo.png" style="width:22px;height:22px;margin-right:8px;vertical-align:middle;" alt="logo" />
+                <span class="mission-top-title">报警日志</span>
               </div>
-              <div class="filter-item">
-                <span class="filter-label">报警等级：</span>
-                <div class="custom-select-wrapper">
-                  <select v-model="filter.level" class="mission-select">
-                    <option value="">全部等级</option>
-                    <option value="0">通知</option>
-                    <option value="1">提醒</option>
-                    <option value="2">警告</option>
-                  </select>
-                  <span class="custom-select-arrow">
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                    </svg>
-                  </span>
+              <div class="mission-top-row">
+                <div class="filter-item">
+                  <span class="filter-label">设备选择：</span>
+                  <div class="custom-select-wrapper">
+                    <select v-model="selectedDeviceType" class="mission-select" @change="handleDeviceTypeChange">
+                      <option v-for="option in getDeviceTypeOptions()" :key="option.value" :value="option.value">
+                        {{ option.label }}
+                      </option>
+                    </select>
+                    <span class="custom-select-arrow">
+                      <svg width="12" height="12" viewBox="0 0 12 12">
+                        <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                      </svg>
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </div>
-          <!-- 列表区 -->
-          <div class="mission-table-card card">
-            <div class="mission-table-header">
-              <div class="mission-th" v-for="col in columns" :key="col.key">{{ col.title }}</div>
-            </div>
-            <div class="mission-table-body">
-              <div v-if="loading" class="loading-row">
-                <div class="mission-td" style="text-align:center;grid-column:1/-1;padding:20px;">
-                  加载中...
+                <div class="filter-item">
+                  <span class="filter-label">报警等级：</span>
+                  <div class="custom-select-wrapper">
+                    <select v-model="filter.level" class="mission-select">
+                      <option value="">全部等级</option>
+                      <option value="0">通知</option>
+                      <option value="1">提醒</option>
+                      <option value="2">警告</option>
+                    </select>
+                    <span class="custom-select-arrow">
+                      <svg width="12" height="12" viewBox="0 0 12 12">
+                        <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                      </svg>
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div v-else-if="error" class="error-row">
-                <div class="mission-td" style="text-align:center;grid-column:1/-1;padding:20px;color:#ff6b6b;">
-                  {{ error }}
-                </div>
-              </div>
-              <div v-else-if="alarmList.length === 0" class="empty-row">
-                <div class="mission-td" style="text-align:center;grid-column:1/-1;padding:20px;color:#b8c7d9;">
-                  暂无报警数据
-                </div>
-              </div>
-              <div v-else class="mission-tr" v-for="(row, idx) in alarmList" :key="row.id">
-                <div class="mission-td">{{ idx + 1 }}</div>
-                <div class="mission-td">{{ row.deviceName }}</div>
-                <div class="mission-td">{{ row.type }}</div>
-                <div class="mission-td">{{ row.content }}</div>
-                <div class="mission-td">
-                  <span :class="['level-badge', `level-${row.level}`]">{{ row.levelText }}</span>
-                </div>
-                <div class="mission-td">{{ row.time }}</div>
               </div>
             </div>
-          </div>
-        </section>
-      </div>
-    </main>
-  </div>
+            <!-- 列表区 -->
+            <div class="mission-table-card card">
+              <div class="mission-table-header">
+                <div class="mission-th" v-for="col in columns" :key="col.key">{{ col.title }}</div>
+              </div>
+              <div class="mission-table-body">
+                <div v-if="loading" class="loading-row">
+                  <div class="mission-td" style="text-align:center;grid-column:1/-1;padding:20px;">
+                    加载中...
+                  </div>
+                </div>
+                <div v-else-if="error" class="error-row">
+                  <div class="mission-td" style="text-align:center;grid-column:1/-1;padding:20px;color:#ff6b6b;">
+                    {{ error }}
+                  </div>
+                </div>
+                <div v-else-if="alarmList.length === 0" class="empty-row">
+                  <div class="mission-td" style="text-align:center;grid-column:1/-1;padding:20px;color:#b8c7d9;">
+                    暂无报警数据
+                  </div>
+                </div>
+                <div v-else class="mission-tr" v-for="(row, idx) in alarmList" :key="row.id">
+                  <div class="mission-td">{{ idx + 1 }}</div>
+                  <div class="mission-td">{{ row.deviceName }}</div>
+                  <div class="mission-td">{{ row.type }}</div>
+                  <div class="mission-td">{{ row.content }}</div>
+                  <div class="mission-td">
+                    <span :class="['level-badge', `level-${row.level}`]">{{ row.levelText }}</span>
+                  </div>
+                  <div class="mission-td">{{ row.time }}</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </PermissionGuard>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHmsAlerts, useDevices } from '../composables/useApi'
+import PermissionGuard from '../components/PermissionGuard.vue'
 import equipmengStoreIcon from '@/assets/source_data/svg_data/equipmeng_store.svg'
 import equipmentWarningsIcon from '@/assets/source_data/svg_data/equipment_warnings.svg'
 
 const router = useRouter()
+
+
 
 // 使用HMS报警API和设备管理API
 const { hmsAlerts, loading, error, fetchDeviceHms, setAllAlerts } = useHmsAlerts()

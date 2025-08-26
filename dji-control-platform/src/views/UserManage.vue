@@ -23,12 +23,10 @@
               <span class="mission-top-title">{{ currentTab === 'user' ? '用户管理' : '角色管理' }}</span>
             </div>
             <div class="user-top-row">
-              <PermissionGuard permission="system_management.user.create">
-                <button 
-                  class="mission-btn mission-btn-pause" 
-                  @click="handleAddUser"
-                >新增用户</button>
-              </PermissionGuard>
+              <button 
+                class="mission-btn mission-btn-pause" 
+                @click="handleAddUser"
+              >新增用户</button>
             </div>
           </div>
           <div class="mission-table-card card">
@@ -49,7 +47,7 @@
                 <div class="mission-td">{{ user.username }}</div>
                 <div class="mission-td">{{ user.userfullname || '-' }}</div>
                 <div class="mission-td">
-                  <UserRoleDisplay :user="user" />
+                  <UserRoleDisplay :user="(user as any)" />
                 </div>
                 <div class="mission-td">{{ '-' }}</div>
                 <div class="mission-td">{{ '-' }}</div>
@@ -57,12 +55,8 @@
                 <div class="mission-td">{{ formatTime(user.created_time) }}</div>
                 <div class="mission-td">
                   <div class="user-action-btns">
-                    <PermissionGuard permission="system_management.user.edit">
-                      <button class="icon-btn" title="编辑" @click="openEditUserDialog(user)"><img :src="editIcon" /></button>
-                    </PermissionGuard>
-                    <PermissionGuard permission="system_management.user.delete">
-                      <button class="icon-btn" title="删除" @click="openDeleteUserDialog(user)"><img :src="deleteIcon" /></button>
-                    </PermissionGuard>
+                    <button class="icon-btn" title="编辑" @click="onClickEditUser(user)"><img :src="editIcon" /></button>
+                    <button class="icon-btn" title="删除" @click="onClickDeleteUser(user)"><img :src="deleteIcon" /></button>
                   </div>
                 </div>
               </div>
@@ -121,24 +115,13 @@
       </div>
     </div>
 
-    <!-- 权限提示弹窗 -->
-    <div v-if="showPermissionDenied" class="custom-dialog-mask">
-      <div class="custom-dialog permission-dialog">
-        <div class="custom-dialog-title">权限不足</div>
-        <div class="custom-dialog-content">
-          <div class="permission-message">
-            <div class="permission-icon">⚠️</div>
-            <div class="permission-text">
-              您没有执行此操作的权限<br>
-              请联系管理员获取相应权限
-            </div>
-          </div>
-        </div>
-        <div class="custom-dialog-actions">
-          <button class="mission-btn mission-btn-pause" @click="showPermissionDenied = false">确定</button>
-        </div>
-      </div>
-    </div>
+    <!-- 权限不足弹窗（与首页一致样式） -->
+    <PermissionDenied 
+      :show="showPermissionDenied" 
+      :required-permission="requiredPermission" 
+      @close="showPermissionDenied = false" 
+      @contactAdmin="showPermissionDenied = false" 
+    />
 
     <!-- 编辑用户弹窗 -->
     <div v-if="showEditUserDialog" class="custom-dialog-mask">
@@ -206,6 +189,23 @@
         </div>
       </div>
     </div>
+
+    <!-- 错误提示弹窗 -->
+    <ErrorMessage 
+      :show="showErrorMessage" 
+      :message="errorMessage" 
+      @close="closeErrorMessage" 
+    />
+
+    <!-- 统一结果弹窗 -->
+    <ResultDialog
+      :show="resultDialog.show"
+      :type="resultDialog.type"
+      :title="resultDialog.title"
+      :message="resultDialog.message"
+      :details="resultDialog.details"
+      @close="closeResultDialog"
+    />
   </div>
 </template>
 
@@ -215,7 +215,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUsers, useRoles } from '../composables/useApi'
 import { UserRoleManager } from '../utils/userRoleManager'
 import UserRoleDisplay from '../components/UserRoleDisplay.vue'
-import PermissionGuard from '../components/PermissionGuard.vue'
+// 取消按钮上的权限包装，改为点击时校验
+import { usePermissionStore } from '../stores/permission'
+import PermissionDenied from '../components/PermissionDenied.vue'
+import ErrorMessage from '../components/ErrorMessage.vue'
+import ResultDialog from '../components/ResultDialog.vue'
 import userIcon from '@/assets/source_data/svg_data/user.svg'
 import roleIcon from '@/assets/source_data/svg_data/role.svg'
 import editIcon from '@/assets/source_data/svg_data/edit.svg'
@@ -225,7 +229,7 @@ const router = useRouter()
 const route = useRoute()
 
 // 使用用户管理API
-const { users, loading, error, fetchUsers, createUser, updateUser, deleteUser, assignUserRole, removeUserRole } = useUsers()
+const { users, loading, error, fetchUsers, createUser, updateUser, deleteUser, assignUserRole, removeUserRole, syncUserRole } = useUsers()
 
 // 使用角色管理API
 const { roles: roleList, fetchRoles } = useRoles()
@@ -255,8 +259,21 @@ const onSearch = async () => {
       limit: 100,
       search: filter.value.username || filter.value.name 
     })
-  } catch (err) {
+  } catch (err: any) {
     console.error('搜索用户失败:', err)
+    
+    // 处理错误响应
+    let errorMsg = '搜索用户失败，请稍后重试'
+    
+    if (err.response?.data?.detail) {
+      errorMsg = err.response.data.detail
+    } else if (err.message) {
+      errorMsg = err.message
+    }
+    
+    // 显示错误弹窗
+    errorMessage.value = errorMsg
+    showErrorMessage.value = true
   }
 }
 
@@ -265,6 +282,19 @@ const showEditUserDialog = ref(false)
 const showDeleteUserDialog = ref(false)
 const showPermissionDenied = ref(false)
 const requiredPermission = ref('')
+
+// 错误提示相关状态
+const showErrorMessage = ref(false)
+const errorMessage = ref('')
+
+// 结果弹窗状态
+const resultDialog = ref({
+  show: false,
+  type: 'info' as 'success' | 'error' | 'info',
+  title: '',
+  message: '',
+  details: '' as string | null
+})
 
 
 const addUserForm = ref({
@@ -296,48 +326,33 @@ const editUserForm = ref({
 
 const currentUser = ref<any>(null)
 
-// 权限检查函数
-const hasPermission = (permission: string) => {
-  // 从权限Store获取用户权限
-  const userStr = localStorage.getItem('user')
-  if (!userStr) return false
-  
-  try {
-    const user = JSON.parse(userStr)
-    // 这里可以根据用户角色获取权限，暂时返回true
-    // 后续可以连接真实的权限API
-    return true
-  } catch (err) {
-    console.error('解析用户信息失败:', err)
-    return false
-  }
-}
+// 权限检查函数（与全站一致，使用权限Store）
+const permissionStore = usePermissionStore()
+const hasPermission = (permission: string) => permissionStore.hasPermission(permission)
 
 const handleAddUser = () => {
-  if (hasPermission('user_manage:add')) {
+  if (hasPermission('system_management.user.create')) {
     showAddUserDialog.value = true
   } else {
-    requiredPermission.value = 'user_manage:add'
+    requiredPermission.value = 'system_management.user.create'
     showPermissionDenied.value = true
   }
 }
 
-const handleEditUser = (user: any) => {
-  if (hasPermission('user_manage:edit')) {
-    // 这里可以打开编辑弹窗
-    console.log('编辑用户:', user)
+const onClickEditUser = (user: any) => {
+  if (hasPermission('system_management.user.edit')) {
+    openEditUserDialog(user)
   } else {
-    requiredPermission.value = 'user_manage:edit'
+    requiredPermission.value = 'system_management.user.edit'
     showPermissionDenied.value = true
   }
 }
 
-const handleDeleteUser = (user: any) => {
-  if (hasPermission('user_manage:delete')) {
-    // 这里可以执行删除操作
-    console.log('删除用户:', user)
+const onClickDeleteUser = (user: any) => {
+  if (hasPermission('system_management.user.delete')) {
+    openDeleteUserDialog(user)
   } else {
-    requiredPermission.value = 'user_manage:delete'
+    requiredPermission.value = 'system_management.user.delete'
     showPermissionDenied.value = true
   }
 }
@@ -367,7 +382,7 @@ const onAddUserConfirm = async () => {
     
     // 如果选择了角色，为用户分配角色
     if (selectedRole && newUser) {
-      const roleId = UserRoleManager.getRoleIdByName(selectedRole.role_name, roleList.value)
+      const roleId = UserRoleManager.getRoleIdByName(selectedRole.role_name, roleList.value as any)
       if (roleId) {
         const result = await UserRoleManager.assignRole(newUser.id, roleId, assignUserRole)
         if (result.success) {
@@ -392,9 +407,53 @@ const onAddUserConfirm = async () => {
       workspace_id: '123456',
       user_type: 1
     }
-  } catch (err) {
+    
+    // 重新获取用户列表以更新显示
+    await fetchUsers({ skip: 0, limit: 100 })
+    console.log('用户创建成功，列表已刷新')
+    
+    // 显示成功结果
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '新增用户成功',
+      message: '',
+      details: ''
+    }
+    
+  } catch (err: any) {
     console.error('创建用户失败:', err)
+    
+    // 处理错误响应
+    let errorMsg = '创建用户失败，请稍后重试'
+    
+    if (err.response?.data?.detail) {
+      // 处理 {"detail":"该用户名的用户已存在"} 这种错误
+      errorMsg = err.response.data.detail
+    } else if (err.message) {
+      errorMsg = err.message
+    }
+    
+    // 显示失败结果
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '新增用户失败',
+      message: '',
+      details: errorMsg
+    }
   }
+}
+
+// 关闭错误弹窗
+const closeErrorMessage = () => {
+  showErrorMessage.value = false
+  errorMessage.value = ''
+}
+
+// 关闭结果弹窗
+const closeResultDialog = () => {
+  resultDialog.value.show = false
 }
 
 // 打开编辑用户弹窗
@@ -434,33 +493,70 @@ const onEditUserConfirm = async () => {
       const apiUserData = {
         username: editUserForm.value.username,
         userfullname: editUserForm.value.name,
-        is_activate: '1',
-        is_superuser: selectedRole ? '0' : '0', // 根据实际角色设置
-        workspace_id: '123456',
-        user_type: 1
+        is_activate: editUserForm.value.is_activate,
+        is_superuser: editUserForm.value.is_superuser,
+        workspace_id: editUserForm.value.workspace_id,
+        user_type: editUserForm.value.user_type
       }
       
-      // 更新用户信息
-      await updateUser(currentUser.value.id.toString(), apiUserData)
+      console.log('更新用户信息:', apiUserData)
       
-      // 处理角色分配
+      // 使用POST接口更新用户信息
+      await updateUser(currentUser.value.id.toString(), apiUserData)
+      console.log('用户基本信息更新成功')
+      
+      // 处理角色分配 - 如果修改了角色，同步更新角色关联
       if (selectedRole) {
-        const roleId = UserRoleManager.getRoleIdByName(selectedRole.role_name, roleList.value)
+        const roleId = UserRoleManager.getRoleIdByName(selectedRole.role_name, roleList.value as any)
         if (roleId) {
           const currentUserRoles = currentUser.value.roles || []
-          const result = await UserRoleManager.updateUserRole(
-            currentUser.value.id,
-            currentUserRoles,
-            roleId,
-            assignUserRole,
-            removeUserRole
-          )
-          if (result.success) {
-            console.log(`用户 ${currentUser.value.username} 角色已更新为 ${selectedRole.role_name}`)
+          const currentRoleIds = currentUserRoles.map((role: any) => role.id)
+          
+          // 检查角色是否发生变化
+          if (!currentRoleIds.includes(roleId)) {
+            console.log(`用户角色发生变化，从 ${currentUserRoles.map((r: any) => r.role_name).join(', ')} 更新为 ${selectedRole.role_name}`)
+            
+            // 删除所有当前角色
+            for (const currentRoleId of currentRoleIds) {
+              try {
+                await removeUserRole(currentUser.value.id, currentRoleId)
+                console.log(`已删除用户角色: ${currentRoleId}`)
+              } catch (err) {
+                console.error(`删除用户角色失败: ${currentRoleId}`, err)
+              }
+            }
+            
+            // 使用同步接口分配新角色
+            try {
+              await syncUserRole(currentUser.value.id, roleId)
+              console.log(`用户 ${currentUser.value.username} 角色已同步更新为 ${selectedRole.role_name}`)
+            } catch (err) {
+              console.error('同步角色失败:', err)
+              // 如果同步失败，尝试使用普通分配接口
+              try {
+                await assignUserRole(currentUser.value.id, roleId)
+                console.log(`用户 ${currentUser.value.username} 角色已分配为 ${selectedRole.role_name}`)
+              } catch (assignErr) {
+                console.error('分配新角色失败:', assignErr)
+              }
+            }
           } else {
-            console.error('更新角色失败:', result.error)
+            console.log('用户角色未发生变化')
           }
         }
+      }
+      
+      // 重新获取用户列表以更新显示
+      await fetchUsers({ skip: 0, limit: 100 })
+      console.log('用户列表已刷新')
+      
+      // 显示成功结果
+      resultDialog.value = {
+        show: true,
+        type: 'success',
+        title: '编辑用户成功',
+        message: '',
+        details: ''
       }
       
       showEditUserDialog.value = false
@@ -476,8 +572,26 @@ const onEditUserConfirm = async () => {
         workspace_id: '123456',
         user_type: 1
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('更新用户失败:', err)
+      
+      // 处理错误响应
+      let errorMsg = '更新用户失败，请稍后重试'
+      
+      if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail
+      } else if (err.message) {
+        errorMsg = err.message
+      }
+      
+      // 显示失败结果
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '编辑用户失败',
+        message: '',
+        details: errorMsg
+      }
     }
   }
 }
@@ -494,8 +608,38 @@ const onDeleteUserConfirm = async () => {
     try {
       await deleteUser(currentUser.value.id.toString())
       showDeleteUserDialog.value = false
-    } catch (err) {
+      
+      // 重新获取用户列表以更新显示
+      await fetchUsers({ skip: 0, limit: 100 })
+      
+      // 显示成功结果
+      resultDialog.value = {
+        show: true,
+        type: 'success',
+        title: '删除用户成功',
+        message: '',
+        details: ''
+      }
+    } catch (err: any) {
       console.error('删除用户失败:', err)
+      
+      // 处理错误响应
+      let errorMsg = '删除用户失败，请稍后重试'
+      
+      if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail
+      } else if (err.message) {
+        errorMsg = err.message
+      }
+      
+      // 显示失败结果
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '删除用户失败',
+        message: '',
+        details: errorMsg
+      }
     }
   }
 }
@@ -542,8 +686,21 @@ onMounted(async () => {
     ])
     
 
-  } catch (err) {
+  } catch (err: any) {
     console.error('获取数据失败:', err)
+    
+    // 处理错误响应
+    let errorMsg = '获取数据失败，请稍后重试'
+    
+    if (err.response?.data?.detail) {
+      errorMsg = err.response.data.detail
+    } else if (err.message) {
+      errorMsg = err.message
+    }
+    
+    // 显示错误弹窗
+    errorMessage.value = errorMsg
+    showErrorMessage.value = true
   }
 })
 </script>

@@ -8,7 +8,7 @@ export const useDeviceStore = defineStore('device', () => {
 
   // 计算属性：机场列表
   const docks = computed(() => {
-    return devices.value.filter(device => device.child_sn !== '')
+    return devices.value.filter(device => device.device_type_info?.device_type === 3)
   })
 
   // 计算属性：无人机列表

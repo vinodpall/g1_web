@@ -10,7 +10,7 @@ export interface User {
   updated_time: string
   workspace_id: string
   user_type: number
-  roles: Role[] | string[] // 角色可以是Role对象数组或字符串数组
+  roles: Role[] | string[] | ReadonlyArray<Role> | ReadonlyArray<string> // 兼容后端返回的只读数组
   workspace_name: string | null
 }
 
@@ -89,7 +89,7 @@ export interface Role {
   role_description: string
   created_time: string
   updated_time: string
-  permissions: Permission[]
+  permissions: Permission[] | ReadonlyArray<Permission>
 }
 
 export interface Device {

@@ -10,12 +10,17 @@
         <h4>用户信息</h4>
         <p><strong>用户ID:</strong> {{ userStore.user?.id || '未知' }}</p>
         <p><strong>用户名:</strong> {{ userStore.user?.username || '未知' }}</p>
-        <p><strong>角色数量:</strong> {{ userStore.user?.roles?.length || 0 }}</p>
-        <div v-if="userStore.user?.roles?.length > 0" class="roles-info">
+        <p><strong>角色数量:</strong> {{ Array.isArray(userStore.user?.roles) ? userStore.user?.roles?.length : 0 }}</p>
+        <div v-if="Array.isArray(userStore.user?.roles) && (userStore.user?.roles?.length || 0) > 0" class="roles-info">
           <p><strong>角色详情:</strong></p>
           <ul class="roles-list">
-            <li v-for="role in userStore.user.roles" :key="role.id" class="role-item">
-              {{ role.role_name }} ({{ role.permissions?.length || 0 }}个权限)
+            <li 
+              v-for="(role, idx) in userStore.user?.roles as any[]" 
+              :key="typeof role === 'string' ? role : (role?.id ?? idx)" 
+              class="role-item"
+            >
+              {{ typeof role === 'string' ? role : (role?.role_name || '未知角色') }}
+              ({{ typeof role === 'object' ? (role?.permissions?.length || 0) : 0 }}个权限)
             </li>
           </ul>
         </div>

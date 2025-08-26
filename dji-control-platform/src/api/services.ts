@@ -69,7 +69,7 @@ export const userApi = {
 
   // 更新用户
   updateUser: (id: string, userData: Partial<User>) => {
-    return apiClient.put<User>(`/users/${id}`, userData)
+    return apiClient.post<User>(`/users/${id}`, userData)
   },
 
   // 删除用户
@@ -85,6 +85,11 @@ export const userApi = {
   // 删除用户角色
   removeRole: (userId: number, roleId: number) => {
     return apiClient.delete(`/users/${userId}/roles/${roleId}`)
+  },
+
+  // 同步更新用户角色
+  syncUserRole: (userId: number, roleId: number) => {
+    return apiClient.post(`/users/${userId}/roles/${roleId}`)
   }
 }
 

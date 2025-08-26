@@ -24,8 +24,12 @@ export const useUserStore = defineStore('user', {
     isLoggedIn: (state) => !!state.token,
     hasPermission: (state) => (permission: string) => {
       if (!state.user) return false
-      // 简化校验：若后端包含 roles 数组，超级管理员判定可根据其中是否包含 'super_admin'
-      if (Array.isArray(state.user.roles) && state.user.roles.includes('super_admin')) return true
+      // 若后端返回字符串角色数组（含'super_admin'）或对象角色数组（含role_name==='超级管理员'），判定为超管
+      if (Array.isArray(state.user.roles)) {
+        const rolesArr = state.user.roles as unknown[]
+        const isSuper = rolesArr.some((r: any) => (typeof r === 'string' ? r === 'super_admin' : r?.role_name === '超级管理员'))
+        if (isSuper) return true
+      }
       // 这里可以根据角色和权限进行更复杂的判断
       return true
     }

@@ -1057,6 +1057,22 @@ export function useUsers() {
     }
   }
 
+  // 同步更新用户角色
+  const syncUserRole = async (userId: number, roleId: number) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await userApi.syncUserRole(userId, roleId)
+      return response
+    } catch (err: any) {
+      error.value = err.message || '同步角色失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   // 更新用户
   const updateUser = async (id: string, userData: Partial<User>) => {
     loading.value = true
@@ -1118,7 +1134,8 @@ export function useUsers() {
     deleteUser,
     getUser,
     assignUserRole,
-    removeUserRole
+    removeUserRole,
+    syncUserRole
   }
 } 
 

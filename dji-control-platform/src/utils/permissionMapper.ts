@@ -42,6 +42,7 @@ const permissionNameMapping: Record<string, string> = {
   '设备管理-页面查看': 'device_management.view',
   '设备管理-添加设备': 'device_management.device.create',
   '设备管理-删除设备': 'device_management.device.delete',
+  '设备管理-报警日志': 'device_management.log.view',
   
   // 系统管理权限
   '系统管理-页面查看': 'system_management.view',
@@ -141,7 +142,8 @@ export function mapPermissionsToSections(permissions: Permission[]): PermissionS
       viewPermission: 'device_management.view',
       permissions: [
         { key: 'device_management.device.create', label: '添加设备' },
-        { key: 'device_management.device.delete', label: '删除设备' }
+        { key: 'device_management.device.delete', label: '删除设备' },
+        { key: 'device_management.log.view', label: '报警日志' }
       ]
     },
     {

@@ -30,7 +30,7 @@
               <div class="device-top-row">
                 <input v-model="filter.keyword" class="device-input" placeholder="请输入关键字搜索" />
                 <button class="device-btn" @click="handleSearch">查询</button>
-                <button class="device-btn device-btn-add" v-permission-click-dialog="'device_management.device.create'" @click="handleAddDevice">添加设备</button>
+                <!-- <button class="device-btn device-btn-add" v-permission-click-dialog="'device_management.device.create'" @click="handleAddDevice">添加设备</button> -->
               </div>
             </div>
             <!-- 新增和卡片区 -->

@@ -15,6 +15,12 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
+      path: '/permission-denied',
+      name: 'PermissionDenied',
+      component: () => import('../views/PermissionDenied.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
       path: '/dashboard',
       name: 'Dashboard',
       component: () => import('../views/Layout.vue'),
@@ -94,7 +100,7 @@ const router = createRouter({
           component: () => import('../views/AlarmLog.vue'),
           meta: { 
             requiresAuth: true,
-            permission: 'alarm_log.view'
+            permission: 'device_management.log.view'
           }
         },
         {
@@ -164,9 +170,15 @@ router.beforeEach((to, _from, next) => {
           next()
           return
         } else {
-          // 其他页面没有权限，重定向到首页
+          // 其他页面没有权限，跳转到权限拒绝页面
           console.warn(`用户没有访问 ${to.path} 的权限，需要权限: ${to.meta.permission}`)
-          next('/dashboard/home')
+          next({
+            path: '/permission-denied',
+            query: { 
+              requiredPermission: to.meta.permission as string,
+              targetPath: to.path
+            }
+          })
           return
         }
       }

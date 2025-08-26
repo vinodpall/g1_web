@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>错误处理测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .error-button {
+            background: #dc3545;
+        }
+        .error-button:hover {
+            background: #c82333;
+        }
+        .success-button {
+            background: #28a745;
+        }
+        .success-button:hover {
+            background: #218838;
+        }
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>用户管理错误处理测试</h1>
+    
+    <div class="test-section">
+        <h2>测试说明</h2>
+        <p>这个页面用于测试用户管理页面的错误处理功能。主要测试以下场景：</p>
+        <ul>
+            <li>新增用户时用户名已存在的错误处理</li>
+            <li>编辑用户时的错误处理</li>
+            <li>删除用户时的错误处理</li>
+            <li>搜索用户时的错误处理</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>错误响应格式</h2>
+        <p>后端返回的错误格式：</p>
+        <div class="code-block">
+{
+  "detail": "该用户名的用户已存在"
+}
+        </div>
+        <p>或者：</p>
+        <div class="code-block">
+{
+  "detail": "用户不存在"
+}
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>测试步骤</h2>
+        <ol>
+            <li>打开用户管理页面</li>
+            <li>点击"新增用户"按钮</li>
+            <li>填写一个已存在的用户名</li>
+            <li>点击"确认"按钮</li>
+            <li>应该会显示错误弹窗，提示"该用户名的用户已存在"</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>错误处理功能</h2>
+        <p>已实现的功能：</p>
+        <ul>
+            <li>✅ 新增用户错误处理</li>
+            <li>✅ 编辑用户错误处理</li>
+            <li>✅ 删除用户错误处理</li>
+            <li>✅ 搜索用户错误处理</li>
+            <li>✅ 页面加载错误处理</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>成功提示功能</h2>
+        <p>已实现的功能：</p>
+        <ul>
+            <li>✅ 新增用户成功提示</li>
+            <li>✅ 编辑用户成功提示</li>
+            <li>✅ 删除用户成功提示</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>错误弹窗组件</h2>
+        <p>使用的组件：<code>ErrorMessage.vue</code></p>
+        <p>功能特点：</p>
+        <ul>
+            <li>显示错误图标和标题</li>
+            <li>显示具体的错误信息</li>
+            <li>点击"确定"按钮关闭</li>
+            <li>点击遮罩层关闭</li>
+            <li>红色主题，符合错误提示的视觉设计</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>成功弹窗组件</h2>
+        <p>使用的组件：<code>SuccessMessage.vue</code></p>
+        <p>功能特点：</p>
+        <ul>
+            <li>显示成功图标和标题</li>
+            <li>显示具体的成功信息</li>
+            <li>点击"确定"按钮关闭</li>
+            <li>点击遮罩层关闭</li>
+            <li>绿色主题，符合成功提示的视觉设计</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>代码实现</h2>
+        <p>主要修改的文件：<code>src/views/UserManage.vue</code></p>
+        <p>关键代码：</p>
+        <div class="code-block">
+// 错误提示相关状态
+const showErrorMessage = ref(false)
+const errorMessage = ref('')
+
+// 成功提示相关状态
+const showSuccessMessage = ref(false)
+const successMessage = ref('')
+
+// 错误处理逻辑
+catch (err: any) {
+  console.error('创建用户失败:', err)
+  
+  // 处理错误响应
+  let errorMsg = '创建用户失败，请稍后重试'
+  
+  if (err.response?.data?.detail) {
+    // 处理 {"detail":"该用户名的用户已存在"} 这种错误
+    errorMsg = err.response.data.detail
+  } else if (err.message) {
+    errorMsg = err.message
+  }
+  
+  // 显示错误弹窗
+  errorMessage.value = errorMsg
+  showErrorMessage.value = true
+}
+
+// 成功处理逻辑
+// 显示成功提示
+successMessage.value = '用户创建成功'
+showSuccessMessage.value = true
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>测试建议</h2>
+        <p>建议测试以下场景：</p>
+        <ul>
+            <li>网络连接失败时的错误处理</li>
+            <li>服务器返回500错误时的处理</li>
+            <li>权限不足时的错误处理</li>
+            <li>表单验证失败时的处理</li>
+            <li>多个错误弹窗同时显示时的处理</li>
+        </ul>
+    </div>
+
+    <script>
+        // 简单的测试函数
+        function testErrorHandling() {
+            console.log('错误处理测试页面已加载');
+            console.log('请按照测试步骤进行实际测试');
+        }
+        
+        // 页面加载时执行测试
+        window.addEventListener('load', testErrorHandling);
+    </script>
+</body>
+</html> 

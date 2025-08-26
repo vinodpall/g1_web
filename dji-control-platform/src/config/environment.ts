@@ -44,17 +44,17 @@ const intranetConfig: EnvironmentConfig = {
     domain: '/api/v1' // 同域部署，使用相对路径
   },
   websocket: {
-    host: '192.168.111.101',
+    host: '172.16.88.152',
     port: 8000,
-    fullUrl: 'ws://192.168.111.101:8000'
+    fullUrl: 'ws://172.16.88.152:8000'
   },
   video: {
-    webrtcDomain: 'webrtc://192.168.111.101:8000',
-    rtmpDomain: 'rtmp://192.168.111.101:8000'
+    webrtcDomain: 'webrtc://172.16.88.152:8000',
+    rtmpDomain: 'rtmp://172.16.88.152:8000'
   },
   services: {
-    vision: 'http://192.168.111.101:8000',
-    livestream: 'http://192.168.111.101:8000'
+    vision: 'http://172.16.88.152:8000',
+    livestream: 'http://172.16.88.152:8000'
   }
 }
 
@@ -65,17 +65,17 @@ const internetConfig: EnvironmentConfig = {
     domain: '/api/v1' // 同域部署，使用相对路径
   },
   websocket: {
-    host: '10.10.1.36',
+    host: '10.10.1.37',
     port: 8000,
-    fullUrl: 'ws://10.10.1.36:8000'
+    fullUrl: 'ws://10.10.1.37:8000'
   },
   video: {
-    webrtcDomain: 'webrtc://10.10.1.36:8000',
-    rtmpDomain: 'rtmp://10.10.1.36:8000'
+    webrtcDomain: 'webrtc://10.10.1.37:8000',
+    rtmpDomain: 'rtmp://10.10.1.37:8000'
   },
   services: {
-    vision: 'http://10.10.1.36:8000',
-    livestream: 'http://10.10.1.36:8000'
+    vision: 'http://10.10.1.37:8000',
+    livestream: 'http://10.10.1.37:8000'
   }
 }
 

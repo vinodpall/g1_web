@@ -125,22 +125,7 @@
                     </div>
                   </div>
                   <div class="center-controls"></div>
-                  <div class="right-controls" :class="{ active: showScreenMenu }" @click="toggleScreenMenu">
-                    <img src="@/assets/source_data/svg_data/nine_video.svg" class="screen-icon" />
-                    <i class="el-icon dropdown-icon">
-                      <svg width="20" height="20" viewBox="0 0 1024 1024">
-                        <path fill="#59C0FC" d="m192 384 320 384 320-384z"></path>
-                      </svg>
-                    </i>
-                    <!-- 分屏选择菜单 -->
-                    <div class="screen-menu" v-if="showScreenMenu">
-                      <div class="menu-item" @click="selectScreenMode('一分屏')">一分屏</div>
-                      <div class="menu-item" @click="selectScreenMode('二分屏')">二分屏</div>
-                      <div class="menu-item" @click="selectScreenMode('四分屏')">四分屏</div>
-                      <div class="menu-item" @click="selectScreenMode('六分屏')">六分屏</div>
-                      <div class="menu-item" @click="selectScreenMode('九分屏')">九分屏</div>
-                    </div>
-                  </div>
+                  
                 </div>
               </div>
             </div>
@@ -160,7 +145,7 @@
                       <div class="dock-card-title">{{ getDockModeText(osdData?.mode_code) }}</div>  
                       <div class="dock-card-sub">机场系统</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" v-permission-click-dialog="'dock_control.remote_debug'" @click="handleDockSystem">设置</button>
+                    <button class="dock-card-btn" :class="{ active: getRemoteDebugStatus() }" :disabled="!getRemoteDebugStatus()" v-permission-click-dialog="'dock_control.remote_debug'" @click="handleDockSystem">重启</button>
                   </div>
                   <div class="dock-card-item">
                     <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_box.svg" alt="box" />
@@ -168,7 +153,7 @@
                       <div class="dock-card-title">{{ getCoverStateText(osdData?.cover_state) }}</div>
                       <div class="dock-card-sub">舱盖状态</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" v-permission-click-dialog="'dock_control.remote_debug'" @click="handleCoverControl">
+                    <button class="dock-card-btn" :class="{ active: getRemoteDebugStatus() }" :disabled="!getRemoteDebugStatus()" v-permission-click-dialog="'dock_control.remote_debug'" @click="handleCoverControl">
                       {{ osdData?.cover_state === 0 ? '开启' : '关闭' }}
                     </button>
                   </div>
@@ -178,7 +163,7 @@
                       <div class="dock-card-title">{{ osdData?.air_conditioner?.air_conditioner_state === 1 ? '运行中' : '空闲中' }}</div>
                       <div class="dock-card-sub">空调</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" v-permission-click-dialog="'dock_control.remote_debug'" @click="handleAirConditioner">
+                    <button class="dock-card-btn" :class="{ active: getRemoteDebugStatus() }" :disabled="!getRemoteDebugStatus()" v-permission-click-dialog="'dock_control.remote_debug'" @click="handleAirConditioner">
                       {{ osdData?.air_conditioner?.air_conditioner_state === 1 ? '停止' : '启动' }}
                     </button>
                   </div>
@@ -187,11 +172,17 @@
                   <div class="dock-card-item">
                     <img class="dock-card-icon" src="@/assets/source_data/svg_data/dock_control_svg/dock_sim.svg" alt="sim" />
                     <div class="dock-card-content">
-                      <div class="dock-card-title">{{ osdData?.wireless_link?.link_workmode === 1 ? '已开启' : '未开启' }}</div>
+                      <div class="dock-card-title">{{ getEnhancedTransmissionStatus() }}</div>
                       <div class="dock-card-sub">增强图传</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleEnhancedTransmission">
-                      {{ osdData?.wireless_link?.link_workmode === 1 ? '关闭' : '开启' }}
+                    <button 
+                      class="dock-card-btn" 
+                      :class="{ active: getRemoteDebugStatus() }" 
+                      :disabled="!getRemoteDebugStatus()" 
+                      v-permission-click-dialog="'dock_control.enhanced_transmission'"
+                      @click="handleEnhancedTransmission"
+                    >
+                      {{ getEnhancedTransmissionButtonText() }}
                     </button>
                   </div>
                   <div class="dock-card-item">
@@ -200,7 +191,7 @@
                       <div class="dock-card-title">{{ osdData?.alarm_state === 1 ? '已开启' : '未开启' }}</div>
                       <div class="dock-card-sub">机场声光报警</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleAlarmControl">
+                    <button class="dock-card-btn" :class="{ active: getRemoteDebugStatus() }" :disabled="!getRemoteDebugStatus()" @click="handleAlarmControl">
                       {{ osdData?.alarm_state === 1 ? '关闭' : '开启' }}
                     </button>
                   </div>
@@ -210,7 +201,7 @@
                       <div class="dock-card-title">3.5/50.6GB</div>
                       <div class="dock-card-sub">机场存储</div>
                     </div>
-                    <button class="dock-card-btn" :class="{ active: remoteEnabled }" :disabled="!remoteEnabled" @click="handleStorageReset">重置</button>
+                    <button class="dock-card-btn" :class="{ active: getRemoteDebugStatus() }" :disabled="!getRemoteDebugStatus()" @click="handleStorageReset">重置</button>
                   </div>
                 </div>
               </div>
@@ -279,7 +270,7 @@ const formatCurrent = (value: number | undefined) => {
   if (value === undefined || value === null) return '--'
   // 电流通常以毫安为单位，转换为安培
   const currentInAmps = value / 1000
-  return `${currentInAmps.toFixed(2)}A`
+  return `${currentInAmps.toFixed(1)}A`
 }
 
 const formatTemperature = (value: number | undefined) => {
@@ -353,7 +344,7 @@ const progressPercent = ref(40)
 const currentRouteName = ref('测试航线B')
 const amapInstance = ref<any>(null)
 const amapApiRef = ref<any>(null)
-const remoteEnabled = ref(false)
+const remoteEnabled = ref<boolean | undefined>(undefined)
 const dockMarkers = ref<any[]>([])
 const droneMarkers = ref<any[]>([])
 
@@ -590,23 +581,80 @@ const handleStorageReset = () => {
 }
 
 // 增强图传控制
-const handleEnhancedTransmission = () => {
-  const linkWorkMode = osdData.value?.wireless_link?.link_workmode
-  const method = 'sdr_workmode_switch'
-  // 当前为1(开启)→传0关闭；当前为0(关闭)→传1开启
-  const linkMode = linkWorkMode === 1 ? 0 : 1
-  executeRemoteDebug(method, { link_mode: linkMode })
+const handleEnhancedTransmission = async () => {
+  try {
+    const linkWorkMode = osdData.value?.wireless_link?.link_workmode
+    const method = 'sdr_workmode_switch'
+    
+    // 检查远程调试状态
+    if (!getRemoteDebugStatus()) {
+      console.warn('远程调试未开启，无法控制增强图传')
+      return
+    }
+    
+    // 检查当前状态是否有效
+    if (linkWorkMode === undefined || linkWorkMode === null) {
+      console.warn('无法获取当前增强图传状态')
+      return
+    }
+    
+    // 当前为1(开启)→传0关闭；当前为0(关闭)→传1开启
+    const linkMode = linkWorkMode === 1 ? 0 : 1
+    const actionText = linkMode === 1 ? '开启' : '关闭'
+    
+    console.log(`正在${actionText}增强图传...`, {
+      currentMode: linkWorkMode,
+      targetMode: linkMode,
+      method: method
+    })
+    
+    // 显示加载状态
+    const button = event?.target as HTMLButtonElement
+    if (button) {
+      const originalText = button.textContent
+      button.textContent = '处理中...'
+      button.disabled = true
+      
+      try {
+        await executeRemoteDebug(method, { link_mode: linkMode })
+        console.log(`增强图传${actionText}成功`)
+        
+        // 延迟刷新状态，确保后端状态更新完成
+        setTimeout(async () => {
+          await refreshStatus()
+        }, 1000)
+        
+      } finally {
+        // 恢复按钮状态
+        button.textContent = originalText
+        button.disabled = false
+      }
+    } else {
+      // 如果没有按钮引用，直接执行
+      await executeRemoteDebug(method, { link_mode: linkMode })
+      console.log(`增强图传${actionText}成功`)
+      
+      // 延迟刷新状态
+      setTimeout(async () => {
+        await refreshStatus()
+      }, 1000)
+    }
+    
+  } catch (error) {
+    console.error('增强图传控制失败:', error)
+    // 可以在这里添加用户提示
+  }
 }
 
 
 // 获取远程调试状态
 const getRemoteDebugStatus = () => {
-  // 优先使用本地状态，如果本地状态未设置则使用机场系统状态
-  if (remoteEnabled.value !== undefined) {
-    return remoteEnabled.value
+  // 优先根据机场系统状态判断
+  if (osdData.value?.mode_code !== undefined) {
+    return osdData.value.mode_code === 2
   }
-  // 根据机场状态判断是否处于远程调试模式
-  return osdData.value?.mode_code === 2 // 2表示远程调试模式
+  // 回退到本地状态
+  return !!remoteEnabled.value
 }
 
 const toggleRemote = async () => {
@@ -1076,11 +1124,15 @@ const loadWaylineProgress = async () => {
     // 获取第一个机场的航线任务进度
     const dockSn = dockSns[0]
     const progressData = await fetchWaylineProgress(workspaceId, dockSn)
+    if (!progressData) {
+      clearWaylineDisplay()
+      return
+    }
     waylineProgress.value = progressData
     
     // 如果有job_id，获取详细信息
-    if (progressData.job_id) {
-      const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
+    if (progressData && (progressData as any).job_id) {
+      const jobDetail = await fetchWaylineJobDetail(workspaceId, (progressData as any).job_id)
       waylineJobDetail.value = jobDetail
       
       // 显示航点和轨迹
@@ -1751,6 +1803,38 @@ onBeforeUnmount(() => {
 })
 const updateProgress = (percent: number) => {
   progressPercent.value = Math.max(0, Math.min(100, percent))
+}
+
+const getEnhancedTransmissionStatus = () => {
+  const linkWorkMode = osdData.value?.wireless_link?.link_workmode
+  
+  // 检查远程调试状态
+  if (!getRemoteDebugStatus()) {
+    return '远程调试未开启'
+  }
+  
+  // 检查状态是否有效
+  if (linkWorkMode === undefined || linkWorkMode === null) {
+    return '状态未知'
+  }
+  
+  return linkWorkMode === 1 ? '已开启' : '未开启'
+}
+
+const getEnhancedTransmissionButtonText = () => {
+  const linkWorkMode = osdData.value?.wireless_link?.link_workmode
+  
+  // 检查远程调试状态
+  if (!getRemoteDebugStatus()) {
+    return '无法操作'
+  }
+  
+  // 检查状态是否有效
+  if (linkWorkMode === undefined || linkWorkMode === null) {
+    return '状态错误'
+  }
+  
+  return linkWorkMode === 1 ? '关闭' : '开启'
 }
 </script>
 

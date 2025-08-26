@@ -46,6 +46,7 @@
 - `device_management.view` - 设备管理-页面查看
 - `device_management.device.create` - 设备管理-添加设备
 - `device_management.device.delete` - 设备管理-删除设备
+- `device_management.log.view` - 设备管理-报警日志
 
 ### 路由权限配置
 

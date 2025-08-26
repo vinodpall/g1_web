@@ -23,9 +23,7 @@
               <span class="mission-top-title">角色管理</span>
             </div>
             <div class="role-top-row">
-              <PermissionGuard permission="role_management.role.create">
-                <button class="mission-btn mission-btn-pause" @click="showAddRoleDialog = true">新增角色</button>
-              </PermissionGuard>
+              <button class="mission-btn mission-btn-pause" @click="onClickAddRole">新增角色</button>
             </div>
           </div>
           <div class="mission-table-card card">
@@ -44,15 +42,9 @@
                 <div class="mission-td">{{ formatTime(role.created_time) }}</div>
                 <div class="mission-td">
                   <div class="role-action-btns">
-                    <PermissionGuard permission="role_management.permission.set">
-                      <button class="icon-btn" title="查看" @click="openPermissionDialog(role)"><img :src="permissionIcon" /></button>
-                    </PermissionGuard>
-                    <PermissionGuard permission="role_management.role.edit">
-                      <button class="icon-btn" title="编辑" @click="openEditRoleDialog(role)"><img :src="editIcon" /></button>
-                    </PermissionGuard>
-                    <PermissionGuard permission="role_management.role.delete">
-                      <button class="icon-btn" title="删除" @click="openDeleteRoleDialog(role)"><img :src="deleteIcon" /></button>
-                    </PermissionGuard>
+                    <button class="icon-btn" title="查看" @click="onClickOpenPermission(role)"><img :src="permissionIcon" /></button>
+                    <button class="icon-btn" title="编辑" @click="onClickEditRole(role)"><img :src="editIcon" /></button>
+                    <button class="icon-btn" title="删除" @click="onClickDeleteRole(role)"><img :src="deleteIcon" /></button>
                   </div>
                 </div>
               </div>
@@ -83,6 +75,14 @@
         </div>
       </div>
     </div>
+
+    <!-- 权限不足弹窗（与首页一致样式） -->
+    <PermissionDenied 
+      :show="showPermissionDenied" 
+      :required-permission="requiredPermission" 
+      @close="showPermissionDenied = false" 
+      @contactAdmin="showPermissionDenied = false" 
+    />
 
     <!-- 权限管理弹窗 -->
     <div v-if="showPermissionDialog" class="custom-dialog-mask">
@@ -201,6 +201,7 @@ import roleIcon from '@/assets/source_data/svg_data/role.svg'
 import permissionIcon from '@/assets/source_data/svg_data/permission.svg'
 import editIcon from '@/assets/source_data/svg_data/edit.svg'
 import deleteIcon from '@/assets/source_data/svg_data/delete.svg'
+import PermissionDenied from '../components/PermissionDenied.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -210,13 +211,14 @@ const { roles, loading, error, fetchRoles, createRole, updateRole, deleteRole } 
 
 // 导入roleApi
 import { roleApi } from '../api/services'
-import PermissionGuard from '../components/PermissionGuard.vue'
+// 移除按钮上的权限包装，改为点击时校验
 
 // 使用权限API
 const { fetchAllPermissions } = usePermissions()
 
 // 使用权限Store
 const permissionStore = usePermissionStore()
+const hasPermission = (p: string) => permissionStore.hasPermission(p)
 
 const sidebarTabs = [
   { key: 'user', label: '用户管理', icon: userIcon, path: '/dashboard/users' },
@@ -249,6 +251,8 @@ const onSearch = async () => {
 const showAddRoleDialog = ref(false)
 const showEditRoleDialog = ref(false)
 const showDeleteRoleDialog = ref(false)
+const showPermissionDenied = ref(false)
+const requiredPermission = ref('')
 const addRoleForm = ref({
   roleName: '',
   roleDescription: ''
@@ -275,6 +279,42 @@ const onAddRoleConfirm = async () => {
   }
 }
 
+// 点击新增角色（权限校验）
+const onClickAddRole = () => {
+  if (hasPermission('role_management.role.create')) {
+    showAddRoleDialog.value = true
+  } else {
+    requiredPermission.value = 'role_management.role.create'
+    showPermissionDenied.value = true
+  }
+}
+
+const onClickOpenPermission = (role: any) => {
+  if (hasPermission('role_management.permission.set')) {
+    openPermissionDialog(role)
+  } else {
+    requiredPermission.value = 'role_management.permission.set'
+    showPermissionDenied.value = true
+  }
+}
+
+const onClickEditRole = (role: any) => {
+  if (hasPermission('role_management.role.edit')) {
+    openEditRoleDialog(role)
+  } else {
+    requiredPermission.value = 'role_management.role.edit'
+    showPermissionDenied.value = true
+  }
+}
+
+const onClickDeleteRole = (role: any) => {
+  if (hasPermission('role_management.role.delete')) {
+    openDeleteRoleDialog(role)
+  } else {
+    requiredPermission.value = 'role_management.role.delete'
+    showPermissionDenied.value = true
+  }
+}
 // 打开编辑角色弹窗
 const openEditRoleDialog = (role: any) => {
   currentRole.value = role

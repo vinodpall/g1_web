@@ -7,6 +7,15 @@
         您没有访问此页面的权限<br>
         请联系管理员开通相应权限
       </p>
+      
+      <!-- 显示具体权限信息 -->
+      <div v-if="requiredPermissionName" class="permission-details">
+        <p class="permission-details-title">所需权限：</p>
+        <div class="permission-details-list">
+          <span class="permission-detail-item">{{ requiredPermissionName }}</span>
+        </div>
+      </div>
+      
       <div class="permission-denied-actions">
         <button class="permission-denied-btn" @click="goHome">返回首页</button>
         <button class="permission-denied-btn secondary" @click="goBack">返回上页</button>
@@ -16,16 +25,40 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { usePermissionStore } from '../stores/permission'
 
 const router = useRouter()
+const route = useRoute()
+const permissionStore = usePermissionStore()
+
+// 从路由参数获取权限信息
+const requiredPermission = computed(() => route.query.requiredPermission as string)
+const targetPath = computed(() => route.query.targetPath as string)
+
+// 获取权限的中文名称
+const requiredPermissionName = computed(() => {
+  if (!requiredPermission.value) return ''
+  
+  const allPermissions = permissionStore.getAllPermissions
+  const permission = allPermissions.find(p => p.permission_code === requiredPermission.value)
+  
+  return permission ? permission.permission_name : requiredPermission.value
+})
 
 const goHome = () => {
   router.push('/dashboard/home')
 }
 
 const goBack = () => {
-  router.go(-1)
+  if (targetPath.value) {
+    // 如果有目标路径，尝试返回
+    router.go(-1)
+  } else {
+    // 否则返回首页
+    router.push('/dashboard/home')
+  }
 }
 </script>
 
@@ -63,6 +96,39 @@ const goBack = () => {
   line-height: 1.6;
   color: #b6b6b6;
   margin-bottom: 32px;
+}
+
+.permission-details {
+  margin: 20px 0;
+  background: rgba(255, 77, 79, 0.1);
+  border: 1px solid rgba(255, 77, 79, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.permission-details-title {
+  color: #ff7875;
+  font-size: 14px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.permission-details-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.permission-detail-item {
+  display: inline-block;
+  background: rgba(255, 77, 79, 0.2);
+  color: #ff7875;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+  font-family: 'Courier New', monospace;
 }
 
 .permission-denied-actions {

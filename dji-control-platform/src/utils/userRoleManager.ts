@@ -99,8 +99,8 @@ export class UserRoleManager {
    * @param roleName 角色名称
    * @param roleList 角色列表
    */
-  static getRoleIdByName(roleName: string, roleList: Role[]): number | null {
-    const role = roleList.find(role => role.role_name === roleName)
+  static getRoleIdByName(roleName: string, roleList: readonly Role[] | Role[]): number | null {
+    const role = (roleList as readonly Role[]).find(role => role.role_name === roleName)
     return role ? role.id : null
   }
 
@@ -109,8 +109,8 @@ export class UserRoleManager {
    * @param roleId 角色ID
    * @param roleList 角色列表
    */
-  static getRoleNameById(roleId: number, roleList: Role[]): string | null {
-    const role = roleList.find(role => role.id === roleId)
+  static getRoleNameById(roleId: number, roleList: readonly Role[] | Role[]): string | null {
+    const role = (roleList as readonly Role[]).find(role => role.id === roleId)
     return role ? role.role_name : null
   }
 }

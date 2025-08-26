@@ -29,14 +29,9 @@ const props = defineProps<Props>()
 
 // 计算角色名称列表
 const roleNames = computed(() => {
-  if (!props.user.roles || props.user.roles.length === 0) {
-    return []
-  }
-  
-  return props.user.roles.map((role: Role | string) => {
-    // 如果role是对象，取role_name；如果是字符串，直接使用
-    return typeof role === 'object' ? role.role_name : role
-  }).filter(Boolean) // 过滤掉空值
+  const roles = props.user.roles as (Role | string)[] | ReadonlyArray<Role | string> | undefined
+  if (!roles || roles.length === 0) return []
+  return Array.from(roles).map((role: Role | string) => (typeof role === 'object' ? role.role_name : role)).filter(Boolean)
 })
 
 // 计算默认角色显示
