@@ -3,21 +3,18 @@
     <div class="header">
       <div class="header-left">
         <img src="/src/assets/source_data/plane_2.png" alt="logo" class="logo" />
-        <span class="title">无人机管控平台</span>
+        <span class="title">机器人管控平台</span>
       </div>
       
       <nav class="nav-menu">
         <router-link to="/dashboard/home" class="nav-item" :class="{ active: $route.path === '/dashboard/home' }">
           首页
         </router-link>
-        <router-link to="/dashboard/drone-control" class="nav-item" :class="{ active: $route.path === '/dashboard/drone-control' || $route.path === '/dashboard/dock-control' }">
-          无人机控制
-        </router-link>
         <router-link to="/dashboard/mission" class="nav-item" :class="{ active: $route.path.includes('mission') }">
-          任务管理
+          展厅管理
         </router-link>
         <router-link to="/dashboard/device-manage" class="nav-item" :class="{ active: $route.path === '/dashboard/device-manage' || $route.path === '/dashboard/alarm-log' }">
-          设备管理
+          机器人管理
         </router-link>
         <router-link to="/dashboard/users" class="nav-item" :class="{ active: $route.path.includes('users') || $route.path.includes('roles') }">
           系统管理

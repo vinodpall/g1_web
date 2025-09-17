@@ -1,7 +1,162 @@
 <template>
   <div class="home-container">
+    <!-- 平板新布局：顶部/底部 7:3，顶部左右 1:3 -->
+    <div class="tablet-dashboard">
+      <div class="top-area">
+        <!-- 左侧列容器：上下排列机器人信息和任务动态 -->
+        <div class="left-column-wrapper">
+          <!-- 机器人信息 -->
+          <div class="top-left-card">
+            <div class="cardTitle cardTitle--tablet" style="width: 100%; margin: 0;">
+              <img src="@/assets/source_data/bg_data/card_logo.png" alt="" />
+              机器人信息
+            </div>
+            <div class="robot-info-container">
+              <!-- 左右结构：机器人图片和详细信息 -->
+              <div class="robot-info-layout">
+                <div class="robot-image-section">
+                  <img src="@/assets/source_data/robot_source/g1_comp_stand.png" alt="机器人" class="robot-image" />
+                </div>
+                <div class="robot-details-section">
+                  <div class="robot-detail-item">
+                    <span class="detail-label">名称：</span>
+                    <span class="detail-value">a区导览机器人</span>
+                  </div>
+                  <div class="robot-detail-item">
+                    <span class="detail-label">型号：</span>
+                    <span class="detail-value">G1</span>
+                  </div>
+                  <div class="robot-detail-item">
+                    <span class="detail-label">状态：</span>
+                    <span class="status-indicator">
+                      <span class="status-dot online"></span>
+                      <span class="status-text">在线</span>
+                    </span>
+                  </div>
+                  <div class="robot-detail-item">
+                    <span class="detail-label">编号：</span>
+                    <span class="detail-value">SN-20231108</span>
+                  </div>
+                  <!-- 电量和信号强度移到右侧 -->
+                  <div class="status-indicators-row">
+                    <div class="status-indicator-item">
+                      <div class="status-icon battery-icon">
+                        <div class="battery-level" style="width: 30%"></div>
+                      </div>
+                      <span class="status-percentage">30%</span>
+                    </div>
+                    <div class="status-indicator-item">
+                      <div class="status-icon wifi-icon">
+                        <div class="wifi-bars">
+                          <div class="bar bar1"></div>
+                          <div class="bar bar2"></div>
+                          <div class="bar bar3"></div>
+                        </div>
+                      </div>
+                      <span class="status-text">弱</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 任务动态 -->
+          <div class="top-left-card-2">
+            <div class="cardTitle cardTitle--tablet" style="width: 100%; margin: 0;">
+              <img src="@/assets/source_data/bg_data/card_logo.png" alt="" />
+              任务动态
+            </div>
+            <div class="task-dynamic-container">
+              <!-- 任务点列表 -->
+              <div class="task-points-list">
+                <div class="task-point-item" v-for="(point, index) in taskPoints" :key="index">
+                  <div class="task-point-info">
+                  <div class="task-point-name">{{ point.name }}</div>
+                    <div class="task-point-coords">
+                      <span>X: {{ point.x }}</span>
+                      <span>Y: {{ point.y }}</span>
+                      <span>角度: {{ point.angle }}</span>
+                    </div>
+                  </div>
+                  <div class="task-point-refresh" v-if="index === 0">
+                    <img src="@/assets/source_data/robot_source/current.svg" alt="当前任务" class="current-icon" />
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 任务执行进度 -->
+              <div class="task-progress-section">
+                <div class="progress-info">
+                  <span class="progress-label">任务执行进度: {{ taskProgress }}%</span>
+                  <button class="pause-resume-btn" @click="toggleTaskExecution">
+                    {{ isTaskPaused ? '恢复' : '暂停' }}
+                  </button>
+                </div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar">
+                    <div class="progress-fill" :style="{ width: taskProgress + '%' }"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右 3：栅格图显示 -->
+        <div class="top-right-card">
+          <div class="gridmap-wrapper">
+            <canvas ref="gridCanvas" class="grid-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-area">
+        <div class="bottom-card">
+          <div class="bottom-panel-title">
+            <span class="bottom-title-text">机器人控制</span>
+            <span class="remote-switch-wrap" style="font-size:13px;font-weight:400;">
+              导航开关
+              <span class="switch-container" :class="{ active: navEnabled }" @click="navEnabled = !navEnabled"><span class="switch-toggle"></span></span>
+            </span>
+          </div>
+          <div class="bottom-card-row">
+            <div class="mini-card">
+              <img class="mini-card-icon" src="@/assets/source_data/robot_source/position.svg" alt="pos" />
+              <div class="mini-card-content">
+                <div class="mini-card-title">定位正常</div>
+                <div class="mini-card-sub">机器人定位状态</div>
+              </div>
+            </div>
+            <div class="mini-card">
+              <img class="mini-card-icon" src="@/assets/source_data/robot_source/location.svg" alt="speed" />
+              <div class="mini-card-content">
+                <div class="mini-card-title">W: 0.0 rad/s · V: 0.0 m/s</div>
+                <div class="mini-card-sub">X: 0.512 · Y: 0.421 · 角度: -0.123</div>
+              </div>
+            </div>
+            <div class="mini-card">
+              <img class="mini-card-icon" src="@/assets/source_data/robot_source/hall.svg" alt="hall" />
+              <div class="mini-card-content">
+                <div class="mini-card-title">a展厅</div>
+                <div class="mini-card-sub">当前展厅</div>
+              </div>
+            </div>
+            <div class="mini-card">
+              <img class="mini-card-icon" src="@/assets/source_data/robot_source/area.svg" alt="area" />
+              <div class="mini-card-content">
+                <div class="mini-card-title">A展区</div>
+                <div class="mini-card-sub">当前任务展区</div>
+              </div>
+            </div>
+            <button class="start-task-btn">开始执行任务</button>
+          </div>
+          
+        </div>
+      </div>
+    </div>
     <!-- 左侧状态栏 -->
-    <div class="left-box">
+    <div class="left-box" v-if="false">
       <!-- 无人机状态 -->
       <div class="left-on1">
         <div class="cardTitle">
@@ -287,7 +442,7 @@
     </div>
 
     <!-- 中间区域 -->
-    <div class="center-column">
+    <div class="center-column" v-if="false">
       <!-- 视频播放区域 -->
       <div class="content-on1" @click="closeMenus">
         <div class="boxGrid-box">
@@ -481,7 +636,7 @@
     </div>
 
     <!-- 右侧区域 -->
-    <div class="right-column">
+    <div class="right-column" v-if="false">
       <!-- 告警趋势卡片 -->
       <div class="right-on1">
         <div class="cardTitle">
@@ -754,6 +909,8 @@ import * as echarts from 'echarts'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import flvjs from 'flv.js'
 import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
+// 首页底部卡片：导航开关状态
+const navEnabled = ref(false)
 import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
 import droneArrowIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_arrow.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
@@ -939,6 +1096,23 @@ const flightStatsError = ref('')
 let statusRefreshTimer: number | null = null
 // 无人机状态刷新定时器（2秒一次）
 let droneStatusRefreshTimer: number | null = null
+
+// 任务动态相关数据
+const taskPoints = ref([
+  { name: 'a任务点', x: 234, y: 876, angle: -123 },
+  { name: 'b任务点', x: 456, y: 789, angle: 45 },
+  { name: 'c任务点', x: 678, y: 543, angle: 90 }
+])
+
+const taskProgress = ref(80)
+const isTaskPaused = ref(false)
+
+// 切换任务执行状态
+const toggleTaskExecution = () => {
+  isTaskPaused.value = !isTaskPaused.value
+  // 这里可以添加实际的暂停/恢复逻辑
+  console.log(isTaskPaused.value ? '任务已暂停' : '任务已恢复')
+}
 
 // 舱盖状态警报声相关
 // const previousCoverState = ref<number | undefined>(undefined)
@@ -1902,6 +2076,152 @@ const initVideoPlayer = () => {
   }
   
   // 由watch(videoStreamUrl)统一触发播放，避免重复拉流
+}
+
+// 栅格图渲染：读取 assets/source_data/pgm_data/gridMap.pgm 并绘制到 canvas
+const gridCanvas = ref<HTMLCanvasElement | null>(null)
+
+const loadAndRenderPGM = async () => {
+  try {
+    const url = new URL('../assets/source_data/pgm_data/gridMap.pgm', import.meta.url).href
+    const response = await fetch(url)
+    const buffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    // 解析 PGM，支持 P2/P5：我们读取头部文本到第三个换行后，再按 maxVal 判断每像素1或2字节
+    let header = ''
+    let i = 0
+    let newlines = 0
+    while (i < bytes.length && newlines < 3) {
+      const ch = String.fromCharCode(bytes[i++])
+      header += ch
+      if (ch === '\n') newlines++
+    }
+    const headerClean = header
+      .split('\n')
+      .filter(line => line.trim() && !line.startsWith('#'))
+      .join('\n')
+    const parts = headerClean.split(/\s+/).filter(Boolean)
+    const magic = parts[0]
+    const width = parseInt(parts[1])
+    const height = parseInt(parts[2])
+    const maxVal = parseInt(parts[3]) || 255
+    const pixelStart = i
+    const canvas = gridCanvas.value
+    if (!canvas || !width || !height) return
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const imageData = ctx.createImageData(width, height)
+    if (magic === 'P5') {
+      const bytesPerSample = maxVal > 255 ? 2 : 1
+      let p = pixelStart
+      for (let idx = 0; idx < width * height; idx++) {
+        let v = 0
+        if (bytesPerSample === 1) v = bytes[p++]
+        else { v = (bytes[p] << 8) | bytes[p + 1]; p += 2 }
+        const c = Math.max(0, Math.min(255, Math.round((v / maxVal) * 255)))
+        imageData.data[idx * 4 + 0] = c
+        imageData.data[idx * 4 + 1] = c
+        imageData.data[idx * 4 + 2] = c
+        imageData.data[idx * 4 + 3] = 255
+      }
+    } else {
+      // P2 ASCII
+      const text = new TextDecoder().decode(bytes)
+      const tokens = text
+        .replace(/#.*\n/g, '')
+        .trim()
+        .split(/\s+/)
+      // tokens: magic width height max followed by pixels
+      const pixelTokens = tokens.slice(4)
+      for (let idx = 0; idx < width * height; idx++) {
+        const v = parseInt(pixelTokens[idx] || `${maxVal}`)
+        const c = Math.max(0, Math.min(255, Math.round((v / maxVal) * 255)))
+        imageData.data[idx * 4 + 0] = c
+        imageData.data[idx * 4 + 1] = c
+        imageData.data[idx * 4 + 2] = c
+        imageData.data[idx * 4 + 3] = 255
+      }
+    }
+    // 将白底黑线的样式映射为附件风格：黑色线条更突出
+    for (let k = 0; k < imageData.data.length; k += 4) {
+      const g = imageData.data[k]
+      if (g < 128) {
+        imageData.data[k] = 0
+        imageData.data[k + 1] = 0
+        imageData.data[k + 2] = 0
+      } else {
+        imageData.data[k] = 255
+        imageData.data[k + 1] = 255
+        imageData.data[k + 2] = 255
+      }
+    }
+    ctx.putImageData(imageData, 0, 0)
+    // 栅格图交互状态
+    let scale = 1
+    let offsetX = 0
+    let offsetY = 0
+    let isDragging = false
+    let lastX = 0
+    let lastY = 0
+
+    // 初始适配容器：缩放铺满，保持比例，限制在白色背景区域内
+    const resize = () => {
+      const parent = canvas.parentElement as HTMLElement
+      if (!parent) return
+      const sw = parent.clientWidth
+      const sh = parent.clientHeight
+      scale = Math.min(sw / width, sh / height) * 0.8 // 初始缩放为80%，留更多边距
+      canvas.style.width = `${Math.floor(width * scale)}px`
+      canvas.style.height = `${Math.floor(height * scale)}px`
+      // 居中显示
+      offsetX = (sw - width * scale) / 2
+      offsetY = (sh - height * scale) / 2
+      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+    }
+
+    // 鼠标滚轮缩放
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? 0.9 : 1.1
+      scale = Math.max(0.1, Math.min(10, scale * delta)) // 移除容器限制，范围0.1-10倍
+      canvas.style.width = `${Math.floor(width * scale)}px`
+      canvas.style.height = `${Math.floor(height * scale)}px`
+      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+    })
+
+    // 鼠标拖拽移动
+    canvas.addEventListener('mousedown', (e) => {
+      isDragging = true
+      lastX = e.clientX
+      lastY = e.clientY
+    })
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isDragging) return
+      const deltaX = e.clientX - lastX
+      const deltaY = e.clientY - lastY
+      offsetX += deltaX
+      offsetY += deltaY
+      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+      lastX = e.clientX
+      lastY = e.clientY
+    })
+
+    canvas.addEventListener('mouseup', () => {
+      isDragging = false
+    })
+
+    canvas.addEventListener('mouseleave', () => {
+      isDragging = false
+    })
+
+    resize()
+    window.addEventListener('resize', resize)
+  } catch (e) {
+    // 读取失败忽略
+  }
 }
 
 // 开始视频播放
@@ -3080,6 +3400,11 @@ onMounted(async () => {
     }, 100)
   })
 
+  // 渲染栅格图
+  nextTick(() => {
+    loadAndRenderPGM()
+  })
+
   // 添加全局点击事件监听器，用于点击空白处关闭菜单
   document.addEventListener('click', handleGlobalClick)
 
@@ -3592,6 +3917,634 @@ const centerToDroneMarker = () => {
 </script>
 
 <style scoped>
+/* 新布局样式：适配 2200x1440，顶部:底部 = 8:2，顶部左:右 = 1:3 */
+.tablet-dashboard {
+  height: calc(100vh - 84px);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px; /* 上下20px，左右12px */
+  gap: 24px;
+  box-sizing: border-box;
+}
+
+.top-area {
+  flex: 8;
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+}
+
+/* 左侧列容器：上下排列机器人信息和任务动态 */
+.left-column-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.bottom-area {
+  flex: 2;
+  min-height: 0;
+}
+
+.top-left-card,
+.top-left-card-2,
+.top-right-card,
+.bottom-card {
+  background: rgba(10, 16, 28, 0.9);
+  border: 1px solid rgba(0, 188, 212, 0.18);
+  border-radius: 12px;
+  padding: 10px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.top-left-card { 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  background-image: url('@/assets/source_data/bg_data/card_first_body.png');
+  background-size: 100% 100%;
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0; /* 确保背景与外框左上角对齐 */
+  min-height: 0;
+}
+
+.top-left-card-2 { 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  background-image: url('@/assets/source_data/bg_data/card_first_body.png');
+  background-size: 100% 100%;
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0; /* 确保背景与外框左上角对齐 */
+  min-height: 0;
+}
+
+/* 机器人信息容器样式 */
+.robot-info-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px; /* 收窄内边距，给图片更多空间 */
+  height: 100%;
+}
+
+/* 任务动态容器样式 */
+.task-dynamic-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  height: 100%;
+}
+
+/* 左右结构布局 */
+.robot-info-layout {
+  flex: 1;
+  display: flex;
+  height: 100%;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.robot-image-section {
+  flex: 1.4; /* 略缩小图片区，给右侧更多空间 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.robot-image {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.robot-details-section {
+  flex: 1 1 0;
+  min-width: 0; /* 允许换行，避免被图片挤压 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  word-break: break-word;
+}
+
+.robot-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-label {
+  color: #00bcd4;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 50px;
+}
+
+.detail-value {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #4caf50;
+}
+
+.status-dot.online {
+  background-color: #4caf50;
+}
+
+.status-text {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+/* 状态指示器行：电量和信号强度 */
+.status-indicators-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 188, 212, 0.3);
+}
+
+.status-indicator-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-icon {
+  width: 40px;
+  height: 20px;
+  position: relative;
+}
+
+.battery-icon {
+  border: 2px solid #00bcd4;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.battery-icon::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 8px;
+  background: #00bcd4;
+  border-radius: 0 2px 2px 0;
+}
+
+.battery-level {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50 0%, #8bc34a 50%, #ff9800 80%, #f44336 100%);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.wifi-icon {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+}
+
+.wifi-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.bar {
+  background: #00bcd4;
+  border-radius: 1px;
+}
+
+.bar1 {
+  width: 4px;
+  height: 6px;
+}
+
+.bar2 {
+  width: 4px;
+  height: 10px;
+}
+
+.bar3 {
+  width: 4px;
+  height: 14px;
+}
+
+.status-percentage {
+  color: #00bcd4;
+  font-size: 12px;
+  font-weight: 500;
+}
+.top-right-card { 
+  flex: 3; 
+  display: flex; 
+  flex-direction: column; 
+  position: relative;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 20px; /* 与旧视频卡片一致的内边距 */
+}
+
+/* 使用原视频背景图，在内部添加白色底色区域 */
+.top-right-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('@/assets/source_data/bg_data/video_bg.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 在背景图内添加白色底色区域 */
+.top-right-card::after {
+  content: '';
+  position: absolute;
+  top: 30px;
+  left: 30px;
+  right: 30px;
+  bottom: 30px;
+  background: #fff;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.video-wrapper { position: relative; flex: 1; display: flex; flex-direction: column; padding: 0; z-index: 2; }
+.gridmap-wrapper { 
+  position: absolute; 
+  top: 30px; 
+  left: 30px; 
+  right: 30px; 
+  bottom: 30px; 
+  display: flex; 
+  align-items: flex-start; 
+  justify-content: flex-start; 
+  z-index: 3; 
+  overflow: hidden; 
+}
+.grid-canvas { display: block; background: #fff; cursor: grab; user-select: none; transform-origin: 0 0; will-change: transform; }
+.grid-canvas:active { cursor: grabbing; }
+.player_container { flex: 1; position: relative; min-height: 0; }
+.player_item { height: 100%; }
+.player_box { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 0; }
+.compact-controls { padding: 8px 10px 10px 10px; background: transparent; }
+
+.summary-grid {
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.summary-item { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; }
+.summary-item .label { color: #8aa0b5; font-size: 13px; margin-bottom: 6px; }
+.summary-item .value { color: #fff; font-size: 16px; font-weight: 600; }
+
+.bottom-card { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: stretch;
+  position: relative;
+  background: transparent;
+  border: 1px solid rgba(0, 188, 212, 0.25);
+  border-radius: 10px;
+  padding: 18px 18px 18px 18px;
+  overflow: hidden;
+}
+.bottom-card .bottom-panel-title,
+.bottom-card .bottom-card-row {
+  position: relative;
+  z-index: 2;
+}
+
+.bottom-panel-title {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+  text-align: center;
+  border-radius: 10px 10px 0 0;
+  background: #004161;
+  height: 32px;
+  line-height: 32px;
+  width: calc(100% + 2px);
+  margin-left: -1px;
+  margin-right: -1px;
+  margin-top: -1px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  padding: 0 12px;
+}
+.bottom-title-text {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.remote-switch-wrap {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  position: relative;
+  z-index: 2;
+  margin-left: auto;
+  margin-right: 8px;
+}
+.switch-container {
+  width: 40px;
+  height: 20px;
+  background: #B0B0B0;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  border: 1px solid #888;
+  transition: background 0.3s, border 0.3s;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 8px;
+  margin-right: 0;
+}
+.switch-container.active {
+  background: #16bbf2;
+  border: 1px solid #16bbf2;
+}
+.switch-toggle {
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  transition: left 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.switch-container.active .switch-toggle {
+  left: 21px;
+}
+.bottom-card-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  padding-top: 16px;
+  align-items: center;
+}
+.mini-card {
+  display: flex;
+  align-items: center;
+  background: rgba(1, 135, 191, 0.30);
+  border-radius: 6px;
+  padding: 14px 18px;
+  min-height: 68px;
+  gap: 12px;
+  flex: 1;
+}
+.mini-card-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  filter: brightness(0) invert(1);
+}
+.mini-card-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.mini-card-title { color: #FFF; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-card-sub { color: #FFF; font-size: 13px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .92; }
+.start-task-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  border-radius: 10px;
+  background: #16bbf2;
+  color: #fff;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 160px;
+  height: 68px; /* 与 mini-card 视觉高度一致 */
+  cursor: pointer;
+}
+.start-task-btn:hover { filter: brightness(1.05); }
+.bottom-card::before,
+.bottom-card::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(0, 188, 212, 0) 0%, rgba(0, 188, 212, 0.7) 50%, rgba(0, 188, 212, 0) 100%);
+  pointer-events: none;
+}
+.bottom-card::before { top: 0; }
+.bottom-card::after { bottom: 0; }
+
+/* 任务点列表样式 */
+.task-points-list {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.task-point-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(0, 188, 212, 0.2);
+  border-radius: 4px;
+  padding: 8px 12px;
+  transition: all 0.3s ease;
+  min-height: 36px;
+}
+
+.task-point-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 188, 212, 0.4);
+}
+
+.task-point-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.task-point-name {
+  color: #00e5ff;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-point-coords {
+  display: flex;
+  gap: 14px;
+  color: #cfe9f3;
+  font-size: 12px;
+  white-space: nowrap;
+  margin-left: 12px;
+}
+
+.task-point-coords span {
+  color: #8aa0b5;
+}
+.task-point-coords span + span::before {
+  content: '·';
+  margin: 0 6px 0 4px;
+  color: #4fa6bf;
+}
+
+.task-point-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 0.2s ease;
+}
+
+.task-point-refresh:hover {
+  background: rgba(0, 188, 212, 0.2);
+}
+
+.current-icon {
+  width: 12px;
+  height: 12px;
+  filter: brightness(0) saturate(100%) invert(69%) sepia(100%) saturate(1000%) hue-rotate(180deg) brightness(1) contrast(1);
+}
+
+/* 任务进度部分样式 */
+.task-progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 188, 212, 0.3);
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-label {
+  color: #00bcd4;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.pause-resume-btn {
+  background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 188, 212, 0.3);
+}
+
+.pause-resume-btn:hover {
+  background: linear-gradient(135deg, #0097a7 0%, #006064 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 188, 212, 0.4);
+}
+
+.pause-resume-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 188, 212, 0.3);
+}
+
+.progress-bar-container {
+  width: 100%;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(0, 188, 212, 0.2);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50 0%, #8bc34a 50%, #ff9800 80%, #f44336 100%);
+  border-radius: 10px;
+  transition: width 0.5s ease;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.compact-tabs { margin-top: 6px; }
+.compact-table { overflow: auto; flex: 1; }
+
+/* 隐藏旧三列布局的容器（防止干扰空间） */
+.left-box, .center-column, .right-column { display: none !important; }
 /* 航线选择器样式 */
 .wayline-select-wrapper {
   position: relative;
@@ -3988,10 +4941,8 @@ const centerToDroneMarker = () => {
   z-index: 2000;
 }
 .home-container {
-  display: grid;
-  grid-template-columns: clamp(280px, 28vw, 480px) 1fr clamp(280px, 28vw, 480px);
-  gap: 12px;
-  padding: 20px;
+  display: block;
+  padding: 0;
   height: calc(100vh - 84px); /* 64px导航栏 + 20px间距 */
   background-color: #0a0f1c;
   color: #fff;
@@ -4083,10 +5034,17 @@ const centerToDroneMarker = () => {
   flex-shrink: 0;
 }
 
+/* 平板新布局中的标题样式保持一致的标题背景 */
+.cardTitle--tablet {
+  background-image: url('@/assets/source_data/bg_data/card_title.png');
+  background-size: 100% 100%;
+}
+
 .cardTitle img {
   width: 18px;
   height: 18px;
   margin-right: 8px;
+  vertical-align: middle;
 }
 
 .on1-bottom, .on2-bottom, .on3-bottom, .on4-bottom {
@@ -5124,6 +6082,7 @@ const centerToDroneMarker = () => {
   width: 18px;
   height: 18px;
   margin-right: 8px;
+  vertical-align: middle;
 }
 
 .right-on1,

@@ -103,7 +103,7 @@
   min-width: 340px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   height: 100%;
   background: transparent;
   padding-bottom: 0; /* 取消原有padding-bottom */

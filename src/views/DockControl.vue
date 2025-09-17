@@ -216,7 +216,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useDevicePolling } from '../composables/useDevicePolling'
 import { useDeviceStore } from '../stores/device'
 import { useWaylineJobs } from '../composables/useApi'
 import { useDevices } from '../composables/useApi'
@@ -245,18 +244,13 @@ const router = useRouter()
 // 使用设备存储
 const deviceStore = useDeviceStore()
 
-// 使用统一的设备状态轮询API
-const { 
-  startUnifiedPolling,
-  stopUnifiedPolling,
-  refreshStatus,
-  droneStatus, 
-  dockStatus,
-  environment,
-  gpsStatus,
-  osdData,
-  position
-} = useDevicePolling()
+// 全局轮询已移除；如需数据，请通过单次加载或各自接口获取
+const droneStatus = ref<any>(null)
+const dockStatus = ref<any>(null)
+const environment = ref<any>(null)
+const gpsStatus = ref<any>(null)
+const osdData = ref<any>(null)
+const position = ref<any>(null)
 
 // 格式化函数（从useDeviceStatus中提取）
 const formatVoltage = (value: number | undefined) => {
@@ -1726,8 +1720,7 @@ onMounted(async () => {
     // 可以在这里添加备用方案，比如显示一个简单的div
   })
   
-  // 启动统一的设备状态轮询（包含条件轮询）
-  startUnifiedPolling()
+  // 轮询已移除
   
   // 设置地图标记更新定时器（每2秒更新一次地图）
   const mapUpdateTimer = setInterval(() => {
@@ -1772,8 +1765,7 @@ onBeforeUnmount(() => {
   // 停止视频播放并清理视频资源
   stopVideoPlayback()
   
-  // 停止统一的设备状态轮询
-  stopUnifiedPolling()
+  // 轮询已移除
   
   // 清理地图标记更新定时器
   if (mapUpdateTimerRef) {

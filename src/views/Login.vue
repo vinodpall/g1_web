@@ -1,18 +1,18 @@
 <template>
   <div class="login-container">
     <div class="login-background">
-      <img src="/src/assets/source_data/bg_data/mian_pg_bg.png" alt="background" />
+      <img src="/src/assets/source_data/bg_data/bg_1.jpg" alt="background" />
     </div>
     
     <div class="login-content">
       <div class="login-left">
         <div class="logo-section">
           <img src="/src/assets/source_data/plane_2.png" alt="logo" class="logo" />
-          <h1 class="title">无人机管控平台</h1>
+          <h1 class="title">机器人管控平台</h1>
         </div>
-        <div class="drone-illustration">
+        <!-- <div class="drone-illustration">
           <img src="/src/assets/source_data/bg_data/main_pg_front.png" alt="drone" />
-        </div>
+        </div> -->
       </div>
       
       <div class="login-right">
@@ -226,13 +226,16 @@ const closeErrorDialog = () => {
   align-items: center;
   justify-content: center;
   max-width: 600px;
+  margin-top: -380px;
 }
 
 .logo-section {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
+  transform: translateY(-40px);
+  margin-top: -80px;
 }
 
 .logo {

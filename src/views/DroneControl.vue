@@ -255,7 +255,7 @@
                       <div class="quality-btn-wrapper" style="display: inline-block;">
                         <button class="quality-btn" v-permission-click-dialog="'drone_control.drone.control'" @click="toggleQualityMenu" title="设置清晰度">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
                           </svg>
                         </button>
                       </div>
@@ -681,8 +681,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { controlApi, drcApi, livestreamApi, waylineApi, remoteDebugApi } from '../api/services'
-import { useDevicePolling } from '../composables/useDevicePolling'
-import { useWaylineJobs, useDevices } from '../composables/useApi'
+import { useDevices } from '../composables/useApi'
 import { useVisionWebSocket } from '../composables/useVisionWebSocket'
 import { visionConfig, logVisionConfig } from '@/config/vision'
 import { parseErrorMessage } from '../utils/errorCodes'
@@ -714,28 +713,7 @@ import cameraRightIcon from '@/assets/source_data/svg_data/camera_right.svg'
 const router = useRouter()
 
 // 使用统一的设备状态轮询API
-const { 
-  startUnifiedPolling,
-  stopUnifiedPolling,
-  refreshStatus,
-  position,
-  dockStatus,
-  droneStatus, 
-  gpsStatus,
-  environment,
-  osdData,
-  waylineProgress: pollingWaylineProgress
-} = useDevicePolling()
-
-// 从缓存获取设备状态
-const deviceStatus = computed(() => {
-  // 这里可以根据需要返回具体的设备状态
-  return {
-    dockStatus: dockStatus.value,
-    droneStatus: droneStatus.value,
-    environment: environment.value
-  }
-})
+const { getCachedWorkspaceId, getCachedDeviceSns } = useDevices()
 
 // 格式化函数（从useDeviceStatus中提取）
 const formatBattery = (value: number | undefined) => {
@@ -780,7 +758,6 @@ const formatRainfall = (value: number | undefined) => {
 
 // 使用航线任务API
 const { fetchWaylineProgress, fetchWaylineJobDetail, fetchWaylineDetail, stopJob, pauseJob, resumeJob } = useWaylineJobs()
-const { getCachedWorkspaceId, getCachedDeviceSns } = useDevices()
 
 // 航线任务相关数据
 const waylineProgress = ref<any>(null)
@@ -788,10 +765,8 @@ const waylineJobDetail = ref<any>(null)
 
 // 地图更新定时器引用
 let mapUpdateTimerRef: number | null = null
-
 // 舱盖状态警报声相关
 const isAlarmPlaying = ref(false)
-
 // 生成警报声的函数
 const createAlarmSound = () => {
   try {
@@ -1290,8 +1265,6 @@ const GIMBAL_CONTROL_INTERVAL_MS = 200 // 每200ms发送一次云台控制指令
 // DRC状态相关
 const DRC_STATUS_CHECK_INTERVAL = 5000 // 每5秒检查一次DRC状态
 
-// 设备状态轮询已合并到useDevicePolling中
-
 // 视频流相关状态管理
 const videoStreamUrl = ref<string>('')
 const videoPlayer = ref<any>(null)
@@ -1577,7 +1550,6 @@ const initTakeoffParams = () => {
     enable_vision: false
   }
 }
-
 // 视频播放控制相关
 const isVideoPlaying = ref(false)
 const currentTime = ref('00:00')
@@ -2334,7 +2306,6 @@ const initVideoPlayer = async () => {
     startVideoPolling()
   }
 }
-
 // 开始视频播放
 const startVideoPlayback = () => {
   if (!videoElement.value || !videoStreamUrl.value) {
@@ -3128,7 +3099,6 @@ const drawVisionData = (visionData: any) => {
   
   // 不绘制设备信息
 }
-
 // 批量绘制标记框（优化性能）
 const drawBoundingBoxesBatch = (ctx: CanvasRenderingContext2D, detections: Array<{detection: any, isActive: boolean}>, canvasWidth: number, canvasHeight: number) => {
   // 设置通用的绘制参数
@@ -3868,7 +3838,6 @@ const handleQualityChange = async (quality: number) => {
     qualityChanging.value = false
   }
 }
-
 onMounted(async () => {
   // 启动水印时间更新
   updateWatermarkTime()
@@ -3931,9 +3900,6 @@ onMounted(async () => {
       
     })
     
-    // 启动统一的设备状态轮询（包含条件轮询）
-    startUnifiedPolling()
-    
     // 启动DRC状态轮询
     startDrcStatusPolling()
     
@@ -3969,9 +3935,6 @@ const authorityInterval = setInterval(checkAuthorityStatus, 10000)
     
     // 在组件销毁时清理定时器
     onBeforeUnmount(() => {
-      // 停止统一的设备状态轮询
-      stopUnifiedPolling()
-      
       if (authorityInterval) {
         clearInterval(authorityInterval)
       }
@@ -4655,7 +4618,6 @@ const checkAuthorityStatus = async () => {
     // 静默处理错误
   }
 }
-
 // 云台控制处理函数
 const handleGimbalControl = async (direction: 'up' | 'down' | 'left' | 'right') => {
   try {
@@ -7040,7 +7002,6 @@ const handleCameraRecordingStop = async () => {
   left: 0 !important;
   box-sizing: border-box !important;
 }
-
 /* FlvJS播放器样式 - 最强制性设置 */
 .player_box .flv-player,
 .player_box .video-js,
@@ -7056,7 +7017,6 @@ const handleCameraRecordingStop = async () => {
   border: none !important;
   box-sizing: border-box !important;
 }
-
 .player_box .video-js .vjs-tech {
   width: 100% !important;
   height: 100% !important;
@@ -7841,12 +7801,6 @@ const handleCameraRecordingStop = async () => {
   background: rgba(103, 213, 253, 0.2);
   color: #67d5fd;
 }
-
-.takeoff-modal-actions .mission-btn-pause {
-  background: #67d5fd;
-  color: #fff;
-}
-
 .takeoff-modal-actions .mission-btn-pause:hover {
   background: #50c7f7;
   box-shadow: 0 2px 8px rgba(103, 213, 253, 0.3);
@@ -7863,7 +7817,6 @@ const handleCameraRecordingStop = async () => {
   color: #b8c7d9;
   font-size: 14px;
 }
-
 /* 无人机追踪按钮样式 */
 .drone-track-btn {
   position: absolute;

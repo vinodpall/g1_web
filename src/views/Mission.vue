@@ -20,275 +20,46 @@
           <div class="mission-top-card card">
             <div class="mission-top-header">
               <img class="mission-top-logo" src="@/assets/source_data/bg_data/card_logo.png" alt="logo" />
-              <span class="mission-top-title">航线管理</span>
+              <span class="mission-top-title">展厅管理</span>
             </div>
-            <div class="mission-top-row">
-              <span class="mission-lib-label">航线库</span>
-              <div class="mission-top-selects">
-                <div style="position: relative; display: inline-block;">
-                  <select
-                    v-model="selectedTrack"
-                    ref="trackSelectRef"
-                    class="mission-select treeselect-track track-select-wide"
-                    style="width: 200px;"
-                    @mousedown="onTrackSelectMousedown"
-                    @keydown="onTrackSelectKeydown"
-                    @blur="onTrackSelectBlur"
-                    @focus="onTrackSelectFocus"
-                    @change="onTrackSelectChange"
-                    :disabled="trackFileLoading"
+            <div class="hall-toolbar">
+              <div class="hall-toolbar-row">
+                <div class="hall-actions">
+                  <button
+                    class="mission-btn mission-btn-pause hall-btn"
+                    :disabled="isGenerating"
+                    @click="isRecording ? stopHallRecording() : startHallRecording()"
                   >
-                    <option v-for="file in waylineFiles" :key="file.wayline_id" :value="file.wayline_id">
-                      {{ file.name }}
-                    </option>
-                  </select>
-                  <span
-                    class="custom-select-arrow"
-                    @click="openTrackSelect"
-                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 2;"
+                    {{ isRecording ? '停止地图录制' : '展厅地图录制' }}
+                  </button>
+                  <button
+                    class="mission-btn mission-btn-pause hall-btn"
+                    :disabled="isRecording || isGenerating"
+                    @click="startGenerateHallMap"
                   >
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <polygon v-if="!isTrackSelectOpen" points="2,4 6,8 10,4" fill="#fff"/>
-                      <polygon v-else points="2,8 6,4 10,8" fill="#fff"/>
-                    </svg>
-                  </span>
+                    生成展厅地图
+                  </button>
                 </div>
-                <div class="mission-top-btns">
-                                  <button class="mission-btn mission-btn-pause" v-permission-click-dialog="'wayline_management.wayline.delete'" @click="handleDeleteTrack">删除航线</button>
-                <button class="mission-btn mission-btn-pause" v-permission-click-dialog="'wayline_management.wayline.create'" @click="handleAddTrack">新增航线</button>
-                <button class="mission-btn mission-btn-pause" v-permission-click-dialog="'wayline_management.task.issue'" @click="handleDispatchTask">下发任务</button>
+                <div class="map-progress" v-show="isGenerating || (mapGenProgress > 0 && mapGenProgress < 100)">
+                  <div class="map-progress-track">
+                    <div class="map-progress-fill" :style="{ width: mapGenProgress + '%' }"></div>
+                  </div>
+                  <span class="map-progress-text">{{ mapGenProgress }}%</span>
                 </div>
               </div>
             </div>
+            </div>
+          <div class="hall-grid-card card">
+            <div class="hall-grid-content">
+              <div class="gridmap-wrapper">
+                <canvas ref="hallGridCanvas" class="grid-canvas"></canvas>
           </div>
-          <div class="mission-table-card card">
-            <div class="mission-table-header">
-              <div class="mission-th">航点编号</div>
-              <div class="mission-th">坐标</div>
-              <div class="mission-th">航点类型</div>
-              <div class="mission-th">操作</div>
-            </div>
-            <div class="mission-table-body">
-              <div class="mission-tr" v-for="waypoint in waypointsData" :key="waypoint.index">
-                <div class="mission-td">{{ waypoint.index + 1 }}</div>
-                <div class="mission-td">{{ formatCoordinates(waypoint.coordinates) }}</div>
-                <div class="mission-td mission-icons">
-                  <span v-for="action in waypoint.actions" :key="action.actionId" class="mission-icon">
-                    <img :src="getActionIcon(action.type)" :title="action.typeName" />
-                  </span>
-                </div>
-                <div class="mission-td">
-                  <button class="mission-btn mission-btn-pause" disabled>删除航点</button>
-                </div>
-              </div>
             </div>
           </div>
         </section>
       </div>
     </main>
-    <!-- 弹窗等 -->
-    <div v-if="confirmDialog.visible" class="custom-dialog-mask">
-      <div class="custom-dialog">
-        <div class="custom-dialog-title">操作确认</div>
-        <div class="custom-dialog-content">{{ confirmDialog.message }}</div>
-        <div class="custom-dialog-actions">
-          <button class="mission-btn mission-btn-pause" @click="onConfirmDialogOk">确定</button>
-          <button v-if="confirmDialog.showCancel" class="mission-btn mission-btn-cancel" @click="onConfirmDialogCancel">取消</button>
-        </div>
-      </div>
-    </div>
-    <div v-if="uploadDialog.visible" class="custom-dialog-mask">
-      <div class="dispatch-task-modal upload-task-modal">
-        <div class="dispatch-task-modal-content">
-          <div class="dispatch-task-title">上传航线文件</div>
-          <div class="dispatch-task-form">
-            <!-- 文件上传区域 -->
-            <div class="dispatch-task-row">
-              <label>航线文件：</label>
-              <div class="upload-file-wrapper">
-                <label class="upload-file-btn">
-                  <input
-                    type="file"
-                    accept=".kmz"
-                    @change="onFileChange"
-                    ref="fileInputRef"
-                    class="upload-file-input"
-                  />
-                  选择文件
-                </label>
-                <span class="upload-file-tip">仅支持 .kmz 格式文件</span>
-              </div>
-            </div>
-            
-            <!-- 文件名称显示 -->
-            <div v-if="uploadDialog.fileName" class="dispatch-task-row">
-              <label>已选文件：</label>
-              <div class="upload-file-name">
-                <svg class="upload-file-icon" viewBox="0 0 20 20" width="18" height="18">
-                  <path fill="#67d5fd" d="M4 2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.83A2 2 0 0 0 17.41 7l-4.42-4.42A2 2 0 0 0 11.17 2H4zm6 1.5V8a1 1 0 0 0 1 1h4.5L10 3.5z"></path>
-                </svg>
-                {{ uploadDialog.fileName }}
-              </div>
-            </div>
-            
-            <!-- 航线名称输入框 -->
-            <div class="dispatch-task-row">
-              <label>航线名称：</label>
-              <input 
-                v-model="uploadDialog.waylineName" 
-                class="dispatch-task-input" 
-                placeholder="选择文件后自动填充，可手动修改"
-                maxlength="50"
-              />
-            </div>
-            
-            <!-- 无人机型号显示 -->
-            <div class="dispatch-task-row">
-              <label>无人机型号：</label>
-              <input 
-                :value="uploadDialog.droneModel || '未知型号'" 
-                class="dispatch-task-input" 
-                disabled
-              />
-            </div>
-          </div>
-          <div class="dispatch-task-actions">
-            <button class="mission-btn mission-btn-cancel" @click="onUploadCancel">取消</button>
-            <button class="mission-btn mission-btn-pause" :disabled="!uploadDialog.file" @click="onUploadConfirm">上传</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div v-if="dispatchTaskDialog.visible" class="custom-dialog-mask">
-      <div class="dispatch-task-modal">
-        <div class="dispatch-task-modal-content">
-          <div class="dispatch-task-title">下发任务</div>
-          <div class="dispatch-task-form">
-            <div class="dispatch-task-row">
-              <label>任务名称：</label>
-              <input 
-                v-model="dispatchTaskDialog.form.name" 
-                class="dispatch-task-input" 
-                placeholder="请输入任务名称"
-              />
-            </div>
-            <div class="dispatch-task-row">
-              <label>设备序列号：</label>
-              <input 
-                v-model="dispatchTaskDialog.form.dock_sn" 
-                class="dispatch-task-input" 
-                disabled
-              />
-            </div>
-            <div class="dispatch-task-row">
-              <label>航线文件ID：</label>
-              <input 
-                v-model="dispatchTaskDialog.form.file_id" 
-                class="dispatch-task-input" 
-                disabled
-              />
-            </div>
-            <div class="dispatch-task-row">
-              <label>任务类型：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="dispatchTaskDialog.form.task_type" class="mission-select">
-                  <option :value="0">立即任务</option>
-                  <option :value="1">定时任务</option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                  </svg>
-                </span>
-              </div>
-            </div>
-            <div v-if="dispatchTaskDialog.form.task_type === 1" class="dispatch-task-row">
-              <label>开始时间：</label>
-              <input 
-                v-model="dispatchTaskDialog.form.begin_time" 
-                type="datetime-local" 
-                class="dispatch-task-input"
-                :min="getMinLocalDateTime()"
-              />
-              <div v-if="dispatchTaskDialog.form.task_type === 1" class="time-tip">提示：定时任务的开始时间必须在当前时间4分钟及以后</div>
-            </div>
-            <div v-if="dispatchTaskDialog.form.task_type === 1" class="dispatch-task-row">
-              <label>周期任务：</label>
-              <div class="dispatch-switch-wrapper">
-                <div
-                  class="switch-container"
-                  :class="{ active: dispatchTaskDialog.form.enable_recurrence }"
-                  @click="dispatchTaskDialog.form.enable_recurrence = !dispatchTaskDialog.form.enable_recurrence"
-                >
-                  <div class="switch-toggle"></div>
-                </div>
-                <span class="dispatch-switch-label">{{ dispatchTaskDialog.form.enable_recurrence ? '开启' : '关闭' }}</span>
-              </div>
-            </div>
-            <div v-if="dispatchTaskDialog.form.task_type === 1 && dispatchTaskDialog.form.enable_recurrence" class="dispatch-task-row">
-              <label>开始日期：</label>
-              <input 
-                v-model="dispatchTaskDialog.form.recurrence_start_date" 
-                type="date" 
-                class="dispatch-task-input"
-                :min="getTodayDate()"
-              />
-            </div>
-            <div v-if="dispatchTaskDialog.form.task_type === 1 && dispatchTaskDialog.form.enable_recurrence" class="dispatch-task-row">
-              <label>结束日期：</label>
-              <input 
-                v-model="dispatchTaskDialog.form.recurrence_end_date" 
-                type="date" 
-                class="dispatch-task-input"
-                :min="getTodayDate()"
-              />
-            </div>
-            <div class="dispatch-task-row">
-              <label>返航高度：</label>
-              <input 
-                v-model="dispatchTaskDialog.form.rth_altitude" 
-                type="number" 
-                class="dispatch-task-input" 
-                placeholder="100"
-              />
-              <span class="unit-label">米</span>
-            </div>
-            <div class="dispatch-task-row">
-              <label>算法开关：</label>
-              <div class="dispatch-switch-wrapper">
-                <div
-                  class="switch-container"
-                  :class="{ active: dispatchTaskDialog.form.enable_vision }"
-                  @click="dispatchTaskDialog.form.enable_vision = !dispatchTaskDialog.form.enable_vision"
-                >
-                  <div class="switch-toggle"></div>
-                </div>
-                <span class="dispatch-switch-label">{{ dispatchTaskDialog.form.enable_vision ? '开启' : '关闭' }}</span>
-              </div>
-            </div>
-            <div class="dispatch-task-row">
-              <label>算法选择：</label>
-              <div class="dispatch-algorithm-options">
-                <label v-for="(name, id) in algorithmOptions" :key="id" class="dispatch-algorithm-option">
-                  <input 
-                    type="checkbox" 
-                    :value="id" 
-                    v-model="dispatchTaskDialog.form.vision_algorithms"
-                    class="dispatch-algorithm-checkbox"
-                    :disabled="!dispatchTaskDialog.form.enable_vision"
-                  />
-                  <span class="dispatch-algorithm-label" :class="{ 'disabled': !dispatchTaskDialog.form.enable_vision }">{{ name }}</span>
-                </label>
-              </div>
-            </div>
-          </div>
-          <div class="dispatch-task-actions">
-            <button class="mission-btn mission-btn-cancel" @click="onDispatchTaskCancel">取消</button>
-            <button class="mission-btn mission-btn-pause" @click="onDispatchTaskConfirm">确定</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 旧弹窗与任务下发模块已移除 -->
   </div>
 </template>
 
@@ -298,9 +69,9 @@ import { useRouter, useRoute } from 'vue-router'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
-import { useWaylineJobs, useDevices } from '../composables/useApi'
-import { waylineApi } from '@/api/services'
-import { useDeviceStatus } from '../composables/useDeviceStatus'
+// import { useWaylineJobs, useDevices } from '../composables/useApi'
+// import { waylineApi } from '@/api/services'
+// import { useDeviceStatus } from '../composables/useDeviceStatus'
 import icon360Photo from '@/assets/source_data/svg_data/task_line_svg/360_photo.svg'
 import iconAbsPhoto from '@/assets/source_data/svg_data/task_line_svg/abs_photo.svg'
 import iconBigger from '@/assets/source_data/svg_data/task_line_svg/bigger.svg'
@@ -317,108 +88,60 @@ import iconTakePhoto from '@/assets/source_data/svg_data/task_line_svg/take_phot
 const router = useRouter()
 const route = useRoute()
 
-// 使用航线文件API
-const { waylineFiles, waylineDetail, fetchWaylineFiles, fetchWaylineDetail, createJob, executeJob } = useWaylineJobs()
-const { getCachedWorkspaceId, getCachedDeviceSns, getCachedDeviceBySn } = useDevices()
-const { droneStatus, fetchMainDeviceStatus, fetchDroneStatus } = useDeviceStatus()
+// 展厅管理相关状态
+const isRecording = ref(false)
+const isGenerating = ref(false)
+const mapGenProgress = ref(0)
+const hallOptions = ref<Array<{ id: string; name: string; gridUrl?: string }>>([
+  { id: 'hall_a', name: 'A展厅' },
+  { id: 'hall_b', name: 'B展厅' }
+])
+const selectedHall = ref('hall_a')
+const currentGridUrl = computed(() => hallOptions.value.find(h => h.id === selectedHall.value)?.gridUrl || '')
 
-// 航线文件相关
-const selectedTrack = ref('')
-const trackFileLoading = ref(false)
+// 动作：开始/停止录制、生成地图/栅格图（此处占位，后端对接时替换）
+const startHallRecording = () => { isRecording.value = true }
+const stopHallRecording = () => { isRecording.value = false }
+const generateHallMap = () => { /* TODO: 生成地图 */ }
+const generateHallGrid = () => { /* TODO: 生成栅格图并更新对应hall的gridUrl */ }
 
-// 加载航线文件列表
-const loadWaylineFiles = async () => {
-  const workspaceId = getCachedWorkspaceId()
-  if (!workspaceId) {
-    console.error('未找到workspace_id，无法加载航线文件')
-    return
-  }
-  
-  trackFileLoading.value = true
-  try {
-    await fetchWaylineFiles(workspaceId, {
-      page: 1,
-      page_size: 100
-    })
-    // 默认选择第一条数据
-    if (waylineFiles.value && waylineFiles.value.length > 0) {
-      selectedTrack.value = waylineFiles.value[0].wayline_id
-      console.log('默认选择第一个航线:', selectedTrack.value)
-      // 立即加载第一个航线的详情
-      await loadWaylineDetail(selectedTrack.value)
+// Demo: 模拟生成进度（对接接口后替换）
+watch(isGenerating, (val) => {
+  if (!val) return
+  mapGenProgress.value = 0
+  const step = () => {
+    if (!isGenerating.value) return
+    mapGenProgress.value = Math.min(100, mapGenProgress.value + Math.round(Math.random() * 8 + 4))
+    if (mapGenProgress.value < 100) {
+      requestAnimationFrame(step)
+    } else {
+      isGenerating.value = false
     }
-  } catch (err) {
-    console.error('加载航线文件失败:', err)
-  } finally {
-    trackFileLoading.value = false
   }
-}
-
-// 加载航线详情
-const loadWaylineDetail = async (waylineId: string) => {
-  const workspaceId = getCachedWorkspaceId()
-  if (!workspaceId || !waylineId) {
-    console.error('加载航线详情失败: workspaceId 或 waylineId 为空', { workspaceId, waylineId })
-    return
-  }
-  
-  try {
-    await fetchWaylineDetail(workspaceId, waylineId)
-    console.log('航线详情加载成功')
-  } catch (err) {
-    console.error('加载航线详情失败:', err)
-  }
-}
-
-// 监听选中的航线变化
-watch(selectedTrack, (newValue, oldValue) => {
-  if (newValue && newValue !== oldValue) {
-    console.log('航线选择变化，加载详情:', newValue)
-    loadWaylineDetail(newValue)
-  }
-}, { immediate: false })
-
-// 计算属性：获取航点数据
-const waypointsData = computed(() => {
-  if (!waylineDetail.value || !waylineDetail.value.waylines || waylineDetail.value.waylines.length === 0) {
-    return []
-  }
-  return waylineDetail.value.waylines[0].waypoints || []
+  requestAnimationFrame(step)
 })
 
-// 获取当前航线名称
-const getCurrentWaylineName = () => {
-  const currentWayline = waylineFiles.value.find(f => f.wayline_id === selectedTrack.value)
-  return currentWayline ? currentWayline.name : '未知航线'
+const startGenerateHallMap = () => {
+  if (isRecording.value || isGenerating.value) return
+  isGenerating.value = true
 }
 
-// 格式化坐标显示
-const formatCoordinates = (coordinates: [number, number]) => {
-  if (!coordinates || coordinates.length !== 2) {
-    return '-'
-  }
-  const [lng, lat] = coordinates
-  return `${lng.toFixed(6)}, ${lat.toFixed(6)}`
-}
+// 航线相关功能已移除
 
-// 获取动作图标
-const getActionIcon = (actionType: string) => {
-  const iconMap: { [key: string]: string } = {
-    'rotateYaw': iconLeftRight,
-    'gimbalRotate': iconHover,
-    'zoom': iconBigger,
-    'startRecord': iconStartVideo,
-    'stopRecord': iconStopVideo,
-    'takePhoto': iconTakePhoto,
-    'focus': iconAbsPhoto
-  }
-  return iconMap[actionType] || iconTakePhoto
-}
+// 航线详情相关逻辑已移除
+
+// 航线选择监听已移除
+
+// 航点数据已移除
+
+// 航线名称获取已移除
+
+// 坐标格式化已移除
+
+// 动作图标映射已移除
 
 const sidebarTabs = [
-  { key: 'list', label: '航线管理', icon: trackListIcon, path: '/dashboard/mission' },
-  { key: 'records', label: '任务记录', icon: trackRecordsIcon, path: '/dashboard/mission-records' },
-  { key: 'logs', label: '任务日志', icon: trackLogsIcon, path: '/dashboard/mission-logs' }
+  { key: 'list', label: '展厅管理', icon: trackListIcon, path: '/dashboard/mission' }
 ]
 
 const handleTabClick = (tab: any) => {
@@ -427,104 +150,11 @@ const handleTabClick = (tab: any) => {
   }
 }
 
-const trackSelectRef = ref<HTMLSelectElement | null>(null)
-const isTrackSelectOpen = ref(false)
-function openTrackSelect() {
-  if (trackSelectRef.value) {
-    trackSelectRef.value.focus()
-    trackSelectRef.value.click && trackSelectRef.value.click()
-    isTrackSelectOpen.value = true
-  }
-}
-function onTrackSelectBlur() {
-  isTrackSelectOpen.value = false
-}
-function onTrackSelectFocus() {
-  isTrackSelectOpen.value = true
-}
-function onTrackSelectChange() {
-  isTrackSelectOpen.value = false
-  console.log('下拉选择框变化事件触发')
-}
-function onTrackSelectMousedown() {
-  isTrackSelectOpen.value = true
-}
-function onTrackSelectKeydown(e: KeyboardEvent) {
-  if ([" ", "Enter", "ArrowDown"].includes(e.key)) {
-    isTrackSelectOpen.value = true
-  }
-  if (["Escape", "Esc"].includes(e.key)) {
-    isTrackSelectOpen.value = false
-  }
-}
+// 旧航线选择交互已移除
 
-const confirmDialog = ref({
-  visible: false,
-  message: '',
-  onOk: () => {},
-  showCancel: true
-})
-function showConfirmDialog(message: string, onOk: () => void, showCancel = true) {
-  confirmDialog.value.visible = true
-  confirmDialog.value.message = message
-  confirmDialog.value.onOk = onOk
-  confirmDialog.value.showCancel = showCancel
-}
-function onConfirmDialogOk() {
-  confirmDialog.value.visible = false
-  confirmDialog.value.onOk && confirmDialog.value.onOk()
-}
-function onConfirmDialogCancel() {
-  confirmDialog.value.visible = false
-}
-async function handleDeleteTrack() {
-  const current = waylineFiles.value.find(f => f.wayline_id === selectedTrack.value)
-  const trackName = current?.name || '未知航线'
-  if (!current) {
-    alert('请先选择要删除的航线')
-    return
-  }
-  showConfirmDialog(`确定要删除航线'${trackName}'吗？`, async () => {
-    try {
-      const workspaceId = getCachedWorkspaceId()
-      if (!workspaceId) {
-        alert('未找到workspace_id')
-        return
-      }
-      await waylineApi.deleteWaylineFile(workspaceId, current.wayline_id)
-      alert('删除成功')
-      // 刷新列表并重置选择
-      await fetchWaylineFiles(workspaceId, { page: 1, page_size: 100 })
-      if (waylineFiles.value.length > 0) {
-        selectedTrack.value = waylineFiles.value[0].wayline_id
-        await loadWaylineDetail(selectedTrack.value)
-      } else {
-        selectedTrack.value = ''
-      }
-    } catch (err) {
-      console.error('删除航线失败:', err)
-      let message = '删除失败，请重试'
-      if (typeof err === 'string') {
-        message = err
-      } else if (err && typeof err === 'object') {
-        const anyErr = err as any
-        if (typeof anyErr.detail === 'string' && anyErr.detail) {
-          message = anyErr.detail
-        } else if (typeof anyErr.message === 'string' && anyErr.message) {
-          message = anyErr.message
-        }
-      }
-      alert(message)
-    }
-  })
-}
-const uploadDialog = ref({
-  visible: false,
-  file: null as File | null,
-  fileName: '',
-  waylineName: '',
-  droneModel: ''
-})
+// 旧确认弹窗已移除
+// 旧删除航线函数已移除
+// 旧上传对话框状态已移除
 
 // 算法选项
 const algorithmOptions = {
@@ -535,31 +165,7 @@ const algorithmOptions = {
   9: "人车检测"
 }
 
-// 下发任务弹窗
-const dispatchTaskDialog = ref({
-  visible: false,
-  form: {
-    name: '',
-    dock_sn: '',
-    file_id: '',
-    task_type: 0,
-    out_of_control_action: 0,
-    rth_altitude: 100,
-    rth_mode: 1,
-    exit_wayline_when_rc_lost: 0,
-    wayline_precision_type: 1,
-    begin_time: null as string | null,
-    end_time: null as string | null,
-    execute_time: null as string | null,
-    enable_vision: false, // 新增算法开关
-    vision_algorithms: [] as number[], // 新增算法选择
-    vision_threshold: 0.5, // 新增算法阈值
-    // 周期任务相关
-    enable_recurrence: false,
-    recurrence_start_date: '' as string,
-    recurrence_end_date: '' as string
-  }
-})
+// 旧任务下发弹窗已移除
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
@@ -598,132 +204,10 @@ const formatLocalDateTime = (date: Date) => {
   return `${y}-${m}-${d}T${hh}:${mm}:${ss}`
 }
 
-function showUploadDialog() {
-  uploadDialog.value.visible = true
-  uploadDialog.value.file = null
-  uploadDialog.value.fileName = ''
-  uploadDialog.value.waylineName = ''
-  
-  // 获取无人机型号信息
-  const { droneSns } = getCachedDeviceSns()
-  if (droneSns && droneSns.length > 0) {
-    // 从缓存中获取无人机设备信息
-    const droneDevice = getCachedDeviceBySn(droneSns[0])
-    
-    if (droneDevice && droneDevice.device_type_info) {
-      const { domain, device_type, sub_type } = droneDevice.device_type_info
-      const droneModelKey = `${domain}-${device_type}-${sub_type}`
-      uploadDialog.value.droneModel = droneModelKey
-      console.log('无人机型号组合:', droneModelKey, '设备信息:', droneDevice.device_type_info)
-    } else {
-      uploadDialog.value.droneModel = '未知型号'
-      console.log('未找到无人机设备信息')
-    }
-  } else {
-    uploadDialog.value.droneModel = '未知型号'
-    console.log('未找到无人机设备SN')
-  }
-  
-  setTimeout(() => {
-    if (fileInputRef.value) fileInputRef.value.value = ''
-  }, 0)
-}
-function onFileChange(e: Event) {
-  const files = (e.target as HTMLInputElement).files
-  if (files && files.length > 0) {
-    const file = files[0]
-    if (file.name.endsWith('.kmz')) {
-      uploadDialog.value.file = file
-      uploadDialog.value.fileName = file.name
-      
-      // 自动提取文件名（去掉.kmz扩展名）并填充到航线名称
-      const fileNameWithoutExtension = file.name.replace(/\.kmz$/i, '')
-      uploadDialog.value.waylineName = fileNameWithoutExtension
-    } else {
-      uploadDialog.value.file = null
-      uploadDialog.value.fileName = ''
-      uploadDialog.value.waylineName = '' // 清空航线名称
-      alert('请选择.kmz格式的文件')
-      if (fileInputRef.value) fileInputRef.value.value = ''
-    }
-  }
-}
-async function onUploadConfirm() {
-  if (uploadDialog.value.file) {
-    try {
-      const workspaceId = getCachedWorkspaceId()
-      if (!workspaceId) {
-        alert('未找到workspace_id')
-        return
-      }
-      
-      // 获取token
-      const token = localStorage.getItem('token')
-      if (!token) {
-        alert('未找到认证token，请重新登录')
-        return
-      }
-      
-      // 如果没有航线名称，使用文件名作为默认名称
-      const waylineName = uploadDialog.value.waylineName.trim() || 
-        uploadDialog.value.fileName.replace(/\.kmz$/i, '')
-      
-      // 创建FormData对象
-      const formData = new FormData()
-      formData.append('name', waylineName)
-      formData.append('drone_model_key', uploadDialog.value.droneModel)
-      formData.append('file', uploadDialog.value.file)
-      
-      console.log('上传参数:', {
-        name: waylineName,
-        drone_model_key: uploadDialog.value.droneModel,
-        file: uploadDialog.value.file.name
-      })
-      
-      // 调用上传接口，添加认证头
-      const response = await fetch(`/api/v1/wayline/workspaces/${workspaceId}/files/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      })
-      
-      if (response.ok) {
-        const result = await response.json()
-        console.log('文件上传成功:', result)
-        alert('航线文件上传成功')
-        uploadDialog.value.visible = false
-        
-        // 刷新航线文件列表
-        const workspaceId = getCachedWorkspaceId()
-        if (workspaceId) {
-          await fetchWaylineFiles(workspaceId, {
-            page: 1,
-            page_size: 100
-          })
-        }
-      } else {
-        const errorData = await response.json()
-        console.error('文件上传失败:', errorData)
-        alert(`文件上传失败: ${errorData.message || '未知错误'}`)
-      }
-    } catch (error) {
-      console.error('文件上传失败:', error)
-      alert('文件上传失败，请检查网络连接')
-    }
-  } else {
-    alert('请先选择航线文件')
-  }
-}
-function onUploadCancel() {
-  uploadDialog.value.visible = false
-}
-function handleAddTrack() {
-  // 直接弹出上传文件弹窗
-  showUploadDialog()
-}
-async function handleDispatchTask() {
+// 旧上传入口已移除
+// 旧上传事件已移除
+// 旧上传确认/取消已移除
+/* 旧任务下发逻辑已移除
   // 获取当前选中的航线信息
   const currentWayline = waylineFiles.value.find(f => f.wayline_id === selectedTrack.value)
   if (!currentWayline) {
@@ -779,9 +263,9 @@ async function handleDispatchTask() {
   }
   
   dispatchTaskDialog.value.visible = true
-}
+*/
 
-async function onDispatchTaskConfirm() {
+/* 旧任务下发逻辑已移除
   const form = dispatchTaskDialog.value.form
   
   // 验证必填字段
@@ -900,15 +384,141 @@ async function onDispatchTaskConfirm() {
     console.error('任务下发失败:', err)
     alert('任务下发失败')
   }
-}
+*/
 
-function onDispatchTaskCancel() {
-  dispatchTaskDialog.value.visible = false
-}
+// 旧任务下发取消已移除
 
 // 页面加载时获取数据
-onMounted(async () => {
-  await loadWaylineFiles()
+onMounted(() => {})
+
+// 栅格图渲染（参考首页实现，简化版）
+const hallGridCanvas = ref<HTMLCanvasElement | null>(null)
+let hallGridCleanup: (() => void) | null = null
+
+const loadAndRenderHallPGM = async () => {
+  try {
+    const canvas = hallGridCanvas.value
+    if (!canvas) return
+    // 示例：可以根据 selectedHall 切换不同资源，这里先固定为 gridMap.pgm
+    const url = new URL('../assets/source_data/pgm_data/gridMap.pgm', import.meta.url).href
+    const response = await fetch(url)
+    const buffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    // 解析头
+    let header = ''
+    let i = 0, newlines = 0
+    while (i < bytes.length && newlines < 3) {
+      const ch = String.fromCharCode(bytes[i++])
+      header += ch
+      if (ch === '\n') newlines++
+    }
+    const headerClean = header.split('\n').filter(l => l.trim() && !l.startsWith('#')).join('\n')
+    const parts = headerClean.split(/\s+/).filter(Boolean)
+    const magic = parts[0]
+    const width = parseInt(parts[1]); const height = parseInt(parts[2])
+    const maxVal = parseInt(parts[3]) || 255
+    const pixelStart = i
+    canvas.width = width; canvas.height = height
+    const ctx = canvas.getContext('2d'); if (!ctx) return
+    const imageData = ctx.createImageData(width, height)
+    if (magic === 'P5') {
+      const bytesPerSample = maxVal > 255 ? 2 : 1
+      let p = pixelStart
+      for (let idx = 0; idx < width * height; idx++) {
+        let v = 0
+        if (bytesPerSample === 1) v = bytes[p++]
+        else { v = (bytes[p] << 8) | bytes[p + 1]; p += 2 }
+        const c = Math.max(0, Math.min(255, Math.round((v / maxVal) * 255)))
+        const off = idx * 4
+        imageData.data[off] = c; imageData.data[off + 1] = c; imageData.data[off + 2] = c; imageData.data[off + 3] = 255
+      }
+    } else {
+      const text = new TextDecoder().decode(bytes)
+      const tokens = text.replace(/#.*\n/g, '').trim().split(/\s+/)
+      const pixelTokens = tokens.slice(4)
+      for (let idx = 0; idx < width * height; idx++) {
+        const v = parseInt(pixelTokens[idx] || `${maxVal}`)
+        const c = Math.max(0, Math.min(255, Math.round((v / maxVal) * 255)))
+        const off = idx * 4
+        imageData.data[off] = c; imageData.data[off + 1] = c; imageData.data[off + 2] = c; imageData.data[off + 3] = 255
+      }
+    }
+    // 黑白映射
+    for (let k = 0; k < imageData.data.length; k += 4) {
+      const g = imageData.data[k]
+      if (g < 128) {
+        imageData.data[k] = 0; imageData.data[k + 1] = 0; imageData.data[k + 2] = 0
+      } else {
+        imageData.data[k] = 255; imageData.data[k + 1] = 255; imageData.data[k + 2] = 255
+      }
+    }
+    ctx.putImageData(imageData, 0, 0)
+
+    // 交互
+    let scale = 1, offsetX = 0, offsetY = 0
+    let isDragging = false, lastX = 0, lastY = 0
+
+    const resize = () => {
+      const parent = canvas.parentElement as HTMLElement
+      if (!parent) return
+      const sw = parent.clientWidth; const sh = parent.clientHeight
+      scale = Math.min(sw / width, sh / height) * 1.0
+      canvas.style.width = `${Math.floor(width * scale)}px`
+      canvas.style.height = `${Math.floor(height * scale)}px`
+      offsetX = (sw - width * scale) / 2
+      offsetY = (sh - height * scale) / 2
+      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+    }
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? 0.9 : 1.1
+      scale = Math.max(0.1, Math.min(10, scale * delta))
+      canvas.style.width = `${Math.floor(width * scale)}px`
+      canvas.style.height = `${Math.floor(height * scale)}px`
+      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+    }
+    const onMouseDown = (e: MouseEvent) => { isDragging = true; lastX = e.clientX; lastY = e.clientY }
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return
+      const dx = e.clientX - lastX; const dy = e.clientY - lastY
+      offsetX += dx; offsetY += dy
+      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+      lastX = e.clientX; lastY = e.clientY
+    }
+    const endDrag = () => { isDragging = false }
+
+    resize()
+    window.addEventListener('resize', resize)
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    canvas.addEventListener('mousedown', onMouseDown)
+    canvas.addEventListener('mousemove', onMouseMove)
+    canvas.addEventListener('mouseup', endDrag)
+    canvas.addEventListener('mouseleave', endDrag)
+
+    if (hallGridCleanup) hallGridCleanup()
+    hallGridCleanup = () => {
+      window.removeEventListener('resize', resize)
+      canvas.removeEventListener('wheel', onWheel as any)
+      canvas.removeEventListener('mousedown', onMouseDown as any)
+      canvas.removeEventListener('mousemove', onMouseMove as any)
+      canvas.removeEventListener('mouseup', endDrag as any)
+      canvas.removeEventListener('mouseleave', endDrag as any)
+    }
+  } catch (e) {
+    // 忽略
+  }
+}
+
+watch(selectedHall, () => {
+  // 切换展厅时重载（未来可切换不同PGM来源）
+  loadAndRenderHallPGM()
+})
+
+onMounted(() => {
+  // 初次渲染
+  // 等 DOM 就绪后加载
+  setTimeout(() => loadAndRenderHallPGM(), 0)
 })
 </script>
 
@@ -1430,4 +1040,41 @@ onMounted(async () => {
   color: #b8c7d9;
   user-select: none;
 }
+
+/* 展厅栅格图容器，作为绝对定位子元素的定位上下文 */
+.hall-grid-content {
+  position: relative;
+  flex: 1;
+  min-height: 360px;
+  background: #fff;
+  border: 1px solid #164159;
+  border-radius: 6px;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 让卡片拉伸到底部，并在底部留出间距 */
+.hall-grid-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex: 1;
+  min-height: 0;
+}
+
+.gridmap-wrapper { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: flex-start; overflow: hidden; background: #fff; }
+.grid-canvas { display: block; background: #fff; cursor: grab; user-select: none; transform-origin: 0 0; }
+.grid-canvas:active { cursor: grabbing; }
+
+/* 展厅管理工具栏与进度条 */
+.hall-toolbar { display: flex; flex-direction: column; gap: 10px; }
+.hall-toolbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hall-actions { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; }
+.hall-btn { height: 32px; padding: 0 14px; border-radius: 6px; }
+.hall-select { display: flex; align-items: center; gap: 8px; }
+.map-progress { display: flex; align-items: center; gap: 10px; }
+.map-progress-track { flex: 1; height: 6px; background: rgba(103,213,253,.15); border: 1px solid rgba(103,213,253,.3); border-radius: 6px; overflow: hidden; }
+.map-progress-fill { height: 100%; background: linear-gradient(90deg, #59c0fc, #16bbf2); transition: width .2s ease; }
+.map-progress-text { color: #cfe9f3; font-size: 12px; min-width: 38px; text-align: right; }
 </style>

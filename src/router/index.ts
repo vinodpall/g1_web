@@ -41,15 +41,6 @@ const router = createRouter({
           }
         },
         {
-          path: 'drone-control',
-          name: 'DroneControl',
-          component: () => import('../views/DroneControl.vue'),
-          meta: { 
-            requiresAuth: true,
-            permission: 'drone_control.view'
-          }
-        },
-        {
           path: 'dock-control',
           name: 'DockControl',
           component: () => import('../views/DockControl.vue'),

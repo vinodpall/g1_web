@@ -12,13 +12,6 @@ const permissionNameMapping: Record<string, string> = {
   '首页-取消返航': 'home.drone.cancel_return',
   '首页-急停': 'home.drone.emergency_stop',
   
-  // 无人机控制权限
-  '无人机控制-页面查看': 'drone_control.view',
-  '无人机控制-航线暂停': 'drone_control.wayline.pause',
-  '无人机控制-航线停止': 'drone_control.wayline.stop',
-  '无人机控制-远程调试': 'drone_control.remote_debug',
-  '无人机控制-无人机控制': 'drone_control.drone.control',
-  '无人机控制-云台控制': 'drone_control.gimbal.control',
   
   // 机场控制权限
   '机场控制-页面查看': 'dock_control.view',
@@ -94,13 +87,13 @@ export function mapPermissionsToSections(permissions: Permission[]): PermissionS
     },
     {
       key: 'drone_control',
-      title: '无人机控制',
+  // title: '无人机控制',
       viewPermission: 'drone_control.view',
       permissions: [
         { key: 'drone_control.wayline.pause', label: '航线暂停' },
         { key: 'drone_control.wayline.stop', label: '航线停止' },
         { key: 'drone_control.remote_debug', label: '远程调试' },
-        { key: 'drone_control.drone.control', label: '无人机控制' },
+  // { key: 'drone_control.drone.control', label: '无人机控制' },
         { key: 'drone_control.gimbal.control', label: '云台控制' }
       ]
     },
