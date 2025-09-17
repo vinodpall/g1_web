@@ -27,20 +27,19 @@
                 <div class="hall-actions">
                   <button
                     class="mission-btn mission-btn-pause hall-btn"
-                    :disabled="isGenerating"
                     @click="isRecording ? stopHallRecording() : startHallRecording()"
                   >
                     {{ isRecording ? '停止地图录制' : '展厅地图录制' }}
                   </button>
                   <button
                     class="mission-btn mission-btn-pause hall-btn"
-                    :disabled="isRecording || isGenerating"
+                    :disabled="isRecording"
                     @click="startGenerateHallMap"
                   >
                     生成展厅地图
                   </button>
                 </div>
-                <div class="map-progress" v-show="isGenerating || (mapGenProgress > 0 && mapGenProgress < 100)">
+                <div class="map-progress">
                   <div class="map-progress-track">
                     <div class="map-progress-fill" :style="{ width: mapGenProgress + '%' }"></div>
                   </div>
@@ -49,11 +48,68 @@
               </div>
             </div>
             </div>
-          <div class="hall-grid-card card">
-            <div class="hall-grid-content">
-              <div class="gridmap-wrapper">
+          <div class="hall-grid-card">
+            <div class="hall-grid-header">
+              <div class="grid-toolbar-compact">
+                <div class="toolbar-left">
+                  <span class="toolbar-label">地图列表</span>
+                  <select v-model="selectedHall" class="toolbar-select">
+                    <option v-for="h in hallOptions" :key="h.id" :value="h.id">{{ h.name }}</option>
+                  </select>
+                </div>
+                <div class="toolbar-right">
+                  <button class="toolbar-btn" :class="{ active: isEditMode }" @click="toggleEditMode">
+                    <span class="btn-icon">✏️</span>
+                    {{ isEditMode ? '编辑中' : '编辑' }}
+                  </button>
+                  <button class="toolbar-btn" @click="onUploadGrid">
+                    <span class="btn-icon">📁</span>
+                    上传
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="hall-grid-main">
+              <div class="gridmap-container">
                 <canvas ref="hallGridCanvas" class="grid-canvas"></canvas>
-          </div>
+                <div v-show="isEditMode" class="edit-panel-right">
+                  <div class="panel-tools">
+                    <div class="tool-group">
+                      <div class="tool-item" :class="{ active: activeTool === 'pen' && navMode === 'edit' }" @click="setTool('pen')" title="画笔">
+                        <span class="tool-icon">✏️</span>
+                      </div>
+                      <div class="tool-item" :class="{ active: activeTool === 'eraser' && navMode === 'edit' }" @click="setTool('eraser')" title="橡皮擦">
+                        <span class="tool-icon">🧽</span>
+                      </div>
+                    </div>
+                    <div class="tool-settings">
+                      <div class="setting-item">
+                        <label>大小</label>
+                        <input type="range" min="2" max="50" v-model.number="brushSize" class="size-slider" />
+                        <span class="size-value">{{ brushSize }}</span>
+                      </div>
+                    </div>
+                    <div class="navigation-tools">
+                      <div class="nav-item" :class="{ active: navMode === 'pan' }" @click="setNavMode('pan')" title="拖动模式">
+                        <span class="nav-icon">✋</span>
+                      </div>
+                      <div class="nav-item" @click="zoomIn" title="放大">
+                        <span class="nav-icon">🔍+</span>
+                      </div>
+                      <div class="nav-item" @click="zoomOut" title="缩小">
+                        <span class="nav-icon">🔍-</span>
+                      </div>
+                      <div class="nav-item" @click="resetZoom" title="重置视图">
+                        <span class="nav-icon">⌂</span>
+                      </div>
+                    </div>
+                    <div class="tool-actions">
+                      <button class="action-btn" @click="undoEdit" :disabled="!canUndo">撤回</button>
+                      <button class="action-btn" @click="clearGridEdit">重置</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -90,8 +146,7 @@ const route = useRoute()
 
 // 展厅管理相关状态
 const isRecording = ref(false)
-const isGenerating = ref(false)
-const mapGenProgress = ref(0)
+const mapGenProgress = ref(65)
 const hallOptions = ref<Array<{ id: string; name: string; gridUrl?: string }>>([
   { id: 'hall_a', name: 'A展厅' },
   { id: 'hall_b', name: 'B展厅' }
@@ -99,32 +154,114 @@ const hallOptions = ref<Array<{ id: string; name: string; gridUrl?: string }>>([
 const selectedHall = ref('hall_a')
 const currentGridUrl = computed(() => hallOptions.value.find(h => h.id === selectedHall.value)?.gridUrl || '')
 
+// 栅格编辑相关
+const isEditMode = ref(false)
+const activeTool = ref<'pen' | 'eraser'>('pen')
+const brushSize = ref(16)
+const brushColor = ref('#000000') // 黑色表示障碍物
+const navMode = ref<'edit' | 'pan'>('edit') // 导航模式：编辑或拖动
+
+const toggleEditMode = () => { 
+  isEditMode.value = !isEditMode.value
+  setupCanvasEditEvents()
+}
+const setTool = (tool: 'pen' | 'eraser') => { 
+  activeTool.value = tool
+  navMode.value = 'edit'
+}
+
+const setNavMode = (mode: 'edit' | 'pan') => { 
+  navMode.value = mode
+  // 切换到拖动模式时，取消工具选中状态的视觉反馈
+  if (mode === 'pan') {
+    // 工具按钮不会显示为选中状态，但保持内部状态
+  }
+}
+
+// 缩放和导航方法
+let currentScale = 1
+let currentOffsetX = 0
+let currentOffsetY = 0
+
+const zoomIn = () => {
+  const canvas = hallGridCanvas.value
+  if (!canvas) return
+  currentScale = Math.min(5, currentScale * 1.2)
+  applyTransform()
+}
+
+const zoomOut = () => {
+  const canvas = hallGridCanvas.value
+  if (!canvas) return
+  currentScale = Math.max(0.2, currentScale / 1.2)
+  applyTransform()
+}
+
+const resetZoom = () => {
+  const canvas = hallGridCanvas.value
+  if (!canvas) return
+  currentScale = 1
+  currentOffsetX = 0
+  currentOffsetY = 0
+  applyTransform()
+}
+
+const applyTransform = () => {
+  const canvas = hallGridCanvas.value
+  if (!canvas) return
+  const parent = canvas.parentElement as HTMLElement
+  if (!parent) return
+  
+  const sw = parent.clientWidth
+  const sh = parent.clientHeight
+  const baseScale = Math.min(sw / canvas.width, sh / canvas.height)
+  const finalScale = baseScale * currentScale
+  
+  canvas.style.width = `${Math.floor(canvas.width * finalScale)}px`
+  canvas.style.height = `${Math.floor(canvas.height * finalScale)}px`
+  
+  const centerX = (sw - canvas.width * finalScale) / 2 + currentOffsetX
+  const centerY = (sh - canvas.height * finalScale) / 2 + currentOffsetY
+  
+  canvas.style.transform = `translate(${centerX}px, ${centerY}px)`
+}
+const onUploadGrid = async () => {
+  // 先确认是否保存当前栅格图
+  const shouldSave = await showConfirmDialog(
+    '确认操作', 
+    '是否下载保存当前栅格图的修改，然后上传新的栅格图？\n\n点击确定后会自动下载修改后的栅格图文件到您的下载文件夹，您可以用它替换原文件。'
+  )
+  if (!shouldSave) return
+  
+  // 下载保存当前栅格图
+  await saveCurrentGrid()
+  
+  // 显示成功提示
+  showSuccessMessage('栅格图已下载到您的下载文件夹')
+  
+  // 等待1秒让用户看到提示，然后弹出文件选择对话框
+  setTimeout(() => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.pgm,.png,.jpg,.jpeg'
+    input.onchange = () => {
+      const file = input.files?.[0]
+      if (!file) return
+      handleGridFileUpload(file)
+    }
+    input.click()
+  }, 1000)
+}
+
 // 动作：开始/停止录制、生成地图/栅格图（此处占位，后端对接时替换）
 const startHallRecording = () => { isRecording.value = true }
 const stopHallRecording = () => { isRecording.value = false }
 const generateHallMap = () => { /* TODO: 生成地图 */ }
 const generateHallGrid = () => { /* TODO: 生成栅格图并更新对应hall的gridUrl */ }
 
-// Demo: 模拟生成进度（对接接口后替换）
-watch(isGenerating, (val) => {
-  if (!val) return
-  mapGenProgress.value = 0
-  const step = () => {
-    if (!isGenerating.value) return
-    mapGenProgress.value = Math.min(100, mapGenProgress.value + Math.round(Math.random() * 8 + 4))
-    if (mapGenProgress.value < 100) {
-      requestAnimationFrame(step)
-    } else {
-      isGenerating.value = false
-    }
-  }
-  requestAnimationFrame(step)
-})
+// 进度条默认值展示（后续可对接真实进度）
 
-const startGenerateHallMap = () => {
-  if (isRecording.value || isGenerating.value) return
-  isGenerating.value = true
-}
+const startGenerateHallMap = () => { /* 预留：生成展厅地图动作，不影响进度条展示 */ }
 
 // 航线相关功能已移除
 
@@ -453,6 +590,82 @@ const loadAndRenderHallPGM = async () => {
       }
     }
     ctx.putImageData(imageData, 0, 0)
+    
+    // 重置编辑数据
+    gridImageData = null
+
+    // 编辑相关函数
+    const getCanvasCoords = (e: MouseEvent) => {
+      if (!canvas) return { x: 0, y: 0 }
+      
+      const rect = canvas.getBoundingClientRect()
+      const scaleX = canvas.width / rect.width
+      const scaleY = canvas.height / rect.height
+      
+      return {
+        x: Math.floor((e.clientX - rect.left) * scaleX),
+        y: Math.floor((e.clientY - rect.top) * scaleY)
+      }
+    }
+
+    const editGridPixel = (x: number, y: number) => {
+      const ctx = canvas?.getContext('2d')
+      if (!canvas || !ctx) return
+      
+      if (!gridImageData) {
+        gridImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      }
+      
+      const radius = Math.floor(brushSize.value / 2)
+      const color = activeTool.value === 'pen' ? [0, 0, 0, 255] : [255, 255, 255, 255] // 黑色障碍物，白色空地
+      
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const px = x + dx
+          const py = y + dy
+          
+          if (px >= 0 && px < canvas.width && py >= 0 && py < canvas.height) {
+            const distance = Math.sqrt(dx * dx + dy * dy)
+            if (distance <= radius) {
+              const index = (py * canvas.width + px) * 4
+              gridImageData.data[index] = color[0]     // R
+              gridImageData.data[index + 1] = color[1] // G
+              gridImageData.data[index + 2] = color[2] // B
+              gridImageData.data[index + 3] = color[3] // A
+            }
+          }
+        }
+      }
+      
+      ctx.putImageData(gridImageData, 0, 0)
+    }
+
+    const drawLine = (x0: number, y0: number, x1: number, y1: number) => {
+      const dx = Math.abs(x1 - x0)
+      const dy = Math.abs(y1 - y0)
+      const sx = x0 < x1 ? 1 : -1
+      const sy = y0 < y1 ? 1 : -1
+      let err = dx - dy
+      
+      let x = x0
+      let y = y0
+      
+      while (true) {
+        editGridPixel(x, y)
+        
+        if (x === x1 && y === y1) break
+        
+        const e2 = 2 * err
+        if (e2 > -dy) {
+          err -= dy
+          x += sx
+        }
+        if (e2 < dx) {
+          err += dx
+          y += sy
+        }
+      }
+    }
 
     // 交互
     let scale = 1, offsetX = 0, offsetY = 0
@@ -478,15 +691,56 @@ const loadAndRenderHallPGM = async () => {
       canvas.style.height = `${Math.floor(height * scale)}px`
       canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
     }
-    const onMouseDown = (e: MouseEvent) => { isDragging = true; lastX = e.clientX; lastY = e.clientY }
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return
-      const dx = e.clientX - lastX; const dy = e.clientY - lastY
-      offsetX += dx; offsetY += dy
-      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
-      lastX = e.clientX; lastY = e.clientY
+    const onMouseDown = (e: MouseEvent) => { 
+      // 编辑模式下且为编辑导航模式的左键编辑
+      if (isEditMode.value && navMode.value === 'edit' && e.button === 0 && !e.ctrlKey) {
+        // 开始编辑前保存当前状态到历史记录
+        saveToHistory()
+        drawing = true
+        const coords = getCanvasCoords(e)
+        editLastX = coords.x
+        editLastY = coords.y
+        editGridPixel(coords.x, coords.y)
+        e.preventDefault()
+        return
+      }
+      
+      // 拖动：拖动模式、右键、Ctrl+左键、或非编辑模式的左键
+      if (navMode.value === 'pan' || e.button === 2 || e.ctrlKey || !isEditMode.value) {
+        isDragging = true; 
+        lastX = e.clientX; 
+        lastY = e.clientY
+        canvas.style.cursor = 'grabbing'
+        e.preventDefault()
+      }
     }
-    const endDrag = () => { isDragging = false }
+    const onMouseMove = (e: MouseEvent) => {
+      // 处理编辑绘制
+      if (drawing && isEditMode.value) {
+        const coords = getCanvasCoords(e)
+        drawLine(editLastX, editLastY, coords.x, coords.y)
+        editLastX = coords.x
+        editLastY = coords.y
+        return
+      }
+      
+      // 处理拖动
+      if (isDragging) {
+        const dx = e.clientX - lastX; const dy = e.clientY - lastY
+        offsetX += dx; offsetY += dy
+        canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+        lastX = e.clientX; lastY = e.clientY
+      }
+    }
+    const endDrag = () => { 
+      isDragging = false
+      drawing = false
+      if (isEditMode.value) {
+        canvas.style.cursor = activeTool.value === 'pen' ? 'crosshair' : 'pointer'
+      } else {
+        canvas.style.cursor = 'grab'
+      }
+    }
 
     resize()
     window.addEventListener('resize', resize)
@@ -495,6 +749,7 @@ const loadAndRenderHallPGM = async () => {
     canvas.addEventListener('mousemove', onMouseMove)
     canvas.addEventListener('mouseup', endDrag)
     canvas.addEventListener('mouseleave', endDrag)
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault()) // 禁用右键菜单
 
     if (hallGridCleanup) hallGridCleanup()
     hallGridCleanup = () => {
@@ -504,6 +759,7 @@ const loadAndRenderHallPGM = async () => {
       canvas.removeEventListener('mousemove', onMouseMove as any)
       canvas.removeEventListener('mouseup', endDrag as any)
       canvas.removeEventListener('mouseleave', endDrag as any)
+      canvas.removeEventListener('contextmenu', () => {})
     }
   } catch (e) {
     // 忽略
@@ -520,9 +776,226 @@ onMounted(() => {
   // 等 DOM 就绪后加载
   setTimeout(() => loadAndRenderHallPGM(), 0)
 })
+
+// 直接编辑栅格图像素数据
+let drawing = false
+let editLastX = 0, editLastY = 0
+let gridImageData: ImageData | null = null
+const editHistory = ref<ImageData[]>([]) // 编辑历史记录
+const canUndo = computed(() => editHistory.value.length > 0)
+
+const setupCanvasEditEvents = () => {
+  const canvas = hallGridCanvas.value
+  if (!canvas) return
+  
+  // 更新光标样式
+  if (isEditMode.value) {
+    if (navMode.value === 'pan') {
+      canvas.style.cursor = 'grab'
+    } else {
+      canvas.style.cursor = activeTool.value === 'pen' ? 'crosshair' : 'pointer'
+    }
+  } else {
+    canvas.style.cursor = 'grab'
+  }
+}
+
+
+
+const saveToHistory = () => {
+  const canvas = hallGridCanvas.value
+  const ctx = canvas?.getContext('2d')
+  if (!canvas || !ctx) return
+  
+  const currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  const historyData = new ImageData(
+    new Uint8ClampedArray(currentImageData.data),
+    currentImageData.width,
+    currentImageData.height
+  )
+  
+  editHistory.value.push(historyData)
+  console.log('保存历史记录，当前历史记录数量:', editHistory.value.length)
+  // 限制历史记录数量，避免内存占用过多
+  if (editHistory.value.length > 20) {
+    editHistory.value.shift()
+  }
+}
+
+const undoEdit = () => {
+  if (editHistory.value.length === 0) return
+  
+  const canvas = hallGridCanvas.value
+  const ctx = canvas?.getContext('2d')
+  if (!canvas || !ctx) return
+  
+  const previousState = editHistory.value.pop()
+  if (previousState) {
+    ctx.putImageData(previousState, 0, 0)
+    gridImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  }
+}
+
+const clearGridEdit = () => {
+  // 清空历史记录
+  editHistory.value.length = 0
+  // 重新加载原始栅格图
+  loadAndRenderHallPGM()
+}
+
+watch(activeTool, () => {
+  setupCanvasEditEvents()
+})
+
+watch(isEditMode, () => {
+  setupCanvasEditEvents()
+})
+
+watch(navMode, () => {
+  setupCanvasEditEvents()
+})
+
+// 确认对话框
+const showConfirmDialog = (title: string, message: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    const result = window.confirm(`${title}\n\n${message}`)
+    resolve(result)
+  })
+}
+
+// 成功消息提示
+const showSuccessMessage = (message: string) => {
+  // 创建临时提示元素
+  const toast = document.createElement('div')
+  toast.textContent = message
+  toast.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(103, 213, 253, 0.9);
+    color: #172233;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  `
+  document.body.appendChild(toast)
+  
+  // 2秒后自动移除
+  setTimeout(() => {
+    document.body.removeChild(toast)
+  }, 2000)
+}
+
+// 保存当前栅格图（下载到本地）
+const saveCurrentGrid = async (): Promise<void> => {
+  return new Promise((resolve) => {
+    const canvas = hallGridCanvas.value
+    if (!canvas) {
+      resolve()
+      return
+    }
+    
+    try {
+      // 创建下载链接
+      const link = document.createElement('a')
+      link.download = `gridMap_${selectedHall.value}_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.png`
+      
+      // 将canvas转换为PNG格式并下载
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob)
+          link.href = url
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          URL.revokeObjectURL(url)
+          
+          console.log('栅格图已下载，文件名:', link.download)
+        }
+        resolve()
+      }, 'image/png')
+    } catch (error) {
+      console.error('下载栅格图失败:', error)
+      resolve()
+    }
+  })
+}
+
+// 处理上传的栅格图文件
+const handleGridFileUpload = async (file: File) => {
+  try {
+    showSuccessMessage(`正在处理文件: ${file.name}`)
+    
+    // 读取文件
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const result = e.target?.result
+      if (result) {
+        // 创建图片对象
+        const img = new Image()
+        img.onload = () => {
+          // 将新图片绘制到canvas上
+          const canvas = hallGridCanvas.value
+          const ctx = canvas?.getContext('2d')
+          if (canvas && ctx) {
+            // 清空历史记录
+            editHistory.value.length = 0
+            
+            // 调整canvas尺寸
+            canvas.width = img.width
+            canvas.height = img.height
+            
+            // 绘制新图片
+            ctx.drawImage(img, 0, 0)
+            
+            // 重置编辑数据
+            gridImageData = null
+            
+            showSuccessMessage('栅格图上传成功！')
+          }
+        }
+        img.src = result as string
+      }
+    }
+    reader.readAsDataURL(file)
+    
+  } catch (error) {
+    console.error('文件处理失败:', error)
+    showErrorMessage('文件处理失败，请重试')
+  }
+}
+
+// 错误消息提示
+const showErrorMessage = (message: string) => {
+  const toast = document.createElement('div')
+  toast.textContent = message
+  toast.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 59, 48, 0.9);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  `
+  document.body.appendChild(toast)
+  
+  setTimeout(() => {
+    document.body.removeChild(toast)
+  }, 3000)
+}
 </script>
 
-<style>
+<style scoped>
 @import './mission-common.css';
 
 /* 下发任务弹窗样式 */
@@ -737,19 +1210,6 @@ onMounted(() => {
   box-shadow: 0 2px 8px rgba(103, 213, 253, 0.3);
 }
 
-/* 侧边栏底部 */
-.sidebar-menu-bottom {
-  margin-top: auto;
-  padding-bottom: 20px;
-}
-
-.sidebar-menu-bottom img {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
-  filter: brightness(0) invert(1);
-  cursor: pointer;
-}
 
 /* 上传弹窗表单样式 */
 .upload-form-row {
@@ -800,9 +1260,6 @@ onMounted(() => {
   box-shadow: 0 0 0 1px #164159 inset;
 }
 
-.sidebar-menu-bottom img:hover {
-  filter: brightness(0) invert(1) drop-shadow(0 0 8px #67d5fd);
-}
 
 /* 新增算法开关样式 */
 .dispatch-switch-wrapper {
@@ -1041,40 +1498,315 @@ onMounted(() => {
   user-select: none;
 }
 
-/* 展厅栅格图容器，作为绝对定位子元素的定位上下文 */
-.hall-grid-content {
-  position: relative;
-  flex: 1;
-  min-height: 360px;
-  background: #fff;
-  border: 1px solid #164159;
-  border-radius: 6px;
-  padding: 0;
-  overflow: hidden;
-}
-
-/* 让卡片拉伸到底部，并在底部留出间距 */
+/* 展厅栅格图卡片 */
 .hall-grid-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
   flex: 1;
   min-height: 0;
+  background: #172233;
+  border: 1px solid #164159;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 20px;
 }
 
-.gridmap-wrapper { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: flex-start; overflow: hidden; background: #fff; }
+/* 顶部工具栏区域 */
+.hall-grid-header {
+  background: rgba(22, 65, 89, 0.8);
+  border-bottom: 1px solid #164159;
+  padding: 0;
+  backdrop-filter: blur(4px);
+}
+
+/* 主要内容区域 */
+.hall-grid-main {
+  flex: 1;
+  display: flex;
+  position: relative;
+  min-height: 400px;
+}
+
+/* 栅格图容器 */
+.gridmap-container { 
+  position: relative; 
+  flex: 1; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  overflow: hidden; 
+  background: #fff; 
+}
 .grid-canvas { display: block; background: #fff; cursor: grab; user-select: none; transform-origin: 0 0; }
 .grid-canvas:active { cursor: grabbing; }
 
 /* 展厅管理工具栏与进度条 */
 .hall-toolbar { display: flex; flex-direction: column; gap: 10px; }
-.hall-toolbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hall-toolbar-row { display: flex; align-items: center; gap: 12px; }
 .hall-actions { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; }
 .hall-btn { height: 32px; padding: 0 14px; border-radius: 6px; }
 .hall-select { display: flex; align-items: center; gap: 8px; }
-.map-progress { display: flex; align-items: center; gap: 10px; }
-.map-progress-track { flex: 1; height: 6px; background: rgba(103,213,253,.15); border: 1px solid rgba(103,213,253,.3); border-radius: 6px; overflow: hidden; }
-.map-progress-fill { height: 100%; background: linear-gradient(90deg, #59c0fc, #16bbf2); transition: width .2s ease; }
-.map-progress-text { color: #cfe9f3; font-size: 12px; min-width: 38px; text-align: right; }
+.map-progress { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 420px; }
+.map-progress-track { width: 100%; height: 12px; background: linear-gradient(180deg, rgba(103,213,253,.18), rgba(103,213,253,.08)); border: 1px solid rgba(103,213,253,.35); border-radius: 999px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,.28), 0 0 10px rgba(22,187,242,.18); }
+.map-progress-fill { position: relative; height: 100%; background: linear-gradient(90deg, #2ed1ff 0%, #59c0fc 35%, #16bbf2 65%, #00e0ff 100%); transition: width .25s ease; box-shadow: 0 0 10px rgba(22,187,242,.6); }
+.map-progress-fill::after { content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%; background: linear-gradient(90deg, rgba(255,255,255,.0) 0%, rgba(255,255,255,.35) 50%, rgba(255,255,255,.0) 100%); filter: blur(1px); animation: progress-shimmer 2.2s linear infinite; }
+.map-progress-text { color: #cfe9f3; font-size: 12px; min-width: 40px; text-align: right; opacity: .9; }
+@keyframes progress-shimmer { 0% { transform: translateX(0); } 100% { transform: translateX(260%); } }
+.map-progress-text { color: #cfe9f3; font-size: 12px; min-width: 40px; text-align: right; opacity: .9; }
+
+/* 紧凑型工具栏 */
+.grid-toolbar-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(22, 65, 89, 0.8);
+  border-bottom: 1px solid #164159;
+  backdrop-filter: blur(4px);
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-label {
+  color: #67d5fd;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.toolbar-select {
+  background: rgba(22, 65, 89, 0.6);
+  border: 1px solid #164159;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  min-width: 120px;
+  transition: all 0.2s;
+}
+
+.toolbar-select:focus {
+  outline: none;
+  border-color: #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(103, 213, 253, 0.1);
+  border: 1px solid rgba(103, 213, 253, 0.3);
+  color: #67d5fd;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toolbar-btn:hover {
+  background: rgba(103, 213, 253, 0.2);
+  border-color: rgba(103, 213, 253, 0.5);
+}
+
+.toolbar-btn.active {
+  background: #67d5fd;
+  border-color: #67d5fd;
+  color: #172233;
+  box-shadow: 0 0 10px rgba(103, 213, 253, 0.4);
+}
+
+.btn-icon {
+  font-size: 12px;
+}
+
+/* 右侧编辑面板 */
+.edit-panel-right {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  background: rgba(22, 65, 89, 0.9);
+  border-left: 1px solid #164159;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(4px);
+}
+
+.panel-tools {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px;
+  gap: 8px;
+}
+
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tool-item {
+  width: 44px;
+  height: 44px;
+  background: rgba(103, 213, 253, 0.1);
+  border: 1px solid rgba(103, 213, 253, 0.3);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tool-item:hover {
+  background: rgba(103, 213, 253, 0.2);
+  border-color: rgba(103, 213, 253, 0.5);
+}
+
+.tool-item.active {
+  background: #67d5fd;
+  border-color: #67d5fd;
+  box-shadow: 0 0 10px rgba(103, 213, 253, 0.4);
+}
+
+.tool-icon {
+  font-size: 18px;
+  color: #67d5fd;
+}
+
+.tool-item.active .tool-icon {
+  color: #172233;
+}
+
+.tool-settings {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.setting-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.setting-item label {
+  color: #b8c7d9;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.size-slider {
+  width: 40px;
+  height: 80px;
+  writing-mode: bt-lr;
+  -webkit-appearance: slider-vertical;
+}
+
+.size-value {
+  color: #67d5fd;
+  font-size: 10px;
+  background: rgba(22, 65, 89, 0.6);
+  border: 1px solid #164159;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.color-picker {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tool-actions {
+  margin-top: auto;
+}
+
+.action-btn {
+  width: 44px;
+  height: 32px;
+  background: rgba(103, 213, 253, 0.1);
+  border: 1px solid rgba(103, 213, 253, 0.3);
+  color: #67d5fd;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background: rgba(103, 213, 253, 0.2);
+  border-color: rgba(103, 213, 253, 0.5);
+}
+
+.action-btn:disabled {
+  background: rgba(22, 65, 89, 0.3);
+  border-color: rgba(22, 65, 89, 0.5);
+  color: #6b7a8c;
+  cursor: not-allowed;
+}
+
+.action-btn:disabled:hover {
+  background: rgba(22, 65, 89, 0.3);
+  border-color: rgba(22, 65, 89, 0.5);
+}
+
+/* 导航工具 */
+.navigation-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.nav-item {
+  width: 44px;
+  height: 36px;
+  background: rgba(103, 213, 253, 0.1);
+  border: 1px solid rgba(103, 213, 253, 0.3);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-item:hover {
+  background: rgba(103, 213, 253, 0.2);
+  border-color: rgba(103, 213, 253, 0.5);
+}
+
+.nav-item.active {
+  background: #67d5fd;
+  border-color: #67d5fd;
+  box-shadow: 0 0 10px rgba(103, 213, 253, 0.4);
+}
+
+.nav-icon {
+  font-size: 14px;
+  color: #67d5fd;
+}
+
+.nav-item.active .nav-icon {
+  color: #172233;
+}
 </style>
