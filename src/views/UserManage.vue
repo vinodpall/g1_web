@@ -33,7 +33,6 @@
                 <span class="user-label">讲解对象：</span>
                 <div class="custom-select-wrapper">
                   <select v-model="selectedIntroduceTarget" class="user-select">
-                    <option value="">请选择讲解对象</option>
                     <option v-for="target in introduceTargets" :key="target.id" :value="target.id">
                       {{ target.name }}
                     </option>
@@ -77,7 +76,7 @@
           </div>
           <!-- 讲解词管理内容 -->
           <div v-if="currentTab === 'introduce'" class="mission-table-card card">
-            <div v-if="!selectedIntroduceTarget" class="introduce-content">
+            <div v-if="!selectedIntroduceTarget || selectedIntroduceTarget === ''" class="introduce-content">
               <div class="introduce-placeholder">
                 <div class="placeholder-icon">📝</div>
                 <div class="placeholder-text">讲解词管理功能</div>
@@ -449,7 +448,7 @@ const showPermissionDenied = ref(false)
 const requiredPermission = ref('')
 
 // 讲解词管理相关状态
-const selectedIntroduceTarget = ref('')
+const selectedIntroduceTarget = ref('1') // 默认选择第一个
 const introduceTargets = ref([
   { id: '1', name: '展厅A' },
   { id: '2', name: '展厅B' },
@@ -1118,6 +1117,11 @@ const confirmEditIntroduceContent = () => {
 onMounted(async () => {
   try {
     await fetchUsers({ skip: 0, limit: 100 })
+    
+    // 确保讲解对象有值时默认选择第一个
+    if (introduceTargets.value.length > 0 && !selectedIntroduceTarget.value) {
+      selectedIntroduceTarget.value = introduceTargets.value[0].id
+    }
   } catch (err: any) {
     console.error('获取数据失败:', err)
     

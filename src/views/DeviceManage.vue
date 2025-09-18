@@ -102,24 +102,6 @@
                       <label>SN：</label>
                       <input v-model="robotForm.sn" class="add-device-input" placeholder="请输入设备序列号" />
                     </div>
-                      <div class="add-device-row">
-                      <label>状态：</label>
-                      <div class="custom-select-wrapper">
-                        <select v-model="robotForm.status" class="mission-select">
-                          <option value="online">在线</option>
-                          <option value="offline">离线</option>
-                        </select>
-                        <span class="custom-select-arrow">
-                          <svg width="12" height="12" viewBox="0 0 12 12">
-                            <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                          </svg>
-                        </span>
-                      </div>
-                    </div>
-                    <div class="add-device-row">
-                      <label>电量：</label>
-                      <input v-model.number="robotForm.battery" type="number" min="0" max="100" class="add-device-input" placeholder="请输入电量百分比" />
-                    </div>
                     <div class="add-device-row">
                       <label>说明：</label>
                       <textarea v-model="robotForm.description" class="add-device-textarea" placeholder="请输入机器人说明" rows="3"></textarea>
@@ -279,8 +261,6 @@ const robotForm = ref({
   name: '',
   id: '',
   sn: '',
-  status: 'offline',
-  battery: 50,
   description: '',
   imagePreview: ''
 })
@@ -292,8 +272,6 @@ const handleAddRobot = () => {
     name: '',
     id: '',
     sn: '',
-    status: 'offline',
-    battery: 50,
     description: '',
     imagePreview: ''
   })
@@ -333,8 +311,8 @@ const handleAddRobotSubmit = () => {
     nickname: robotForm.value.name,
     device_sn: robotForm.value.sn || `G1SN2024${String(devices.value.length + 1).padStart(4, '0')}`,
     bound_status: true, // 简化为总是绑定状态
-    login_time: robotForm.value.status === 'online' ? new Date().toISOString() : null,
-    battery_level: robotForm.value.battery,
+    login_time: null, // 默认为离线状态
+    battery_level: 0, // 默认电量为0
     created_at: new Date().toISOString(),
     description: robotForm.value.description,
     custom_image: robotForm.value.imagePreview

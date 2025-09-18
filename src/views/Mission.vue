@@ -127,7 +127,6 @@
                   <span class="area-filter-label">所有展区</span>
                   <div class="custom-select-wrapper">
                     <select v-model="selectedAreaId" class="area-select">
-                      <option value="">请选择展区</option>
                       <option v-for="area in areaList" :key="area.id" :value="area.id">
                         {{ area.name }}
                       </option>
@@ -172,7 +171,7 @@
                 <div class="mission-th">操作</div>
               </div>
               <div class="mission-table-body">
-                <div v-if="!selectedAreaId" class="empty-state">
+                <div v-if="!selectedAreaId || selectedAreaId === ''" class="empty-state">
                   <span>请选择展区查看任务点</span>
                 </div>
                 <div v-else-if="currentTaskPoints.length === 0" class="empty-state">
@@ -217,7 +216,6 @@
                     <span class="area-filter-label">展厅任务列表</span>
                     <div class="custom-select-wrapper">
                       <select v-model="selectedHallTaskList" class="area-select">
-                        <option value="">请选择任务列表</option>
                         <option value="list1">任务列表1</option>
                         <option value="list2">任务列表2</option>
                         <option value="list3">任务列表3</option>
@@ -492,7 +490,6 @@
               <label>展厅：</label>
               <div class="custom-select-wrapper">
                 <select v-model="selectedHallForAreaTask" @change="onHallChange" class="user-select">
-                  <option value="">请选择展厅</option>
                   <option value="abc">展厅ABC</option>
                   <option value="def">展厅DEF</option>
                   <option value="ghi">展厅GHI</option>
@@ -508,7 +505,6 @@
               <label>展区：</label>
               <div class="custom-select-wrapper">
                 <select v-model="selectedAreaForTask" class="user-select" :disabled="!selectedHallForAreaTask">
-                  <option value="">请选择展区</option>
                   <option v-for="area in filteredAreas" :key="area.id" :value="area.id">
                     {{ area.name }}
                   </option>
@@ -687,7 +683,7 @@ const taskPointList = ref<TaskPoint[]>([
   { id: '7', areaId: '3', name: '产品展示点2', x: 42.8, y: 18.9, angle: 225, pointType: '讲解点', robotAction: '挥手', robotDirection: '后退', commentary: '点位2', createdTime: '2024-01-17 10:30:00' }
 ])
 
-const selectedAreaId = ref<string>('')
+const selectedAreaId = ref<string>('1') // 默认选择第一个展区
 const currentTaskPoints = computed(() => {
   if (!selectedAreaId.value) return []
   return taskPointList.value.filter(point => point.areaId === selectedAreaId.value)
@@ -723,7 +719,7 @@ const multiTaskList = ref<MultiTask[]>([
   { id: '4', name: '清洁任务D', taskType: '清洁', areaId: '4', areaName: 'ghi_89', hallName: '展厅GHI', status: 'failed', createdTime: '2024-01-18 14:00:00', executeTime: '2024-01-18 14:20:00' }
 ])
 
-const selectedHallTaskList = ref<string>('')
+const selectedHallTaskList = ref<string>('list1') // 默认选择第一个任务列表
 const currentMultiTasks = computed(() => {
   // 这里可以根据selectedHallTaskList来筛选任务
   return multiTaskList.value
@@ -740,7 +736,7 @@ const hallTaskName = ref<string>('')
 
 // 添加展区任务相关数据
 const showAddAreaTaskDialog = ref<boolean>(false)
-const selectedHallForAreaTask = ref<string>('')
+const selectedHallForAreaTask = ref<string>('abc') // 默认选择第一个展厅
 const selectedAreaForTask = ref<string>('')
 
 // 模拟展区数据，包含展厅前缀

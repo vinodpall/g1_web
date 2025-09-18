@@ -346,7 +346,6 @@
                   v-model="selectedWayline" 
                   class="wayline-select"
                 >
-                  <option value="">请选择</option>
                   <option 
                     v-for="wayline in waylineFiles"
                     :key="wayline.wayline_id"
