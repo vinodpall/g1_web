@@ -1,11 +1,10 @@
 import type { DirectiveBinding } from 'vue'
 import { usePermissionStore } from '../stores/permission'
 
-// 权限检查函数
+// 权限检查函数 - 已禁用权限验证，始终返回true
 function checkPermission(permissions: string | string[]): boolean {
-  const permissionStore = usePermissionStore()
-  const permissionArray = Array.isArray(permissions) ? permissions : [permissions]
-  return permissionStore.hasAnyPermission(permissionArray)
+  console.log('权限指令检查已禁用，允许权限:', permissions)
+  return true
 }
 
 // 显示权限不足提示
@@ -16,226 +15,58 @@ function showPermissionDeniedMessage(permission: string) {
   }
 }
 
-// 权限验证指令（隐藏无权限元素）
+// 权限验证指令（隐藏无权限元素） - 已禁用，不隐藏任何元素
 export const permission = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    const permissionStore = usePermissionStore()
-    const { value } = binding
-    
-    if (value) {
-      const permissions = Array.isArray(value) ? value : [value]
-      const hasPermission = permissionStore.hasAnyPermission(permissions)
-      
-
-      
-      if (!hasPermission) {
-        // 隐藏元素
-        el.style.display = 'none'
-      }
-    }
+    console.log('权限指令已禁用，显示所有元素:', binding.value)
+    // 确保元素可见
+    el.style.display = ''
   },
   
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    const permissionStore = usePermissionStore()
-    const { value } = binding
-    
-    if (value) {
-      const permissions = Array.isArray(value) ? value : [value]
-      const hasPermission = permissionStore.hasAnyPermission(permissions)
-      
-
-      
-      if (hasPermission) {
-        el.style.display = ''
-      } else {
-        el.style.display = 'none'
-      }
-    }
+    console.log('权限指令已禁用，显示所有元素:', binding.value)
+    // 确保元素可见
+    el.style.display = ''
   }
 }
 
-// 权限验证指令（全部满足）
+// 权限验证指令（全部满足） - 已禁用，不隐藏任何元素
 export const permissionAll = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    const permissionStore = usePermissionStore()
-    const { value } = binding
-    
-    if (value) {
-      const permissions = Array.isArray(value) ? value : [value]
-      const hasPermission = permissionStore.hasAllPermissions(permissions)
-      
-      if (!hasPermission) {
-        el.style.display = 'none'
-      }
-    }
+    console.log('权限指令(全部)已禁用，显示所有元素:', binding.value)
+    // 确保元素可见
+    el.style.display = ''
   },
   
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    const permissionStore = usePermissionStore()
-    const { value } = binding
-    
-    if (value) {
-      const permissions = Array.isArray(value) ? value : [value]
-      const hasPermission = permissionStore.hasAllPermissions(permissions)
-      
-      if (hasPermission) {
-        el.style.display = ''
-      } else {
-        el.style.display = 'none'
-      }
-    }
+    console.log('权限指令(全部)已禁用，显示所有元素:', binding.value)
+    // 确保元素可见
+    el.style.display = ''
   }
 }
 
-// 权限验证指令（点击检查，不隐藏元素，显示弹窗）
+// 权限验证指令（点击检查，不隐藏元素，显示弹窗） - 已禁用，允许所有点击
 export const permissionClick = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    const { value } = binding
-    
-    if (value) {
-      const permissions = Array.isArray(value) ? value : [value]
-      
-
-      
-      // 保存原始点击事件
-      const originalClick = el.onclick
-      
-      // 重写点击事件
-      el.onclick = (event: MouseEvent) => {
-        // 检查权限
-        if (!checkPermission(permissions)) {
-          event.preventDefault()
-          event.stopPropagation()
-          
-          // 显示权限不足提示
-          const permissionText = Array.isArray(value) ? value.join(' 或 ') : value
-          showPermissionDeniedMessage(permissionText)
-          
-          return false
-        }
-        
-        // 有权限，执行原始点击事件
-        if (originalClick) {
-          return originalClick.call(el, event)
-        }
-      }
-    }
+    console.log('权限点击指令已禁用，允许所有点击:', binding.value)
+    // 不做任何权限检查，允许正常点击
   },
   
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    // 重新绑定点击事件
-    const { value } = binding
-    
-    if (value) {
-      const permissions = Array.isArray(value) ? value : [value]
-      
-      console.log('权限点击指令更新:', {
-        element: el,
-        permissions: permissions
-      })
-      
-      // 保存原始点击事件
-      const originalClick = el.onclick
-      
-      // 重写点击事件
-      el.onclick = (event: MouseEvent) => {
-        // 检查权限
-        if (!checkPermission(permissions)) {
-          event.preventDefault()
-          event.stopPropagation()
-          
-          // 显示权限不足提示
-          const permissionText = Array.isArray(value) ? value.join(' 或 ') : value
-          showPermissionDeniedMessage(permissionText)
-          
-          return false
-        }
-        
-        // 有权限，执行原始点击事件
-        if (originalClick) {
-          return originalClick.call(el, event)
-        }
-      }
-    }
+    console.log('权限点击指令已禁用，允许所有点击:', binding.value)
+    // 不做任何权限检查，允许正常点击
   }
 }
 
-// 权限验证指令（点击检查，不隐藏元素，使用自定义弹窗）
+// 权限验证指令（点击检查，不隐藏元素，使用自定义弹窗） - 已禁用，允许所有点击
 export const permissionClickDialog = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    const { value } = binding
-    
-    if (value) {
-      const permissions = Array.isArray(value) ? value : [value]
-      
-
-      
-      // 添加权限检查属性
-      el.setAttribute('data-permission', Array.isArray(value) ? value.join(',') : value)
-      
-      // 重写点击事件
-      el.addEventListener('click', (event: MouseEvent) => {
-        // 检查权限
-        if (!checkPermission(permissions)) {
-          event.preventDefault()
-          event.stopPropagation()
-          event.stopImmediatePropagation()
-          
-          // 触发自定义权限不足事件
-          const permissionText = Array.isArray(value) ? value.join(' 或 ') : value
-          const customEvent = new CustomEvent('permission-denied', {
-            detail: { permission: permissionText },
-            bubbles: true
-          })
-          el.dispatchEvent(customEvent)
-          
-          // 阻止所有后续事件
-          return false
-        }
-        
-        // 有权限，继续执行（Vue会处理@click事件）
-      }, true) // 使用捕获阶段，确保在Vue事件之前执行
-    }
+    console.log('权限点击弹窗指令已禁用，允许所有点击:', binding.value)
+    // 不做任何权限检查，允许正常点击
   },
   
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    // 移除旧的事件监听器
-    if ((el as any)._permissionClickHandler) {
-      el.removeEventListener('click', (el as any)._permissionClickHandler, true)
-    }
-    
-    const { value } = binding
-    
-    if (value) {
-      const permissions = Array.isArray(value) ? value : [value]
-      
-      // 更新权限检查属性
-      el.setAttribute('data-permission', Array.isArray(value) ? value.join(',') : value)
-      
-      // 重新绑定点击事件
-      const clickHandler = (event: MouseEvent) => {
-        // 检查权限
-        if (!checkPermission(permissions)) {
-          event.preventDefault()
-          event.stopPropagation()
-          
-          // 触发自定义权限不足事件
-          const permissionText = Array.isArray(value) ? value.join(' 或 ') : value
-          const customEvent = new CustomEvent('permission-denied', {
-            detail: { permission: permissionText },
-            bubbles: true
-          })
-          el.dispatchEvent(customEvent)
-          
-          return false
-        }
-        
-        // 有权限，继续执行（Vue会处理@click事件）
-      }
-      
-      // 保存引用以便后续移除
-      ;(el as any)._permissionClickHandler = clickHandler
-      el.addEventListener('click', clickHandler, true) // 使用捕获阶段
-    }
+    console.log('权限点击弹窗指令已禁用，允许所有点击:', binding.value)
+    // 不做任何权限检查，允许正常点击
   }
 }

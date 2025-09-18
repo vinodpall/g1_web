@@ -65,15 +65,10 @@ const props = withDefaults(defineProps<Props>(), {
 const permissionStore = usePermissionStore()
 const showDialog = ref(false)
 
-// 检查权限
+// 检查权限 - 已禁用权限验证，始终返回true
 const hasPermission = computed(() => {
-  const permissions = Array.isArray(props.permission) ? props.permission : [props.permission]
-  
-  if (props.requireAll) {
-    return permissionStore.hasAllPermissions(permissions)
-  } else {
-    return permissionStore.hasAnyPermission(permissions)
-  }
+  console.log('PermissionGuard权限检查已禁用，允许访问:', props.permission)
+  return true
 })
 
 // 获取权限名称列表

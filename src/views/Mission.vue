@@ -6,7 +6,7 @@
         <div
           v-for="tab in sidebarTabs"
           :key="tab.key"
-          :class="['sidebar-tab', { active: route.path === tab.path }]"
+          :class="['sidebar-tab', { active: currentTab === tab.key }]"
           @click="handleTabClick(tab)"
         >
           <img :src="tab.icon" :alt="tab.label" />
@@ -17,6 +17,8 @@
     <main class="main-content">
       <div class="main-flex">
         <section class="right-panel">
+          <!-- 展厅管理内容 -->
+          <template v-if="currentTab === 'hall'">
           <div class="mission-top-card card">
             <div class="mission-top-header">
               <img class="mission-top-logo" src="@/assets/source_data/bg_data/card_logo.png" alt="logo" />
@@ -52,19 +54,17 @@
             <div class="hall-grid-header">
               <div class="grid-toolbar-compact">
                 <div class="toolbar-left">
-                  <span class="toolbar-label">地图列表</span>
+                  <span class="toolbar-label">展厅列表</span>
                   <select v-model="selectedHall" class="toolbar-select">
                     <option v-for="h in hallOptions" :key="h.id" :value="h.id">{{ h.name }}</option>
                   </select>
                 </div>
                 <div class="toolbar-right">
                   <button class="toolbar-btn" :class="{ active: isEditMode }" @click="toggleEditMode">
-                    <span class="btn-icon">✏️</span>
-                    {{ isEditMode ? '编辑中' : '编辑' }}
+                    <img :src="mapEditIcon" alt="编辑" class="btn-icon-img" />
                   </button>
                   <button class="toolbar-btn" @click="onUploadGrid">
-                    <span class="btn-icon">📁</span>
-                    上传
+                    <img :src="mapUploadIcon" alt="上传" class="btn-icon-img" />
                   </button>
                 </div>
               </div>
@@ -76,10 +76,10 @@
                   <div class="panel-tools">
                     <div class="tool-group">
                       <div class="tool-item" :class="{ active: activeTool === 'pen' && navMode === 'edit' }" @click="setTool('pen')" title="画笔">
-                        <span class="tool-icon">✏️</span>
+                        <img :src="mapPenIcon" alt="画笔" class="tool-icon-img" />
                       </div>
                       <div class="tool-item" :class="{ active: activeTool === 'eraser' && navMode === 'edit' }" @click="setTool('eraser')" title="橡皮擦">
-                        <span class="tool-icon">🧽</span>
+                        <img :src="mapEraserIcon" alt="橡皮擦" class="tool-icon-img" />
                       </div>
                     </div>
                     <div class="tool-settings">
@@ -91,31 +91,443 @@
                     </div>
                     <div class="navigation-tools">
                       <div class="nav-item" :class="{ active: navMode === 'pan' }" @click="setNavMode('pan')" title="拖动模式">
-                        <span class="nav-icon">✋</span>
+                        <img :src="mapMoveIcon" alt="拖动模式" class="nav-icon-img" />
                       </div>
                       <div class="nav-item" @click="zoomIn" title="放大">
-                        <span class="nav-icon">🔍+</span>
+                        <img :src="mapMagnifyIcon" alt="放大" class="nav-icon-img" />
                       </div>
                       <div class="nav-item" @click="zoomOut" title="缩小">
-                        <span class="nav-icon">🔍-</span>
-                      </div>
-                      <div class="nav-item" @click="resetZoom" title="重置视图">
-                        <span class="nav-icon">⌂</span>
+                        <img :src="mapReduceIcon" alt="缩小" class="nav-icon-img" />
                       </div>
                     </div>
                     <div class="tool-actions">
-                      <button class="action-btn" @click="undoEdit" :disabled="!canUndo">撤回</button>
-                      <button class="action-btn" @click="clearGridEdit">重置</button>
+                      <button class="action-btn" @click="undoEdit" :disabled="!canUndo">
+                        <img :src="mapRollbackIcon" alt="撤回" class="action-icon-img" />
+                      </button>
+                      <button class="action-btn" @click="clearGridEdit">
+                        <img :src="mapInitIcon" alt="重置" class="action-icon-img" />
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+          </template>
+
+          <!-- 展区管理内容 -->
+          <template v-if="currentTab === 'area'">
+            <div class="mission-top-card card area-top-card">
+              <div class="mission-top-header">
+                <img class="mission-top-logo" src="@/assets/source_data/bg_data/card_logo.png" alt="logo" />
+                <span class="mission-top-title">展区管理</span>
+              </div>
+              <div class="area-top-row">
+                <div class="area-filter-section">
+                  <span class="area-filter-label">所有展区</span>
+                  <div class="custom-select-wrapper">
+                    <select v-model="selectedAreaId" class="area-select">
+                      <option value="">请选择展区</option>
+                      <option v-for="area in areaList" :key="area.id" :value="area.id">
+                        {{ area.name }}
+                      </option>
+                    </select>
+                    <span class="custom-select-arrow">
+                      <svg width="12" height="12" viewBox="0 0 12 12">
+                        <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <div class="area-action-buttons">
+                  <button 
+                    class="mission-btn mission-btn-pause" 
+                    @click="handleAddArea"
+                  >新增展区</button>
+                  <button 
+                    class="mission-btn mission-btn-stop" 
+                    @click="handleDeleteArea"
+                    :disabled="!selectedAreaId"
+                  >删除展区</button>
+                  <button 
+                    class="mission-btn mission-btn-normal" 
+                    @click="handleAddTaskPoint"
+                    :disabled="!selectedAreaId"
+                  >新增任务点</button>
+                </div>
+              </div>
+            </div>
+            <div class="mission-table-card card">
+              <div class="mission-table-header">
+                <div class="mission-th">序号</div>
+                <div class="mission-th">任务点名称</div>
+                <div class="mission-th">坐标X</div>
+                <div class="mission-th">坐标Y</div>
+                <div class="mission-th">角度</div>
+                <div class="mission-th">点位类型</div>
+                <div class="mission-th">机器人动作</div>
+                <div class="mission-th">机器人朝向</div>
+                <div class="mission-th">讲解词</div>
+                <div class="mission-th">创建时间</div>
+                <div class="mission-th">操作</div>
+              </div>
+              <div class="mission-table-body">
+                <div v-if="!selectedAreaId" class="empty-state">
+                  <span>请选择展区查看任务点</span>
+                </div>
+                <div v-else-if="currentTaskPoints.length === 0" class="empty-state">
+                  <span>当前展区暂无任务点</span>
+                </div>
+                <div v-else class="mission-tr" v-for="(point, idx) in currentTaskPoints" :key="point.id">
+                  <div class="mission-td">{{ idx + 1 }}</div>
+                  <div class="mission-td">{{ point.name }}</div>
+                  <div class="mission-td">{{ point.x.toFixed(2) }}</div>
+                  <div class="mission-td">{{ point.y.toFixed(2) }}</div>
+                  <div class="mission-td">{{ point.angle }}°</div>
+                  <div class="mission-td">{{ point.pointType }}</div>
+                  <div class="mission-td">{{ point.robotAction }}</div>
+                  <div class="mission-td">{{ point.robotDirection }}</div>
+                  <div class="mission-td">{{ point.commentary }}</div>
+                  <div class="mission-td">{{ formatTime(point.createdTime) }}</div>
+                  <div class="mission-td">
+                    <div class="user-action-btns">
+                      <button class="icon-btn" title="编辑" @click="onClickEditTaskPoint(point)">
+                        <img :src="editIcon" />
+                      </button>
+                      <button class="icon-btn" title="删除" @click="onClickDeleteTaskPoint(point)">
+                        <img :src="deleteIcon" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- 展厅任务内容 -->
+          <template v-if="currentTab === 'multitask'">
+            <div class="mission-top-card card area-top-card">
+              <div class="mission-top-header">
+                <img class="mission-top-logo" src="@/assets/source_data/bg_data/card_logo.png" alt="logo" />
+                <span class="mission-top-title">展厅任务</span>
+              </div>
+              <div class="area-top-row">
+                <div class="area-left-section">
+                  <div class="area-filter-section">
+                    <span class="area-filter-label">展厅任务列表</span>
+                    <div class="custom-select-wrapper">
+                      <select v-model="selectedHallTaskList" class="area-select">
+                        <option value="">请选择任务列表</option>
+                        <option value="list1">任务列表1</option>
+                        <option value="list2">任务列表2</option>
+                        <option value="list3">任务列表3</option>
+                      </select>
+                      <span class="custom-select-arrow">
+                        <svg width="12" height="12" viewBox="0 0 12 12">
+                          <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="task-control-buttons">
+                    <button 
+                      class="mission-btn mission-btn-pause"
+                      @click="handleStartTask"
+                      :disabled="!selectedHallTaskList || taskRunning"
+                    >开始任务</button>
+                    <button 
+                      class="mission-btn mission-btn-stop"
+                      @click="handlePauseTask"
+                      :disabled="!taskRunning"
+                    >暂停任务</button>
+                  </div>
+                </div>
+                <div class="area-action-buttons">
+                  <button 
+                    class="mission-btn mission-btn-pause"
+                    @click="handleAddHallTask"
+                  >新增展厅任务</button>
+                  <button 
+                    class="mission-btn mission-btn-stop"
+                    @click="handleDeleteHallTask"
+                    :disabled="!selectedHallTaskList"
+                  >删除展厅任务</button>
+                  <button 
+                    class="mission-btn mission-btn-pause"
+                    @click="handleAddAreaTask"
+                  >添加展区任务</button>
+                </div>
+              </div>
+            </div>
+            <div class="mission-table-card card">
+              <div class="mission-table-header">
+                <div class="mission-th" style="flex: 0 0 80px;">序号</div>
+                <div class="mission-th" style="flex: 1;">展厅名称</div>
+                <div class="mission-th" style="flex: 1;">展区名称</div>
+                <div class="mission-th" style="flex: 1;">创建时间</div>
+                <div class="mission-th" style="flex: 0 0 180px;">操作</div>
+              </div>
+              <div class="mission-table-body">
+                <div v-if="currentMultiTasks.length === 0" class="empty-state">
+                  <span>暂无展厅任务数据</span>
+                </div>
+                <div v-else class="mission-tr" v-for="(task, idx) in currentMultiTasks" :key="task.id">
+                  <div class="mission-td" style="flex: 0 0 80px;">{{ idx + 1 }}</div>
+                  <div class="mission-td" style="flex: 1;">{{ task.hallName || '展厅ABC' }}</div>
+                  <div class="mission-td" style="flex: 1;">{{ task.areaName }}</div>
+                  <div class="mission-td" style="flex: 1;">{{ formatTime(task.createdTime) }}</div>
+                  <div class="mission-td" style="flex: 0 0 180px;">
+                    <div class="user-action-btns">
+                      <button 
+                        class="icon-btn move-btn" 
+                        title="上移" 
+                        @click="onClickMoveUp(task, idx)"
+                        :disabled="idx === 0"
+                      >
+                        <img :src="arrowUpIcon" />
+                      </button>
+                      <button 
+                        class="icon-btn move-btn" 
+                        title="下移" 
+                        @click="onClickMoveDown(task, idx)"
+                        :disabled="idx === currentMultiTasks.length - 1"
+                      >
+                        <img :src="arrowDownIcon" />
+                      </button>
+                      <button class="icon-btn" title="编辑" @click="onClickEditMultiTask(task)">
+                        <img :src="editIcon" />
+                      </button>
+                      <button class="icon-btn" title="删除" @click="onClickDeleteMultiTask(task)">
+                        <img :src="deleteIcon" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
         </section>
       </div>
     </main>
-    <!-- 旧弹窗与任务下发模块已移除 -->
+    <!-- 展区管理弹窗 -->
+    <!-- 新增展区弹窗 -->
+    <div v-if="showAddAreaDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">{{ editingArea ? '编辑展区' : '新增展区' }}</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>展区名称：</label>
+              <div class="area-name-input-group">
+                <div class="area-name-prefix">{{ currentHallPrefix }}_</div>
+                <input 
+                  v-model="addAreaForm.name" 
+                  class="area-name-input" 
+                  placeholder="请输入展区名称" 
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="handleCancelAddArea">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="handleConfirmAddArea">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新增任务点弹窗 -->
+    <div v-if="showAddTaskPointDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">{{ editingTaskPoint ? '编辑任务点' : '新增任务点' }}</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>点位名称：</label>
+              <input v-model="addTaskPointForm.name" class="user-input" placeholder="请输入点位名称" />
+            </div>
+            <div class="add-user-form-row">
+              <label>X坐标：</label>
+              <input v-model.number="addTaskPointForm.x" type="number" step="0.01" class="user-input" placeholder="请输入X坐标" />
+            </div>
+            <div class="add-user-form-row">
+              <label>Y坐标：</label>
+              <input v-model.number="addTaskPointForm.y" type="number" step="0.01" class="user-input" placeholder="请输入Y坐标" />
+            </div>
+            <div class="add-user-form-row">
+              <label>角度：</label>
+              <input v-model.number="addTaskPointForm.angle" type="number" min="0" max="360" class="user-input" placeholder="请输入角度(0-360)" />
+            </div>
+            <div class="add-user-form-row">
+              <label>点位类型：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="addTaskPointForm.pointType" class="user-select">
+                  <option value="讲解点">讲解点</option>
+                  <option value="辅助点">辅助点</option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>机器人动作：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="addTaskPointForm.robotAction" class="user-select">
+                  <option value="抬左手">抬左手</option>
+                  <option value="抬右手">抬右手</option>
+                  <option value="挥手">挥手</option>
+                  <option value="点头">点头</option>
+                  <option value="转身">转身</option>
+                  <option value="静止">静止</option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>机器人朝向：</label>
+              <div class="radio-group">
+                <label class="radio-item">
+                  <input type="radio" v-model="addTaskPointForm.robotDirection" value="前进" />
+                  <span class="radio-label">前进</span>
+                </label>
+                <label class="radio-item">
+                  <input type="radio" v-model="addTaskPointForm.robotDirection" value="后退" />
+                  <span class="radio-label">后退</span>
+                </label>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>讲解词：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="addTaskPointForm.commentary" class="user-select">
+                  <option value="点位1">点位1</option>
+                  <option value="点位2">点位2</option>
+                  <option value="点位3">点位3</option>
+                  <option value="点位4">点位4</option>
+                  <option value="点位5">点位5</option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="handleCancelAddTaskPoint">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="handleConfirmAddTaskPoint">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 访客类型选择弹窗 -->
+    <div v-if="showVisitorTypeDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">开始任务</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>访客类型：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="selectedVisitorType" class="user-select">
+                  <option value="">请选择访客类型</option>
+                  <option value="企业">企业</option>
+                  <option value="学生">学生</option>
+                  <option value="政府单位">政府单位</option>
+                  <option value="社会人员">社会人员</option>
+                  <option value="国家政要">国家政要</option>
+                  <option value="外籍人员">外籍人员</option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="handleCancelStartTask">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="handleConfirmStartTask">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新增展厅任务弹窗 -->
+    <div v-if="showAddHallTaskDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">新增展厅任务</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>展厅任务名称：</label>
+              <input v-model="hallTaskName" class="user-input" placeholder="请输入展厅任务名称" />
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="handleCancelAddHallTask">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="handleConfirmAddHallTask">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 添加展区任务弹窗 -->
+    <div v-if="showAddAreaTaskDialog" class="custom-dialog-mask add-area-task-dialog">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">添加展区任务</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>展厅：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="selectedHallForAreaTask" @change="onHallChange" class="user-select">
+                  <option value="">请选择展厅</option>
+                  <option value="abc">展厅ABC</option>
+                  <option value="def">展厅DEF</option>
+                  <option value="ghi">展厅GHI</option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>展区：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="selectedAreaForTask" class="user-select" :disabled="!selectedHallForAreaTask">
+                  <option value="">请选择展区</option>
+                  <option v-for="area in filteredAreas" :key="area.id" :value="area.id">
+                    {{ area.name }}
+                  </option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="handleCancelAddAreaTask">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="handleConfirmAddAreaTask">确定</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -125,6 +537,23 @@ import { useRouter, useRoute } from 'vue-router'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
+import areaIcon from '@/assets/source_data/robot_source/area.svg'
+import hallIcon from '@/assets/source_data/robot_source/hall.svg'
+import multiTaskIcon from '@/assets/source_data/robot_source/multi_task.svg'
+import editIcon from '@/assets/source_data/svg_data/edit.svg'
+import deleteIcon from '@/assets/source_data/svg_data/delete.svg'
+import arrowUpIcon from '@/assets/source_data/control_data/arrow_up.svg'
+import arrowDownIcon from '@/assets/source_data/control_data/arrow_down.svg'
+// 导入地图编辑工具图标
+import mapEditIcon from '@/assets/source_data/robot_source/map_edit.svg'
+import mapUploadIcon from '@/assets/source_data/robot_source/map_upload.svg'
+import mapPenIcon from '@/assets/source_data/robot_source/map_pen.svg'
+import mapEraserIcon from '@/assets/source_data/robot_source/map_eraser.svg'
+import mapMoveIcon from '@/assets/source_data/robot_source/map_move.svg'
+import mapMagnifyIcon from '@/assets/source_data/robot_source/map_magnify.svg'
+import mapReduceIcon from '@/assets/source_data/robot_source/map_reduce.svg'
+import mapInitIcon from '@/assets/source_data/robot_source/map_init.svg'
+import mapRollbackIcon from '@/assets/source_data/robot_source/map_rollback.svg'
 // import { useWaylineJobs, useDevices } from '../composables/useApi'
 // import { waylineApi } from '@/api/services'
 // import { useDeviceStatus } from '../composables/useDeviceStatus'
@@ -144,6 +573,9 @@ import iconTakePhoto from '@/assets/source_data/svg_data/task_line_svg/take_phot
 const router = useRouter()
 const route = useRoute()
 
+// 当前选中的标签页
+const currentTab = ref('hall')
+
 // 展厅管理相关状态
 const isRecording = ref(false)
 const mapGenProgress = ref(65)
@@ -151,8 +583,52 @@ const hallOptions = ref<Array<{ id: string; name: string; gridUrl?: string }>>([
   { id: 'hall_a', name: 'A展厅' },
   { id: 'hall_b', name: 'B展厅' }
 ])
-const selectedHall = ref('hall_a')
+
+// 缓存相关常量
+const HALL_CACHE_KEY = 'selected_hall_cache'
+
+// 缓存工具函数
+const saveHallToCache = (hallId: string) => {
+  try {
+    localStorage.setItem(HALL_CACHE_KEY, hallId)
+  } catch (error) {
+    console.warn('Failed to save hall to cache:', error)
+  }
+}
+
+const getHallFromCache = (): string => {
+  try {
+    const cached = localStorage.getItem(HALL_CACHE_KEY)
+    // 验证缓存的展厅ID是否有效
+    if (cached && hallOptions.value.some(h => h.id === cached)) {
+      return cached
+    }
+  } catch (error) {
+    console.warn('Failed to get hall from cache:', error)
+  }
+  return 'hall_a' // 默认值
+}
+
+// 初始化时从缓存获取展厅选择
+const selectedHall = ref(getHallFromCache())
 const currentGridUrl = computed(() => hallOptions.value.find(h => h.id === selectedHall.value)?.gridUrl || '')
+
+// 获取当前选中的展厅名称
+const currentSelectedHallName = computed(() => {
+  const hall = hallOptions.value.find(h => h.id === selectedHall.value)
+  return hall ? hall.name : '未选择展厅'
+})
+
+// 获取当前选中展厅的前缀（直接使用完整展厅名称）
+const currentHallPrefix = computed(() => {
+  const hall = hallOptions.value.find(h => h.id === selectedHall.value)
+  return hall ? hall.name : ''
+})
+
+// 监听展厅选择变化，实时保存到缓存
+watch(selectedHall, (newHallId) => {
+  saveHallToCache(newHallId)
+}, { immediate: false })
 
 // 栅格编辑相关
 const isEditMode = ref(false)
@@ -160,6 +636,128 @@ const activeTool = ref<'pen' | 'eraser'>('pen')
 const brushSize = ref(16)
 const brushColor = ref('#000000') // 黑色表示障碍物
 const navMode = ref<'edit' | 'pan'>('edit') // 导航模式：编辑或拖动
+
+// 展区管理相关状态
+interface Area {
+  id: string
+  name: string
+  description: string
+  createdTime: string
+}
+
+interface TaskPoint {
+  id: string
+  areaId: string
+  name: string
+  x: number
+  y: number
+  angle: number
+  pointType: string // 点位类型：讲解点/辅助点
+  robotAction: string // 机器人动作
+  robotDirection: string // 机器人朝向：前进/后退
+  commentary: string // 讲解词
+  createdTime: string
+}
+
+interface MultiTask {
+  id: string
+  name: string
+  taskType: string
+  areaId: string
+  areaName: string
+  hallName: string
+  status: 'waiting' | 'running' | 'completed' | 'failed'
+  createdTime: string
+  executeTime?: string
+}
+
+const areaList = ref<Area[]>([
+  { id: '1', name: 'A展区', description: '主展示区域', createdTime: '2024-01-15 10:30:00' },
+  { id: '2', name: 'B展区', description: '互动体验区域', createdTime: '2024-01-16 14:20:00' },
+  { id: '3', name: 'C展区', description: '产品展示区域', createdTime: '2024-01-17 09:15:00' }
+])
+
+const taskPointList = ref<TaskPoint[]>([
+  { id: '1', areaId: '1', name: '入口讲解点', x: 10.5, y: 20.3, angle: 90, pointType: '讲解点', robotAction: '抬左手', robotDirection: '前进', commentary: '点位1', createdTime: '2024-01-15 11:00:00' },
+  { id: '2', areaId: '1', name: '中央展示点', x: 15.2, y: 25.8, angle: 180, pointType: '讲解点', robotAction: '挥手', robotDirection: '前进', commentary: '点位2', createdTime: '2024-01-15 11:30:00' },
+  { id: '3', areaId: '1', name: '出口辅助点', x: 8.7, y: 30.1, angle: 270, pointType: '辅助点', robotAction: '抬右手', robotDirection: '后退', commentary: '点位3', createdTime: '2024-01-15 12:00:00' },
+  { id: '4', areaId: '2', name: '体验区讲解点', x: 25.4, y: 18.6, angle: 45, pointType: '讲解点', robotAction: '挥手', robotDirection: '前进', commentary: '点位1', createdTime: '2024-01-16 15:00:00' },
+  { id: '5', areaId: '2', name: '充电辅助点', x: 30.0, y: 22.0, angle: 0, pointType: '辅助点', robotAction: '抬左手', robotDirection: '前进', commentary: '点位2', createdTime: '2024-01-16 15:30:00' },
+  { id: '6', areaId: '3', name: '产品展示点1', x: 40.2, y: 15.5, angle: 135, pointType: '讲解点', robotAction: '抬右手', robotDirection: '前进', commentary: '点位1', createdTime: '2024-01-17 10:00:00' },
+  { id: '7', areaId: '3', name: '产品展示点2', x: 42.8, y: 18.9, angle: 225, pointType: '讲解点', robotAction: '挥手', robotDirection: '后退', commentary: '点位2', createdTime: '2024-01-17 10:30:00' }
+])
+
+const selectedAreaId = ref<string>('')
+const currentTaskPoints = computed(() => {
+  if (!selectedAreaId.value) return []
+  return taskPointList.value.filter(point => point.areaId === selectedAreaId.value)
+})
+
+// 弹窗状态
+const showAddAreaDialog = ref(false)
+const showAddTaskPointDialog = ref(false)
+const editingArea = ref<Area | null>(null)
+const editingTaskPoint = ref<TaskPoint | null>(null)
+
+// 表单数据
+const addAreaForm = ref({
+  name: ''
+})
+
+const addTaskPointForm = ref({
+  name: '',
+  x: 0,
+  y: 0,
+  angle: 0,
+  pointType: '讲解点',
+  robotAction: '抬左手',
+  robotDirection: '前进',
+  commentary: '点位1'
+})
+
+// 多任务管理相关数据
+const multiTaskList = ref<MultiTask[]>([
+  { id: '1', name: '巡检任务A', taskType: '巡检', areaId: '1', areaName: 'abc_23', hallName: '展厅ABC', status: 'completed', createdTime: '2024-01-15 09:00:00', executeTime: '2024-01-15 09:30:00' },
+  { id: '2', name: '讲解任务B', taskType: '讲解', areaId: '2', areaName: 'abc_45', hallName: '展厅ABC', status: 'running', createdTime: '2024-01-16 10:00:00', executeTime: '2024-01-16 10:15:00' },
+  { id: '3', name: '拍照任务C', taskType: '拍照', areaId: '3', areaName: 'def_12', hallName: '展厅DEF', status: 'waiting', createdTime: '2024-01-17 11:00:00' },
+  { id: '4', name: '清洁任务D', taskType: '清洁', areaId: '4', areaName: 'ghi_89', hallName: '展厅GHI', status: 'failed', createdTime: '2024-01-18 14:00:00', executeTime: '2024-01-18 14:20:00' }
+])
+
+const selectedHallTaskList = ref<string>('')
+const currentMultiTasks = computed(() => {
+  // 这里可以根据selectedHallTaskList来筛选任务
+  return multiTaskList.value
+})
+
+// 任务控制相关数据
+const taskRunning = ref<boolean>(false)
+const showVisitorTypeDialog = ref<boolean>(false)
+const selectedVisitorType = ref<string>('')
+
+// 新增展厅任务相关数据
+const showAddHallTaskDialog = ref<boolean>(false)
+const hallTaskName = ref<string>('')
+
+// 添加展区任务相关数据
+const showAddAreaTaskDialog = ref<boolean>(false)
+const selectedHallForAreaTask = ref<string>('')
+const selectedAreaForTask = ref<string>('')
+
+// 模拟展区数据，包含展厅前缀
+const allAreas = ref([
+  { id: '1', name: 'abc_23', hallPrefix: 'abc' },
+  { id: '2', name: 'abc_45', hallPrefix: 'abc' },
+  { id: '3', name: 'def_12', hallPrefix: 'def' },
+  { id: '4', name: 'def_67', hallPrefix: 'def' },
+  { id: '5', name: 'ghi_89', hallPrefix: 'ghi' },
+  { id: '6', name: 'ghi_34', hallPrefix: 'ghi' }
+])
+
+// 根据选择的展厅筛选展区
+const filteredAreas = computed(() => {
+  if (!selectedHallForAreaTask.value) return []
+  return allAreas.value.filter(area => area.hallPrefix === selectedHallForAreaTask.value)
+})
 
 const toggleEditMode = () => { 
   isEditMode.value = !isEditMode.value
@@ -226,31 +824,156 @@ const applyTransform = () => {
   canvas.style.transform = `translate(${centerX}px, ${centerY}px)`
 }
 const onUploadGrid = async () => {
-  // 先确认是否保存当前栅格图
-  const shouldSave = await showConfirmDialog(
-    '确认操作', 
-    '是否下载保存当前栅格图的修改，然后上传新的栅格图？\n\n点击确定后会自动下载修改后的栅格图文件到您的下载文件夹，您可以用它替换原文件。'
+  // 二次确认提示
+  const shouldUpload = await showConfirmDialog(
+    '确认上传', 
+    '确认要将当前编辑后的栅格图上传到服务器吗？\n\n上传后将覆盖服务器上的原始栅格图文件。'
   )
-  if (!shouldSave) return
+  if (!shouldUpload) return
   
-  // 下载保存当前栅格图
-  await saveCurrentGrid()
-  
-  // 显示成功提示
-  showSuccessMessage('栅格图已下载到您的下载文件夹')
-  
-  // 等待1秒让用户看到提示，然后弹出文件选择对话框
-  setTimeout(() => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.pgm,.png,.jpg,.jpeg'
-    input.onchange = () => {
-      const file = input.files?.[0]
-      if (!file) return
-      handleGridFileUpload(file)
+  try {
+    // 获取当前编辑后的栅格图数据
+    const canvas = hallGridCanvas.value
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !ctx) {
+      showErrorMessage('无法获取栅格图数据')
+      return
     }
-    input.click()
+    
+    // 将canvas转换为PGM格式的二进制数据
+    const pgmData = await canvasToPGM(canvas, ctx)
+    console.log('PGM数据生成完成，大小:', pgmData.length)
+    
+    // 先下载到本地供验证（不依赖上传成功）
+    downloadPGMToLocal(pgmData)
+    
+    try {
+      // 上传到指定路径
+      await uploadGridToServer(pgmData)
+      showSuccessMessage('栅格图上传成功，并已下载到本地供验证！')
+    } catch (uploadError) {
+      console.error('上传失败:', uploadError)
+      showErrorMessage('栅格图上传失败，但已下载到本地供验证')
+    }
+    
+  } catch (error) {
+    console.error('处理失败:', error)
+    showErrorMessage('栅格图处理失败，请重试')
+  }
+}
+
+// 将canvas转换为PGM格式的二进制数据
+const canvasToPGM = async (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): Promise<Uint8Array> => {
+  const width = canvas.width
+  const height = canvas.height
+  const imageData = ctx.getImageData(0, 0, width, height)
+  
+  // PGM文件头
+  const header = `P5\n${width} ${height}\n255\n`
+  const headerBytes = new TextEncoder().encode(header)
+  
+  // 像素数据（灰度值）
+  const pixelData = new Uint8Array(width * height)
+  for (let i = 0; i < width * height; i++) {
+    const r = imageData.data[i * 4]
+    const g = imageData.data[i * 4 + 1] 
+    const b = imageData.data[i * 4 + 2]
+    // 转换为灰度值
+    const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
+    pixelData[i] = gray
+  }
+  
+  // 合并头部和像素数据
+  const pgmData = new Uint8Array(headerBytes.length + pixelData.length)
+  pgmData.set(headerBytes, 0)
+  pgmData.set(pixelData, headerBytes.length)
+  
+  return pgmData
+}
+
+// 上传栅格图到服务器
+const uploadGridToServer = async (pgmData: Uint8Array) => {
+  // 创建FormData用于文件上传
+  const formData = new FormData()
+  const blob = new Blob([pgmData], { type: 'application/octet-stream' })
+  const filename = 'gridMap.pgm' // 使用固定文件名
+  formData.append('file', blob, filename)
+  formData.append('hallId', selectedHall.value)
+  
+  // TODO: 替换为实际的API端点
+  const uploadUrl = '/api/upload/gridmap' // 需要根据实际后端API调整
+  
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    body: formData,
+    headers: {
+      // 如果需要认证，在这里添加认证头
+      // 'Authorization': `Bearer ${token}`
+    }
+  })
+  
+  if (!response.ok) {
+    throw new Error(`上传失败: ${response.status} ${response.statusText}`)
+  }
+  
+  const result = await response.json()
+  return result
+}
+
+// 下载PGM文件到本地
+const downloadPGMToLocal = (pgmData: Uint8Array) => {
+  try {
+    console.log('开始下载PGM文件，数据大小:', pgmData.length, '字节')
+    
+    // 尝试多种MIME类型，提高兼容性
+    const blob = new Blob([pgmData], { type: 'application/octet-stream' })
+    
+    // 检查浏览器是否支持下载（IE浏览器）
+    if (window.navigator && (window.navigator as any).msSaveOrOpenBlob) {
+      // IE浏览器
+      (window.navigator as any).msSaveOrOpenBlob(blob, 'gridMap.pgm')
+      console.log('使用IE下载方式')
+      return
+    }
+    
+    const url = URL.createObjectURL(blob)
+    console.log('创建下载链接:', url)
+    
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'gridMap.pgm'
+    link.style.display = 'none'
+    link.target = '_blank'
+    
+    // 添加到DOM
+    document.body.appendChild(link)
+    
+    // 模拟用户点击
+    const clickEvent = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    })
+    
+    console.log('准备触发下载...')
+    link.dispatchEvent(clickEvent)
+    
+    // 延迟清理
+  setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link)
+      }
+      URL.revokeObjectURL(url)
+      console.log('下载链接已清理')
   }, 1000)
+    
+    console.log('下载已触发')
+    
+  } catch (error) {
+    console.error('下载失败:', error)
+    const errorMessage = error instanceof Error ? error.message : '未知错误'
+    showErrorMessage('文件下载失败: ' + errorMessage)
+  }
 }
 
 // 动作：开始/停止录制、生成地图/栅格图（此处占位，后端对接时替换）
@@ -278,13 +1001,13 @@ const startGenerateHallMap = () => { /* 预留：生成展厅地图动作，不�
 // 动作图标映射已移除
 
 const sidebarTabs = [
-  { key: 'list', label: '展厅管理', icon: trackListIcon, path: '/dashboard/mission' }
+  { key: 'hall', label: '展厅管理', icon: hallIcon, path: '/dashboard/mission' },
+  { key: 'area', label: '展区管理', icon: areaIcon, path: '/dashboard/mission' },
+  { key: 'multitask', label: '展厅任务', icon: multiTaskIcon, path: '/dashboard/mission' }
 ]
 
 const handleTabClick = (tab: any) => {
-  if (route.path !== tab.path) {
-    router.push(tab.path)
-  }
+  currentTab.value = tab.key
 }
 
 // 旧航线选择交互已移除
@@ -526,7 +1249,10 @@ const formatLocalDateTime = (date: Date) => {
 // 旧任务下发取消已移除
 
 // 页面加载时获取数据
-onMounted(() => {})
+onMounted(() => {
+  // 确保从缓存加载的展厅选择在页面加载时生效
+  console.log('页面加载，当前选中展厅:', selectedHall.value)
+})
 
 // 栅格图渲染（参考首页实现，简化版）
 const hallGridCanvas = ref<HTMLCanvasElement | null>(null)
@@ -593,6 +1319,14 @@ const loadAndRenderHallPGM = async () => {
     
     // 重置编辑数据
     gridImageData = null
+    
+    // 重置缩放和偏移
+    currentScale = 1
+    currentOffsetX = 0
+    currentOffsetY = 0
+    
+    // 应用居中变换
+    applyTransform()
 
     // 编辑相关函数
     const getCanvasCoords = (e: MouseEvent) => {
@@ -672,24 +1406,15 @@ const loadAndRenderHallPGM = async () => {
     let isDragging = false, lastX = 0, lastY = 0
 
     const resize = () => {
-      const parent = canvas.parentElement as HTMLElement
-      if (!parent) return
-      const sw = parent.clientWidth; const sh = parent.clientHeight
-      scale = Math.min(sw / width, sh / height) * 1.0
-      canvas.style.width = `${Math.floor(width * scale)}px`
-      canvas.style.height = `${Math.floor(height * scale)}px`
-      offsetX = (sw - width * scale) / 2
-      offsetY = (sh - height * scale) / 2
-      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+      // 使用统一的applyTransform函数来处理缩放和居中
+      applyTransform()
     }
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       const delta = e.deltaY > 0 ? 0.9 : 1.1
-      scale = Math.max(0.1, Math.min(10, scale * delta))
-      canvas.style.width = `${Math.floor(width * scale)}px`
-      canvas.style.height = `${Math.floor(height * scale)}px`
-      canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+      currentScale = Math.max(0.2, Math.min(5, currentScale * delta))
+      applyTransform()
     }
     const onMouseDown = (e: MouseEvent) => { 
       // 编辑模式下且为编辑导航模式的左键编辑
@@ -727,8 +1452,8 @@ const loadAndRenderHallPGM = async () => {
       // 处理拖动
       if (isDragging) {
         const dx = e.clientX - lastX; const dy = e.clientY - lastY
-        offsetX += dx; offsetY += dy
-        canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+        currentOffsetX += dx; currentOffsetY += dy
+        applyTransform()
         lastX = e.clientX; lastY = e.clientY
       }
     }
@@ -925,47 +1650,345 @@ const saveCurrentGrid = async (): Promise<void> => {
   })
 }
 
-// 处理上传的栅格图文件
-const handleGridFileUpload = async (file: File) => {
-  try {
-    showSuccessMessage(`正在处理文件: ${file.name}`)
-    
-    // 读取文件
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const result = e.target?.result
-      if (result) {
-        // 创建图片对象
-        const img = new Image()
-        img.onload = () => {
-          // 将新图片绘制到canvas上
-          const canvas = hallGridCanvas.value
-          const ctx = canvas?.getContext('2d')
-          if (canvas && ctx) {
-            // 清空历史记录
-            editHistory.value.length = 0
-            
-            // 调整canvas尺寸
-            canvas.width = img.width
-            canvas.height = img.height
-            
-            // 绘制新图片
-            ctx.drawImage(img, 0, 0)
-            
-            // 重置编辑数据
-            gridImageData = null
-            
-            showSuccessMessage('栅格图上传成功！')
-          }
-        }
-        img.src = result as string
+
+// 展区管理相关方法
+// 新增展区
+const handleAddArea = () => {
+  editingArea.value = null
+  addAreaForm.value = { name: '' }
+  showAddAreaDialog.value = true
+}
+
+// 删除展区
+const handleDeleteArea = () => {
+  if (!selectedAreaId.value) return
+  
+  const area = areaList.value.find(a => a.id === selectedAreaId.value)
+  if (!area) return
+  
+  if (confirm(`确定要删除展区"${area.name}"吗？删除后该展区下的所有任务点也将被删除。`)) {
+    // 删除展区
+    areaList.value = areaList.value.filter(a => a.id !== selectedAreaId.value)
+    // 删除该展区下的所有任务点
+    taskPointList.value = taskPointList.value.filter(p => p.areaId !== selectedAreaId.value)
+    selectedAreaId.value = ''
+    alert('展区删除成功')
+  }
+}
+
+// 新增任务点
+const handleAddTaskPoint = () => {
+  if (!selectedAreaId.value) return
+  
+  editingTaskPoint.value = null
+  addTaskPointForm.value = { 
+    name: '', 
+    x: 0, 
+    y: 0, 
+    angle: 0, 
+    pointType: '讲解点', 
+    robotAction: '抬左手',
+    robotDirection: '前进',
+    commentary: '点位1' 
+  }
+  showAddTaskPointDialog.value = true
+}
+
+// 确认新增展区
+const handleConfirmAddArea = () => {
+  if (!addAreaForm.value.name.trim()) {
+    alert('请输入展区名称')
+    return
+  }
+  
+  // 获取前缀
+  const prefix = currentHallPrefix.value
+  if (!prefix) {
+    alert('未选择有效的展厅')
+    return
+  }
+  
+  // 组合完整的展区名称
+  const fullAreaName = `${prefix}_${addAreaForm.value.name.trim()}`
+  
+  if (editingArea.value) {
+    // 编辑模式
+    const index = areaList.value.findIndex(a => a.id === editingArea.value!.id)
+    if (index !== -1) {
+      areaList.value[index] = {
+        ...areaList.value[index],
+        name: fullAreaName
       }
     }
-    reader.readAsDataURL(file)
-    
-  } catch (error) {
-    console.error('文件处理失败:', error)
-    showErrorMessage('文件处理失败，请重试')
+    alert('展区更新成功')
+  } else {
+    // 新增模式
+    const newArea: Area = {
+      id: Date.now().toString(),
+      name: fullAreaName,
+      description: '', // 默认为空
+      createdTime: new Date().toLocaleString()
+    }
+    areaList.value.push(newArea)
+    alert(`展区添加成功：${fullAreaName}`)
+  }
+  
+  showAddAreaDialog.value = false
+}
+
+// 取消新增展区
+const handleCancelAddArea = () => {
+  showAddAreaDialog.value = false
+  editingArea.value = null
+}
+
+// 确认新增任务点
+const handleConfirmAddTaskPoint = () => {
+  if (!addTaskPointForm.value.name.trim()) {
+    alert('请输入点位名称')
+    return
+  }
+  
+  if (addTaskPointForm.value.angle < 0 || addTaskPointForm.value.angle > 360) {
+    alert('角度必须在0-360之间')
+    return
+  }
+  
+  if (editingTaskPoint.value) {
+    // 编辑模式
+    const index = taskPointList.value.findIndex(p => p.id === editingTaskPoint.value!.id)
+    if (index !== -1) {
+      taskPointList.value[index] = {
+        ...taskPointList.value[index],
+        name: addTaskPointForm.value.name,
+        x: addTaskPointForm.value.x,
+        y: addTaskPointForm.value.y,
+        angle: addTaskPointForm.value.angle,
+        pointType: addTaskPointForm.value.pointType,
+        robotAction: addTaskPointForm.value.robotAction,
+        robotDirection: addTaskPointForm.value.robotDirection,
+        commentary: addTaskPointForm.value.commentary
+      }
+    }
+    alert('任务点更新成功')
+  } else {
+    // 新增模式
+    const newTaskPoint: TaskPoint = {
+      id: Date.now().toString(),
+      areaId: selectedAreaId.value,
+      name: addTaskPointForm.value.name,
+      x: addTaskPointForm.value.x,
+      y: addTaskPointForm.value.y,
+      angle: addTaskPointForm.value.angle,
+      pointType: addTaskPointForm.value.pointType,
+      robotAction: addTaskPointForm.value.robotAction,
+      robotDirection: addTaskPointForm.value.robotDirection,
+      commentary: addTaskPointForm.value.commentary,
+      createdTime: new Date().toLocaleString()
+    }
+    taskPointList.value.push(newTaskPoint)
+    alert('任务点添加成功')
+  }
+  
+  showAddTaskPointDialog.value = false
+}
+
+// 取消新增任务点
+const handleCancelAddTaskPoint = () => {
+  showAddTaskPointDialog.value = false
+  editingTaskPoint.value = null
+}
+
+// 编辑任务点
+const onClickEditTaskPoint = (point: TaskPoint) => {
+  editingTaskPoint.value = point
+  addTaskPointForm.value = {
+    name: point.name,
+    x: point.x,
+    y: point.y,
+    angle: point.angle,
+    pointType: point.pointType,
+    robotAction: point.robotAction,
+    robotDirection: point.robotDirection,
+    commentary: point.commentary
+  }
+  showAddTaskPointDialog.value = true
+}
+
+// 删除任务点
+const onClickDeleteTaskPoint = (point: TaskPoint) => {
+  if (confirm(`确定要删除任务点"${point.name}"吗？`)) {
+    taskPointList.value = taskPointList.value.filter(p => p.id !== point.id)
+    alert('任务点删除成功')
+  }
+}
+
+// 时间格式化
+const formatTime = (time: string) => {
+  return time
+}
+
+// 多任务管理相关方法
+const getTaskStatusText = (status: string) => {
+  const statusMap: Record<string, string> = {
+    waiting: '等待中',
+    running: '执行中', 
+    completed: '已完成',
+    failed: '已失败'
+  }
+  return statusMap[status] || status
+}
+
+const handleAddHallTask = () => {
+  hallTaskName.value = ''
+  showAddHallTaskDialog.value = true
+}
+
+const handleDeleteHallTask = () => {
+  if (!selectedHallTaskList.value) {
+    return
+  }
+  
+  if (confirm(`确定要删除任务列表"${selectedHallTaskList.value}"吗？`)) {
+    // 删除选中的任务列表
+    selectedHallTaskList.value = ''
+    alert('任务列表删除成功')
+  }
+}
+
+const handleAddAreaTask = () => {
+  selectedHallForAreaTask.value = ''
+  selectedAreaForTask.value = ''
+  showAddAreaTaskDialog.value = true
+}
+
+// 任务控制相关方法
+const handleStartTask = () => {
+  if (!selectedHallTaskList.value) {
+    return
+  }
+  
+  // 显示访客类型选择弹窗
+  selectedVisitorType.value = ''
+  showVisitorTypeDialog.value = true
+}
+
+const handlePauseTask = () => {
+  if (confirm('确定要暂停当前任务吗？')) {
+    taskRunning.value = false
+    alert('任务已暂停')
+  }
+}
+
+const handleCancelStartTask = () => {
+  showVisitorTypeDialog.value = false
+  selectedVisitorType.value = ''
+}
+
+const handleConfirmStartTask = () => {
+  if (!selectedVisitorType.value) {
+    alert('请选择访客类型')
+    return
+  }
+  
+  // 开始任务
+  taskRunning.value = true
+  showVisitorTypeDialog.value = false
+  
+  alert(`任务已开始，访客类型：${selectedVisitorType.value}`)
+}
+
+// 新增展厅任务相关方法
+const handleCancelAddHallTask = () => {
+  showAddHallTaskDialog.value = false
+  hallTaskName.value = ''
+}
+
+const handleConfirmAddHallTask = () => {
+  if (!hallTaskName.value.trim()) {
+    alert('请输入展厅任务名称')
+    return
+  }
+  
+  // 这里可以添加创建展厅任务的逻辑
+  // 例如：添加到任务列表选项中
+  alert(`展厅任务"${hallTaskName.value}"创建成功`)
+  
+  showAddHallTaskDialog.value = false
+  hallTaskName.value = ''
+}
+
+// 添加展区任务相关方法
+const onHallChange = () => {
+  // 当展厅选择改变时，清空展区选择
+  selectedAreaForTask.value = ''
+}
+
+const handleCancelAddAreaTask = () => {
+  showAddAreaTaskDialog.value = false
+  selectedHallForAreaTask.value = ''
+  selectedAreaForTask.value = ''
+}
+
+const handleConfirmAddAreaTask = () => {
+  if (!selectedHallForAreaTask.value) {
+    alert('请选择展厅')
+    return
+  }
+  
+  if (!selectedAreaForTask.value) {
+    alert('请选择展区')
+    return
+  }
+  
+  const hallName = selectedHallForAreaTask.value.toUpperCase()
+  const areaName = allAreas.value.find(area => area.id === selectedAreaForTask.value)?.name || ''
+  
+  alert(`展区任务创建成功\n展厅：展厅${hallName}\n展区：${areaName}`)
+  
+  showAddAreaTaskDialog.value = false
+  selectedHallForAreaTask.value = ''
+  selectedAreaForTask.value = ''
+}
+
+const onClickExecuteTask = (task: MultiTask) => {
+  if (confirm(`确定要执行任务"${task.name}"吗？`)) {
+    task.status = 'running'
+    task.executeTime = new Date().toLocaleString()
+    alert('任务开始执行')
+  }
+}
+
+const onClickEditMultiTask = (task: MultiTask) => {
+  alert('编辑任务功能待开发')
+}
+
+const onClickDeleteMultiTask = (task: MultiTask) => {
+  if (confirm(`确定要删除任务"${task.name}"吗？`)) {
+    const index = multiTaskList.value.findIndex(t => t.id === task.id)
+    if (index !== -1) {
+      multiTaskList.value.splice(index, 1)
+      alert('任务删除成功')
+    }
+  }
+}
+
+// 上移和下移方法
+const onClickMoveUp = (task: MultiTask, index: number) => {
+  if (index > 0) {
+    // 交换当前项和上一项的位置
+    const temp = multiTaskList.value[index]
+    multiTaskList.value[index] = multiTaskList.value[index - 1]
+    multiTaskList.value[index - 1] = temp
+  }
+}
+
+const onClickMoveDown = (task: MultiTask, index: number) => {
+  if (index < multiTaskList.value.length - 1) {
+    // 交换当前项和下一项的位置
+    const temp = multiTaskList.value[index]
+    multiTaskList.value[index] = multiTaskList.value[index + 1]
+    multiTaskList.value[index + 1] = temp
   }
 }
 
@@ -1537,12 +2560,20 @@ const showErrorMessage = (message: string) => {
   overflow: hidden; 
   background: #fff; 
 }
-.grid-canvas { display: block; background: #fff; cursor: grab; user-select: none; transform-origin: 0 0; }
+.grid-canvas { 
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: #fff; 
+  cursor: grab; 
+  user-select: none; 
+  transform-origin: 0 0; 
+}
 .grid-canvas:active { cursor: grabbing; }
 
 /* 展厅管理工具栏与进度条 */
-.hall-toolbar { display: flex; flex-direction: column; gap: 10px; }
-.hall-toolbar-row { display: flex; align-items: center; gap: 12px; }
+.hall-toolbar { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.hall-toolbar-row { display: flex; align-items: center; gap: 12px; min-height: 40px; }
 .hall-actions { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; }
 .hall-btn { height: 32px; padding: 0 14px; border-radius: 6px; }
 .hall-select { display: flex; align-items: center; gap: 8px; }
@@ -1584,14 +2615,19 @@ const showErrorMessage = (message: string) => {
 }
 
 .toolbar-select {
-  background: rgba(22, 65, 89, 0.6);
-  border: 1px solid #164159;
-  color: #fff;
+  background: #0c3c56;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+  color: #67d5fd;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 13px;
   min-width: 120px;
   transition: all 0.2s;
+}
+
+.toolbar-select:hover {
+  background: #0c4666;
+  border-color: rgba(38, 131, 182, 1);
 }
 
 .toolbar-select:focus {
@@ -1738,6 +2774,9 @@ const showErrorMessage = (message: string) => {
 
 .tool-actions {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .action-btn {
@@ -1809,4 +2848,589 @@ const showErrorMessage = (message: string) => {
 .nav-item.active .nav-icon {
   color: #172233;
 }
+
+/* 图片按钮样式 */
+.btn-icon-img {
+  width: 16px;
+  height: 16px;
+  filter: brightness(0) saturate(100%) invert(74%) sepia(37%) saturate(1756%) hue-rotate(174deg) brightness(95%) contrast(101%);
+}
+
+.toolbar-btn.active .btn-icon-img {
+  filter: brightness(0) saturate(100%) invert(15%) sepia(12%) saturate(1278%) hue-rotate(181deg) brightness(95%) contrast(87%);
+}
+
+.tool-icon-img {
+  width: 20px;
+  height: 20px;
+  filter: brightness(0) saturate(100%) invert(74%) sepia(37%) saturate(1756%) hue-rotate(174deg) brightness(95%) contrast(101%);
+}
+
+.tool-item.active .tool-icon-img {
+  filter: brightness(0) saturate(100%) invert(15%) sepia(12%) saturate(1278%) hue-rotate(181deg) brightness(95%) contrast(87%);
+}
+
+.nav-icon-img {
+  width: 18px;
+  height: 18px;
+  filter: brightness(0) saturate(100%) invert(74%) sepia(37%) saturate(1756%) hue-rotate(174deg) brightness(95%) contrast(101%);
+}
+
+.nav-item.active .nav-icon-img {
+  filter: brightness(0) saturate(100%) invert(15%) sepia(12%) saturate(1278%) hue-rotate(181deg) brightness(95%) contrast(87%);
+}
+
+.action-icon-img {
+  width: 16px;
+  height: 16px;
+  filter: brightness(0) saturate(100%) invert(74%) sepia(37%) saturate(1756%) hue-rotate(174deg) brightness(95%) contrast(101%);
+}
+
+.action-btn:disabled .action-icon-img {
+  filter: brightness(0) saturate(100%) invert(39%) sepia(8%) saturate(1077%) hue-rotate(181deg) brightness(95%) contrast(89%);
+}
+
+/* 展区管理样式 */
+.area-top-card {
+  margin-bottom: 4px;
+}
+
+.area-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 8px;
+  flex-wrap: nowrap;
+  min-height: 40px;
+}
+
+/* 左侧区域容器 */
+.area-left-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.area-filter-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.area-filter-label {
+  color: #67d5fd;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.area-select {
+  background: #0c3c56;
+  border: 1px solid rgba(38, 131, 182, 0.8);
+  color: #67d5fd;
+  padding: 6px 12px;
+  padding-right: 30px;
+  border-radius: 4px;
+  font-size: 13px;
+  min-width: 180px;
+  transition: all 0.2s;
+  /* 隐藏默认下拉箭头 */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: none;
+  -webkit-background-image: none;
+  -moz-background-image: none;
+}
+
+/* 隐藏所有浏览器的默认下拉箭头 */
+.area-select::-ms-expand {
+  display: none;
+}
+
+.area-select::-webkit-select-placeholder {
+  display: none;
+}
+
+.area-select::-moz-select-placeholder {
+  display: none;
+}
+
+/* 针对不同浏览器的额外隐藏规则 */
+.area-select::-webkit-inner-spin-button,
+.area-select::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.area-select::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+.area-select:hover {
+  background: #0c4666;
+  border-color: rgba(38, 131, 182, 1);
+}
+
+.area-select:focus {
+  outline: none;
+  border-color: #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.area-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 添加展区任务弹窗美化样式 */
+.add-area-task-dialog .custom-dialog {
+  min-width: 420px;
+  max-width: 460px;
+}
+
+.add-area-task-dialog .add-user-form {
+  padding: 8px 0;
+  gap: 12px;
+}
+
+.add-area-task-dialog .add-user-form-row {
+  min-height: 36px;
+  gap: 12px;
+}
+
+.add-area-task-dialog .add-user-form label {
+  min-width: 60px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.add-area-task-dialog .custom-select-wrapper {
+  flex: 1;
+  min-width: 180px;
+}
+
+.add-area-task-dialog .user-select {
+  width: 100%;
+  padding: 8px 36px 8px 12px;
+  font-size: 14px;
+  min-height: 36px;
+  border-radius: 4px;
+  border: 1px solid rgba(38, 131, 182, 0.6);
+  background: #0a2d3f;
+  transition: all 0.3s ease;
+}
+
+.add-area-task-dialog .user-select:focus {
+  border-color: #67d5fd;
+  background: #0c3c56;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.2);
+}
+
+.add-area-task-dialog .user-select:disabled {
+  background: #1a2b3d;
+  color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(38, 131, 182, 0.3);
+  cursor: not-allowed;
+}
+
+.add-area-task-dialog .custom-select-arrow {
+  right: 10px;
+  pointer-events: none;
+}
+
+.add-area-task-dialog .custom-select-arrow svg {
+  width: 12px;
+  height: 12px;
+}
+
+.add-area-task-dialog .custom-dialog-actions {
+  padding-top: 16px;
+  gap: 12px;
+}
+
+.add-area-task-dialog .mission-btn {
+  min-width: 90px;
+  height: 36px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.add-area-task-dialog .custom-dialog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #67d5fd;
+  text-align: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(103, 213, 253, 0.2);
+  margin-bottom: 12px;
+}
+
+.add-area-task-dialog .custom-dialog-content {
+  padding: 0 20px;
+}
+
+/* 添加一些悬停效果 */
+.add-area-task-dialog .user-select:not(:disabled):hover {
+  border-color: rgba(103, 213, 253, 0.8);
+  background: #0c3c56;
+}
+
+.add-area-task-dialog .mission-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.custom-select-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.custom-select-arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px;
+  color: #6b7a8c;
+  font-size: 14px;
+}
+
+.user-textarea {
+  width: 100%;
+  min-height: 80px;
+  border-radius: 6px;
+  border: 1px solid #164159;
+  background: transparent;
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 14px;
+  resize: vertical;
+  font-family: inherit;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.user-textarea:focus {
+  outline: none;
+  border: 1.5px solid #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.user-textarea::placeholder {
+  color: #6b7a8c;
+}
+
+/* 按钮禁用状态 */
+.mission-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mission-btn-stop:disabled {
+  background: #561c1c;
+  color: #fd6767;
+  opacity: 0.5;
+}
+
+.mission-btn-normal:disabled {
+  background: #1a3a4a;
+  color: #fff;
+  opacity: 0.5;
+}
+
+
+/* 表单样式 */
+.add-user-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.add-user-form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.add-user-form label {
+  min-width: 80px;
+  color: #67d5fd;
+  font-size: 14px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.add-user-form .user-input,
+.add-user-form .user-select {
+  flex: 1;
+  background: #0c3c56;
+  border: 1px solid rgba(38, 131, 182, 0.6);
+  border-radius: 4px;
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 14px;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+.add-user-form .user-input:focus,
+.add-user-form .user-select:focus {
+  outline: none;
+  border-color: #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.add-user-form .user-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 展区名称输入组合样式 */
+.area-name-input-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(38, 131, 182, 0.6);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #0c3c56;
+}
+
+.area-name-prefix {
+  background: rgba(38, 131, 182, 0.3);
+  color: #67d5fd;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  min-height: 36px;
+  min-width: 100px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid rgba(38, 131, 182, 0.6);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.area-name-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 14px;
+  min-height: 36px;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.area-name-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.area-name-input-group:focus-within {
+  border-color: #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.add-user-form .custom-select-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.add-user-form .custom-select-wrapper .user-select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: none;
+  padding-right: 32px;
+}
+
+.add-user-form .custom-select-arrow {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #67d5fd;
+}
+
+.add-user-form .custom-select-arrow svg {
+  width: 12px;
+  height: 12px;
+}
+
+.add-user-form .custom-select-arrow svg polygon {
+  fill: #67d5fd;
+}
+
+/* Radio 组件样式 */
+.radio-group {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #67d5fd;
+  font-size: 14px;
+}
+
+.radio-item input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(38, 131, 182, 0.6);
+  border-radius: 50%;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  position: relative;
+  margin: 0;
+}
+
+.radio-item input[type="radio"]:checked {
+  border-color: #67d5fd;
+  background: #67d5fd;
+}
+
+.radio-item input[type="radio"]:checked::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  background: #0c3c56;
+  border-radius: 50%;
+}
+
+.radio-item input[type="radio"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.radio-item:hover input[type="radio"] {
+  border-color: #67d5fd;
+}
+
+.radio-label {
+  user-select: none;
+}
+
+/* 操作按钮组样式 */
+.user-action-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 图标按钮样式 */
+.icon-btn {
+  background: transparent;
+  border: none;
+  padding: 0 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.icon-btn:hover {
+  background: #223a5e44;
+  border-radius: 4px;
+}
+
+.icon-btn img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+/* 移动按钮特殊样式 - 统一颜色 */
+.icon-btn.move-btn img {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(118%) contrast(119%);
+}
+
+.icon-btn.move-btn:disabled img {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(118%) contrast(119%) opacity(0.3);
+}
+
+.icon-btn.move-btn:disabled {
+  cursor: not-allowed;
+}
+
+.icon-btn.move-btn:hover:not(:disabled) img {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(140%) contrast(130%);
+}
+
+
+/* 任务状态样式 */
+.task-status {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.task-status.waiting {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.task-status.running {
+  background: rgba(0, 123, 255, 0.2);
+  color: #007bff;
+}
+
+.task-status.completed {
+  background: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+
+.task-status.failed {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
+
+/* 任务控制按钮样式 */
+.task-control-buttons {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.task-control-buttons .mission-btn {
+  min-width: 80px;
+  height: 32px;
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 </style>

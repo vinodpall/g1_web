@@ -6,43 +6,22 @@ export function usePermission() {
   const showPermissionDenied = ref(false)
   const requiredPermission = ref('')
 
-  // 权限检查并显示提示
+  // 权限检查并显示提示 - 已禁用权限验证，始终返回true
   const checkPermission = (permission: string, action?: string): boolean => {
-    const hasPermission = permissionStore.hasPermission(permission)
-    
-    if (!hasPermission) {
-      requiredPermission.value = permission
-      showPermissionDenied.value = true
-      console.warn(`权限不足: ${permission}`, action)
-    }
-    
-    return hasPermission
+    console.log('usePermission权限检查已禁用，允许权限:', permission, action)
+    return true
   }
 
-  // 检查多个权限（任一满足）
+  // 检查多个权限（任一满足） - 已禁用权限验证，始终返回true
   const checkAnyPermission = (permissions: string[], action?: string): boolean => {
-    const hasPermission = permissionStore.hasAnyPermission(permissions)
-    
-    if (!hasPermission) {
-      requiredPermission.value = permissions.join(' 或 ')
-      showPermissionDenied.value = true
-      console.warn(`权限不足: ${permissions.join(' 或 ')}`, action)
-    }
-    
-    return hasPermission
+    console.log('usePermission权限检查已禁用，允许权限:', permissions, action)
+    return true
   }
 
-  // 检查多个权限（全部满足）
+  // 检查多个权限（全部满足） - 已禁用权限验证，始终返回true
   const checkAllPermissions = (permissions: string[], action?: string): boolean => {
-    const hasPermission = permissionStore.hasAllPermissions(permissions)
-    
-    if (!hasPermission) {
-      requiredPermission.value = permissions.join(' 和 ')
-      showPermissionDenied.value = true
-      console.warn(`权限不足: ${permissions.join(' 和 ')}`, action)
-    }
-    
-    return hasPermission
+    console.log('usePermission权限检查已禁用，允许权限:', permissions, action)
+    return true
   }
 
   // 关闭权限提示

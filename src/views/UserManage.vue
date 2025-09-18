@@ -20,24 +20,43 @@
           <div class="mission-top-card card user-top-card">
             <div class="mission-top-header">
               <img class="mission-top-logo" src="@/assets/source_data/bg_data/card_logo.png" alt="logo" />
-              <span class="mission-top-title">{{ currentTab === 'user' ? '用户管理' : '角色管理' }}</span>
+              <span class="mission-top-title">{{ currentTab === 'user' ? '用户管理' : '讲解词管理' }}</span>
             </div>
             <div class="user-top-row">
               <button 
+                v-if="currentTab === 'user'"
                 class="mission-btn mission-btn-pause" 
                 @click="handleAddUser"
               >新增用户</button>
+              <!-- 讲解词管理按钮组 -->
+              <template v-if="currentTab === 'introduce'">
+                <span class="user-label">讲解对象：</span>
+                <div class="custom-select-wrapper">
+                  <select v-model="selectedIntroduceTarget" class="user-select">
+                    <option value="">请选择讲解对象</option>
+                    <option v-for="target in introduceTargets" :key="target.id" :value="target.id">
+                      {{ target.name }}
+                    </option>
+                  </select>
+                  <span class="custom-select-arrow">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    </svg>
+                  </span>
+                </div>
+                <button class="mission-btn mission-btn-pause introduce-btn" @click="handleAddIntroduceTarget">添加讲解对象</button>
+                <button class="mission-btn mission-btn-pause introduce-btn" @click="handleDeleteIntroduceTarget">删除讲解对象</button>
+                <button class="mission-btn mission-btn-pause introduce-btn" @click="handleAddIntroduceContent">添加讲解词</button>
+                <button class="mission-btn mission-btn-pause introduce-btn" @click="handlePointManage">点位名称管理</button>
+              </template>
             </div>
           </div>
-          <div class="mission-table-card card">
+          <!-- 用户管理表格 -->
+          <div v-if="currentTab === 'user'" class="mission-table-card card">
             <div class="mission-table-header">
               <div class="mission-th">序号</div>
               <div class="mission-th">用户名</div>
               <div class="mission-th">姓名</div>
-              <div class="mission-th">角色</div>
-              <div class="mission-th">联系方式</div>
-              <div class="mission-th">性别</div>
-              <div class="mission-th">身份证号</div>
               <div class="mission-th">注册时间</div>
               <div class="mission-th">操作</div>
             </div>
@@ -46,18 +65,77 @@
                 <div class="mission-td">{{ idx + 1 }}</div>
                 <div class="mission-td">{{ user.username }}</div>
                 <div class="mission-td">{{ user.userfullname || '-' }}</div>
-                <div class="mission-td">
-                  <UserRoleDisplay :user="(user as any)" />
-                </div>
-                <div class="mission-td">{{ '-' }}</div>
-                <div class="mission-td">{{ '-' }}</div>
-                <div class="mission-td">{{ '-' }}</div>
                 <div class="mission-td">{{ formatTime(user.created_time) }}</div>
                 <div class="mission-td">
                   <div class="user-action-btns">
                     <button class="icon-btn" title="编辑" @click="onClickEditUser(user)"><img :src="editIcon" /></button>
                     <button class="icon-btn" title="删除" @click="onClickDeleteUser(user)"><img :src="deleteIcon" /></button>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 讲解词管理内容 -->
+          <div v-if="currentTab === 'introduce'" class="mission-table-card card">
+            <div v-if="!selectedIntroduceTarget" class="introduce-content">
+              <div class="introduce-placeholder">
+                <div class="placeholder-icon">📝</div>
+                <div class="placeholder-text">讲解词管理功能</div>
+                <div class="placeholder-desc">请先选择讲解对象，然后查看和管理讲解词内容</div>
+              </div>
+            </div>
+            
+            <!-- 讲解词列表 -->
+            <div v-else class="introduce-list-content">
+              <div class="introduce-list-header">
+                <div class="introduce-list-title">
+                  <span class="target-name">{{ getSelectedTargetName() }}</span>
+                  <span class="target-desc">的讲解词列表</span>
+                </div>
+                <div class="introduce-list-count">
+                  共 {{ getIntroduceContentsByTarget().length }} 条讲解词
+                </div>
+              </div>
+              
+              <div class="introduce-list-table">
+                <div class="introduce-table-header">
+                  <div class="introduce-th introduce-th-index">序号</div>
+                  <div class="introduce-th introduce-th-point">关联点位</div>
+                  <div class="introduce-th introduce-th-content">讲解词内容</div>
+                  <div class="introduce-th introduce-th-time">创建时间</div>
+                  <div class="introduce-th introduce-th-actions">操作</div>
+                </div>
+                
+                <div class="introduce-table-body">
+                  <div 
+                    v-for="(item, index) in getIntroduceContentsByTarget()" 
+                    :key="item.id"
+                    class="introduce-tr"
+                  >
+                    <div class="introduce-td introduce-td-index">{{ index + 1 }}</div>
+                    <div class="introduce-td introduce-td-point">{{ item.pointName }}</div>
+                    <div class="introduce-td introduce-td-content">
+                      <div class="content-preview" :title="item.content">
+                        {{ item.content }}
+                      </div>
+                    </div>
+                    <div class="introduce-td introduce-td-time">{{ item.createTime }}</div>
+                    <div class="introduce-td introduce-td-actions">
+                      <button class="icon-btn" title="编辑" @click="editIntroduceContent(item)">
+                        <img :src="editIcon" />
+                      </button>
+                      <button class="icon-btn" title="删除" @click="deleteIntroduceContent(item.id)">
+                        <img :src="deleteIcon" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- 空状态 -->
+                <div v-if="getIntroduceContentsByTarget().length === 0" class="introduce-empty">
+                  <div class="empty-icon">📝</div>
+                  <div class="empty-text">暂无讲解词</div>
+                  <div class="empty-desc">点击上方"添加讲解词"按钮添加第一条讲解词</div>
                 </div>
               </div>
             </div>
@@ -75,37 +153,6 @@
             <div class="add-user-form-row"><label>用户名：</label><input v-model="addUserForm.username" class="user-input" placeholder="请输入用户名" /></div>
             <div class="add-user-form-row"><label>姓名：</label><input v-model="addUserForm.name" class="user-input" placeholder="请输入姓名" /></div>
             <div class="add-user-form-row"><label>密码：</label><input v-model="addUserForm.password" type="password" class="user-input" placeholder="请输入密码" /></div>
-            <div class="add-user-form-row"><label>角色：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="addUserForm.role" class="user-select">
-                  <option value="">请选择角色</option>
-                  <option v-for="role in roleList" :key="role.id" :value="role.role_name">
-                    {{ role.role_name }}
-                  </option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                  </svg>
-                </span>
-              </div>
-            </div>
-            <div class="add-user-form-row"><label>联系方式：</label><input v-model="addUserForm.phone" class="user-input" placeholder="请输入联系方式" /></div>
-            <div class="add-user-form-row"><label>性别：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="addUserForm.gender" class="user-select">
-                  <option value="">请选择性别</option>
-                  <option value="男">男</option>
-                  <option value="女">女</option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                  </svg>
-                </span>
-              </div>
-            </div>
-            <div class="add-user-form-row"><label>身份证号：</label><input v-model="addUserForm.idCard" class="user-input" placeholder="请输入身份证号" /></div>
           </div>
         </div>
         <div class="custom-dialog-actions">
@@ -131,37 +178,6 @@
           <div class="edit-user-form">
             <div class="edit-user-form-row"><label>用户名：</label><input v-model="editUserForm.username" class="user-input" placeholder="请输入用户名" /></div>
             <div class="edit-user-form-row"><label>姓名：</label><input v-model="editUserForm.name" class="user-input" placeholder="请输入姓名" /></div>
-            <div class="edit-user-form-row"><label>角色：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="editUserForm.role" class="user-select">
-                  <option value="">请选择角色</option>
-                  <option v-for="role in roleList" :key="role.id" :value="role.role_name">
-                    {{ role.role_name }}
-                  </option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                  </svg>
-                </span>
-              </div>
-            </div>
-            <div class="edit-user-form-row"><label>联系方式：</label><input v-model="editUserForm.phone" class="user-input" placeholder="请输入联系方式" /></div>
-            <div class="edit-user-form-row"><label>性别：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="editUserForm.gender" class="user-select">
-                  <option value="">请选择性别</option>
-                  <option value="男">男</option>
-                  <option value="女">女</option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                  </svg>
-                </span>
-              </div>
-            </div>
-            <div class="edit-user-form-row"><label>身份证号：</label><input v-model="editUserForm.idCard" class="user-input" placeholder="请输入身份证号" /></div>
           </div>
         </div>
         <div class="custom-dialog-actions">
@@ -206,22 +222,173 @@
       :details="resultDialog.details"
       @close="closeResultDialog"
     />
+
+    <!-- 添加讲解对象弹窗 -->
+    <div v-if="showAddIntroduceTargetDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">添加讲解对象</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>对象名称：</label>
+              <input v-model="newIntroduceTargetName" class="user-input" placeholder="请输入讲解对象名称" />
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-pause" @click="confirmAddIntroduceTarget">确认</button>
+          <button class="mission-btn mission-btn-cancel" @click="showAddIntroduceTargetDialog = false">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除讲解对象确认弹窗 -->
+    <div v-if="showDeleteIntroduceTargetDialog" class="custom-dialog-mask">
+      <div class="custom-dialog delete-confirm-dialog">
+        <div class="custom-dialog-title">删除确认</div>
+        <div class="custom-dialog-content">
+          <div class="delete-confirm-message">
+            <div class="delete-icon">⚠️</div>
+            <div class="delete-text">
+              确定要删除讲解对象"{{ getSelectedTargetName() }}"吗？删除后无法恢复，请谨慎操作。
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-stop" @click="confirmDeleteIntroduceTarget">确认删除</button>
+          <button class="mission-btn mission-btn-cancel" @click="showDeleteIntroduceTargetDialog = false">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 添加讲解词弹窗 -->
+    <div v-if="showAddIntroduceContentDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">添加讲解词</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>选择点位：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="selectedPointForContent" class="user-select">
+                  <option value="">请选择点位</option>
+                  <option v-for="point in pointNames" :key="point.id" :value="point.id">
+                    {{ point.name }}
+                  </option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>讲解词：</label>
+              <textarea v-model="newIntroduceContent" class="user-textarea" placeholder="请输入讲解词内容" rows="4"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-pause" @click="confirmAddIntroduceContent">确认</button>
+          <button class="mission-btn mission-btn-cancel" @click="showAddIntroduceContentDialog = false">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 点位名称管理弹窗 -->
+    <div v-if="showPointManageDialog" class="custom-dialog-mask">
+      <div class="custom-dialog point-manage-dialog">
+        <div class="custom-dialog-title">点位名称管理</div>
+        <div class="custom-dialog-content">
+          <!-- 添加点位输入区 -->
+          <div class="point-add-section">
+            <div class="point-input-row">
+              <input 
+                v-model="newPointName" 
+                class="user-input point-input" 
+                placeholder="请输入点位名称" 
+                @keyup.enter="addPointName"
+              />
+              <button class="mission-btn mission-btn-pause" @click="addPointName">添加</button>
+            </div>
+          </div>
+          
+          <!-- 点位列表 -->
+          <div class="point-list-section">
+            <div class="point-list-header">点位名称列表</div>
+            <div class="point-list">
+              <div 
+                v-for="point in pointNames" 
+                :key="point.id" 
+                class="point-item"
+              >
+                <span class="point-name">{{ point.name }}</span>
+                <button 
+                  class="point-delete-btn" 
+                  @click="deletePointName(point.id)"
+                  title="删除"
+                >
+                  <img :src="deleteIcon" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="showPointManageDialog = false">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑讲解词弹窗 -->
+    <div v-if="showEditIntroduceContentDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">编辑讲解词</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>选择点位：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="editIntroduceContentForm.pointId" class="user-select">
+                  <option value="">请选择点位</option>
+                  <option v-for="point in pointNames" :key="point.id" :value="point.id">
+                    {{ point.name }}
+                  </option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>讲解词：</label>
+              <textarea v-model="editIntroduceContentForm.content" class="user-textarea" placeholder="请输入讲解词内容" rows="4"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-pause" @click="confirmEditIntroduceContent">确认</button>
+          <button class="mission-btn mission-btn-cancel" @click="showEditIntroduceContentDialog = false">取消</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useUsers, useRoles } from '../composables/useApi'
-import { UserRoleManager } from '../utils/userRoleManager'
-import UserRoleDisplay from '../components/UserRoleDisplay.vue'
+import { useUsers } from '../composables/useApi'
 // 取消按钮上的权限包装，改为点击时校验
 import { usePermissionStore } from '../stores/permission'
 import PermissionDenied from '../components/PermissionDenied.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import ResultDialog from '../components/ResultDialog.vue'
 import userIcon from '@/assets/source_data/svg_data/user.svg'
-import roleIcon from '@/assets/source_data/svg_data/role.svg'
+import introduceIcon from '@/assets/source_data/robot_source/introduce.svg'
 import editIcon from '@/assets/source_data/svg_data/edit.svg'
 import deleteIcon from '@/assets/source_data/svg_data/delete.svg'
 
@@ -229,22 +396,20 @@ const router = useRouter()
 const route = useRoute()
 
 // 使用用户管理API
-const { users, loading, error, fetchUsers, createUser, updateUser, deleteUser, assignUserRole, removeUserRole, syncUserRole } = useUsers()
-
-// 使用角色管理API
-const { roles: roleList, fetchRoles } = useRoles()
+const { users, loading, error, fetchUsers, createUser, updateUser, deleteUser } = useUsers()
 
 const sidebarTabs = [
   { key: 'user', label: '用户管理', icon: userIcon, path: '/dashboard/users' },
-  { key: 'role', label: '角色管理', icon: roleIcon, path: '/dashboard/roles' }
+  { key: 'introduce', label: '讲解词管理', icon: introduceIcon, path: '/dashboard/introduce' }
 ]
-const currentTab = ref(route.path.includes('roles') ? 'role' : 'user')
+const currentTab = ref(route.path.includes('introduce') ? 'introduce' : 'user')
 const handleTabClick = (key: string) => {
-  const tab = sidebarTabs.find(t => t.key === key)
-  if (tab && route.path !== tab.path) {
-    router.push(tab.path)
-  }
   currentTab.value = key
+  if (key === 'user' && route.path !== '/dashboard/users') {
+    router.push('/dashboard/users')
+  } else if (key === 'introduce' && route.path !== '/dashboard/introduce') {
+    router.push('/dashboard/introduce')
+  }
 }
 
 const filter = ref({
@@ -283,6 +448,67 @@ const showDeleteUserDialog = ref(false)
 const showPermissionDenied = ref(false)
 const requiredPermission = ref('')
 
+// 讲解词管理相关状态
+const selectedIntroduceTarget = ref('')
+const introduceTargets = ref([
+  { id: '1', name: '展厅A' },
+  { id: '2', name: '展厅B' },
+  { id: '3', name: '展厅C' }
+])
+const showAddIntroduceTargetDialog = ref(false)
+const showDeleteIntroduceTargetDialog = ref(false)
+const showAddIntroduceContentDialog = ref(false)
+const newIntroduceTargetName = ref('')
+const newIntroduceContent = ref('')
+
+// 点位名称管理相关状态
+const showPointManageDialog = ref(false)
+const newPointName = ref('')
+const selectedPointForContent = ref('')
+const pointNames = ref([
+  { id: '1', name: '入口大厅' },
+  { id: '2', name: '展览区A' },
+  { id: '3', name: '展览区B' },
+  { id: '4', name: '休息区' },
+  { id: '5', name: '出口' }
+])
+
+// 讲解词内容数据
+const introduceContents = ref([
+  {
+    id: '1',
+    targetId: '1', // 讲解对象ID
+    pointId: '1',
+    pointName: '入口大厅',
+    content: '欢迎来到我们的展览馆，这里是入口大厅，请您跟随我继续参观。',
+    createTime: '2024-01-15 10:30:00'
+  },
+  {
+    id: '2',
+    targetId: '1',
+    pointId: '2',
+    pointName: '展览区A',
+    content: '这里是展览区A，展示了我们最新的科技产品和创新成果。',
+    createTime: '2024-01-15 11:00:00'
+  },
+  {
+    id: '3',
+    targetId: '2',
+    pointId: '3',
+    pointName: '展览区B',
+    content: '展览区B主要展示历史文物和传统工艺品，具有深厚的文化底蕴。',
+    createTime: '2024-01-15 11:30:00'
+  }
+])
+
+// 编辑讲解词相关状态
+const showEditIntroduceContentDialog = ref(false)
+const editingIntroduceContent = ref(null)
+const editIntroduceContentForm = ref({
+  pointId: '',
+  content: ''
+})
+
 // 错误提示相关状态
 const showErrorMessage = ref(false)
 const errorMessage = ref('')
@@ -301,10 +527,6 @@ const addUserForm = ref({
   username: '',
   name: '',
   password: '',
-  role: '',
-  phone: '',
-  gender: '',
-  idCard: '',
   is_activate: '1',
   is_superuser: '0',
   workspace_id: '123456',
@@ -314,10 +536,6 @@ const addUserForm = ref({
 const editUserForm = ref({
   username: '',
   name: '',
-  role: '',
-  phone: '',
-  gender: '',
-  idCard: '',
   is_activate: '1',
   is_superuser: '0',
   workspace_id: '123456',
@@ -359,16 +577,13 @@ const onClickDeleteUser = (user: any) => {
 
 const onAddUserConfirm = async () => {
   try {
-    // 根据选择的角色名称找到对应的角色ID
-    const selectedRole = roleList.value.find(role => role.role_name === addUserForm.value.role)
-    
     // 将表单数据转换为API需要的格式
     const apiUserData = {
       username: addUserForm.value.username,
       userfullname: addUserForm.value.name,
       password: addUserForm.value.password,
       is_activate: '1', // 默认激活
-      is_superuser: selectedRole ? '0' : '0', // 根据实际角色设置
+      is_superuser: '0', // 默认不是超级用户
       created_by: null, // 后端会自动设置
       created_time: new Date().toISOString(), // 后端会自动设置
       updated_by: null, // 后端会自动设置
@@ -380,28 +595,11 @@ const onAddUserConfirm = async () => {
     // 创建用户
     const newUser = await createUser(apiUserData)
     
-    // 如果选择了角色，为用户分配角色
-    if (selectedRole && newUser) {
-      const roleId = UserRoleManager.getRoleIdByName(selectedRole.role_name, roleList.value as any)
-      if (roleId) {
-        const result = await UserRoleManager.assignRole(newUser.id, roleId, assignUserRole)
-        if (result.success) {
-          console.log(`用户 ${newUser.username} 已分配角色 ${selectedRole.role_name}`)
-        } else {
-          console.error('分配角色失败:', result.error)
-        }
-      }
-    }
-    
     showAddUserDialog.value = false
     addUserForm.value = { 
       username: '', 
       name: '', 
       password: '',
-      role: '', 
-      phone: '', 
-      gender: '', 
-      idCard: '',
       is_activate: '1',
       is_superuser: '0',
       workspace_id: '123456',
@@ -459,21 +657,10 @@ const closeResultDialog = () => {
 // 打开编辑用户弹窗
 const openEditUserDialog = (user: any) => {
   currentUser.value = user
-  // 根据用户的角色信息设置表单
-  let roleName = ''
-  if (user.roles && user.roles.length > 0) {
-    roleName = user.roles[0].role_name // 取第一个角色
-  } else if (user.is_superuser === '1') {
-    roleName = '超级管理员'
-  }
   
   editUserForm.value = { 
     username: user.username,
     name: user.userfullname || '',
-    role: roleName,
-    phone: '', // API中没有这个字段，置空
-    gender: '', // API中没有这个字段，置空
-    idCard: '', // API中没有这个字段，置空
     is_activate: user.is_activate,
     is_superuser: user.is_superuser,
     workspace_id: user.workspace_id,
@@ -486,9 +673,6 @@ const openEditUserDialog = (user: any) => {
 const onEditUserConfirm = async () => {
   if (currentUser.value) {
     try {
-      // 根据选择的角色名称找到对应的角色ID
-      const selectedRole = roleList.value.find(role => role.role_name === editUserForm.value.role)
-      
       // 将表单数据转换为API需要的格式
       const apiUserData = {
         username: editUserForm.value.username,
@@ -504,47 +688,6 @@ const onEditUserConfirm = async () => {
       // 使用POST接口更新用户信息
       await updateUser(currentUser.value.id.toString(), apiUserData)
       console.log('用户基本信息更新成功')
-      
-      // 处理角色分配 - 如果修改了角色，同步更新角色关联
-      if (selectedRole) {
-        const roleId = UserRoleManager.getRoleIdByName(selectedRole.role_name, roleList.value as any)
-        if (roleId) {
-          const currentUserRoles = currentUser.value.roles || []
-          const currentRoleIds = currentUserRoles.map((role: any) => role.id)
-          
-          // 检查角色是否发生变化
-          if (!currentRoleIds.includes(roleId)) {
-            console.log(`用户角色发生变化，从 ${currentUserRoles.map((r: any) => r.role_name).join(', ')} 更新为 ${selectedRole.role_name}`)
-            
-            // 删除所有当前角色
-            for (const currentRoleId of currentRoleIds) {
-              try {
-                await removeUserRole(currentUser.value.id, currentRoleId)
-                console.log(`已删除用户角色: ${currentRoleId}`)
-              } catch (err) {
-                console.error(`删除用户角色失败: ${currentRoleId}`, err)
-              }
-            }
-            
-            // 使用同步接口分配新角色
-            try {
-              await syncUserRole(currentUser.value.id, roleId)
-              console.log(`用户 ${currentUser.value.username} 角色已同步更新为 ${selectedRole.role_name}`)
-            } catch (err) {
-              console.error('同步角色失败:', err)
-              // 如果同步失败，尝试使用普通分配接口
-              try {
-                await assignUserRole(currentUser.value.id, roleId)
-                console.log(`用户 ${currentUser.value.username} 角色已分配为 ${selectedRole.role_name}`)
-              } catch (assignErr) {
-                console.error('分配新角色失败:', assignErr)
-              }
-            }
-          } else {
-            console.log('用户角色未发生变化')
-          }
-        }
-      }
       
       // 重新获取用户列表以更新显示
       await fetchUsers({ skip: 0, limit: 100 })
@@ -562,11 +705,7 @@ const onEditUserConfirm = async () => {
       showEditUserDialog.value = false
       editUserForm.value = { 
         username: '', 
-        name: '', 
-        role: '', 
-        phone: '', 
-        gender: '', 
-        idCard: '',
+        name: '',
         is_activate: '1',
         is_superuser: '0',
         workspace_id: '123456',
@@ -677,15 +816,308 @@ const formatTime = (timeStr: string) => {
   return new Date(timeStr).toLocaleString('zh-CN')
 }
 
+// 讲解词管理相关方法
+const handleAddIntroduceTarget = () => {
+  showAddIntroduceTargetDialog.value = true
+}
+
+const handleDeleteIntroduceTarget = () => {
+  if (!selectedIntroduceTarget.value) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请先选择要删除的讲解对象'
+    }
+    return
+  }
+  showDeleteIntroduceTargetDialog.value = true
+}
+
+const handleAddIntroduceContent = () => {
+  showAddIntroduceContentDialog.value = true
+}
+
+// 获取选中的讲解对象名称
+const getSelectedTargetName = () => {
+  const target = introduceTargets.value.find(t => t.id === selectedIntroduceTarget.value)
+  return target ? target.name : ''
+}
+
+// 确认添加讲解对象
+const confirmAddIntroduceTarget = () => {
+  if (!newIntroduceTargetName.value.trim()) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请输入讲解对象名称'
+    }
+    return
+  }
+  
+  // 生成新的ID
+  const newId = (Math.max(...introduceTargets.value.map(t => parseInt(t.id))) + 1).toString()
+  
+  // 添加到列表
+  introduceTargets.value.push({
+    id: newId,
+    name: newIntroduceTargetName.value.trim()
+  })
+  
+  // 清空输入并关闭弹窗
+  newIntroduceTargetName.value = ''
+  showAddIntroduceTargetDialog.value = false
+  
+  resultDialog.value = {
+    show: true,
+    type: 'success',
+    title: '添加成功',
+    message: '',
+    details: '讲解对象已添加'
+  }
+}
+
+// 确认删除讲解对象
+const confirmDeleteIntroduceTarget = () => {
+  const targetIndex = introduceTargets.value.findIndex(t => t.id === selectedIntroduceTarget.value)
+  if (targetIndex > -1) {
+    introduceTargets.value.splice(targetIndex, 1)
+    selectedIntroduceTarget.value = ''
+    
+    showDeleteIntroduceTargetDialog.value = false
+    
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '删除成功',
+      message: '',
+      details: '讲解对象已删除'
+    }
+  }
+}
+
+// 获取选中的点位名称
+const getSelectedPointName = () => {
+  const point = pointNames.value.find(p => p.id === selectedPointForContent.value)
+  return point ? point.name : ''
+}
+
+// 获取当前选中讲解对象的讲解词列表
+const getIntroduceContentsByTarget = () => {
+  if (!selectedIntroduceTarget.value) return []
+  return introduceContents.value.filter(item => item.targetId === selectedIntroduceTarget.value)
+}
+
+// 确认添加讲解词
+const confirmAddIntroduceContent = () => {
+  if (!selectedPointForContent.value) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请选择点位'
+    }
+    return
+  }
+  
+  if (!newIntroduceContent.value.trim()) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请输入讲解词内容'
+    }
+    return
+  }
+  
+  // 生成新的ID
+  const newId = (Math.max(0, ...introduceContents.value.map(item => parseInt(item.id))) + 1).toString()
+  
+  // 添加到讲解词列表
+  const newIntroduceItem = {
+    id: newId,
+    targetId: selectedIntroduceTarget.value,
+    pointId: selectedPointForContent.value,
+    pointName: getSelectedPointName(),
+    content: newIntroduceContent.value.trim(),
+    createTime: new Date().toLocaleString('zh-CN')
+  }
+  
+  introduceContents.value.push(newIntroduceItem)
+  
+  // 清空输入并关闭弹窗
+  selectedPointForContent.value = ''
+  newIntroduceContent.value = ''
+  showAddIntroduceContentDialog.value = false
+  
+  resultDialog.value = {
+    show: true,
+    type: 'success',
+    title: '添加成功',
+    message: '',
+    details: '讲解词已添加'
+  }
+}
+
+// 点位名称管理方法
+const handlePointManage = () => {
+  showPointManageDialog.value = true
+}
+
+// 添加点位名称
+const addPointName = () => {
+  if (!newPointName.value.trim()) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请输入点位名称'
+    }
+    return
+  }
+  
+  // 检查是否已存在同名点位
+  const exists = pointNames.value.some(point => point.name === newPointName.value.trim())
+  if (exists) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '该点位名称已存在'
+    }
+    return
+  }
+  
+  // 生成新的ID
+  const newId = (Math.max(...pointNames.value.map(p => parseInt(p.id))) + 1).toString()
+  
+  // 添加到列表
+  pointNames.value.push({
+    id: newId,
+    name: newPointName.value.trim()
+  })
+  
+  // 清空输入
+  newPointName.value = ''
+  
+  resultDialog.value = {
+    show: true,
+    type: 'success',
+    title: '添加成功',
+    message: '',
+    details: '点位名称已添加'
+  }
+}
+
+// 删除点位名称
+const deletePointName = (pointId: string) => {
+  const pointIndex = pointNames.value.findIndex(p => p.id === pointId)
+  if (pointIndex > -1) {
+    pointNames.value.splice(pointIndex, 1)
+    
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '删除成功',
+      message: '',
+      details: '点位名称已删除'
+    }
+  }
+}
+
+// 编辑讲解词
+const editIntroduceContent = (item: any) => {
+  editingIntroduceContent.value = item
+  editIntroduceContentForm.value = {
+    pointId: item.pointId,
+    content: item.content
+  }
+  showEditIntroduceContentDialog.value = true
+}
+
+// 删除讲解词
+const deleteIntroduceContent = (contentId: string) => {
+  const contentIndex = introduceContents.value.findIndex(item => item.id === contentId)
+  if (contentIndex > -1) {
+    introduceContents.value.splice(contentIndex, 1)
+    
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '删除成功',
+      message: '',
+      details: '讲解词已删除'
+    }
+  }
+}
+
+// 确认编辑讲解词
+const confirmEditIntroduceContent = () => {
+  if (!editIntroduceContentForm.value.pointId) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请选择点位'
+    }
+    return
+  }
+  
+  if (!editIntroduceContentForm.value.content.trim()) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请输入讲解词内容'
+    }
+    return
+  }
+  
+  if (editingIntroduceContent.value) {
+    const item = editingIntroduceContent.value
+    const contentIndex = introduceContents.value.findIndex(c => c.id === item.id)
+    
+    if (contentIndex > -1) {
+      // 获取点位名称
+      const selectedPoint = pointNames.value.find(p => p.id === editIntroduceContentForm.value.pointId)
+      
+      // 更新讲解词
+      introduceContents.value[contentIndex] = {
+        ...introduceContents.value[contentIndex],
+        pointId: editIntroduceContentForm.value.pointId,
+        pointName: selectedPoint ? selectedPoint.name : '',
+        content: editIntroduceContentForm.value.content.trim()
+      }
+      
+      // 关闭弹窗并清空表单
+      showEditIntroduceContentDialog.value = false
+      editingIntroduceContent.value = null
+      editIntroduceContentForm.value = { pointId: '', content: '' }
+      
+      resultDialog.value = {
+        show: true,
+        type: 'success',
+        title: '编辑成功',
+        message: '',
+        details: '讲解词已更新'
+      }
+    }
+  }
+}
+
 // 页面加载时获取用户列表
 onMounted(async () => {
   try {
-    await Promise.all([
-      fetchUsers({ skip: 0, limit: 100 }),
-      fetchRoles({ skip: 0, limit: 100 })
-    ])
-    
-
+    await fetchUsers({ skip: 0, limit: 100 })
   } catch (err: any) {
     console.error('获取数据失败:', err)
     
@@ -981,5 +1413,346 @@ onMounted(async () => {
 .mission-td .role-tag {
   font-size: 11px;
   padding: 1px 6px;
+}
+
+/* 讲解词管理样式 */
+.introduce-content {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.introduce-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.placeholder-icon {
+  font-size: 48px;
+  opacity: 0.6;
+}
+
+.placeholder-text {
+  color: #67d5fd;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.placeholder-desc {
+  color: #b6b6b6;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.user-textarea {
+  background: transparent;
+  color: #fff;
+  border: 1px solid #164159;
+  border-radius: 4px;
+  padding: 12px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  min-width: 240px;
+  max-width: 240px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
+  box-shadow: 0 0 0 1px #164159 inset;
+  transition: border 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.user-textarea:focus {
+  outline: none;
+  border: 1.5px solid #16bbf2;
+  box-shadow: 0 0 0 2px rgba(22,187,242,0.15);
+}
+
+.user-textarea::placeholder {
+  color: #666;
+}
+
+/* 讲解词管理按钮样式 */
+.introduce-btn {
+  min-width: 120px;
+  max-width: none;
+  white-space: nowrap;
+}
+
+/* 点位名称管理弹窗样式 */
+.point-manage-dialog {
+  min-width: 500px;
+  max-width: 600px;
+}
+
+.point-add-section {
+  margin-bottom: 24px;
+}
+
+.point-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.point-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: none;
+}
+
+.point-list-section {
+  width: 100%;
+}
+
+.point-list-header {
+  color: #67d5fd;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.point-list {
+  background: rgba(22, 65, 89, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.point-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.point-item:last-child {
+  margin-bottom: 0;
+}
+
+.point-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.point-name {
+  color: #fff;
+  font-size: 14px;
+  flex: 1;
+}
+
+.point-delete-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.point-delete-btn:hover {
+  background: rgba(255, 107, 107, 0.2);
+}
+
+.point-delete-btn img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+/* 自定义滚动条样式 */
+.point-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.point-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.point-list::-webkit-scrollbar-thumb {
+  background: rgba(103, 213, 253, 0.6);
+  border-radius: 3px;
+}
+
+.point-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(103, 213, 253, 0.8);
+}
+
+/* 讲解词列表样式 */
+.introduce-list-content {
+  padding: 20px;
+}
+
+.introduce-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(22, 65, 89, 0.5);
+}
+
+.introduce-list-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.target-name {
+  color: #67d5fd;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.target-desc {
+  color: #b6b6b6;
+  font-size: 16px;
+}
+
+.introduce-list-count {
+  color: #b6b6b6;
+  font-size: 14px;
+}
+
+.introduce-list-table {
+  background: rgba(22, 65, 89, 0.3);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.introduce-table-header {
+  display: grid;
+  grid-template-columns: 60px 120px 1fr 140px 100px;
+  background: rgba(22, 65, 89, 0.6);
+  padding: 12px 16px;
+  gap: 16px;
+}
+
+.introduce-th {
+  color: #67d5fd;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.introduce-th-actions {
+  text-align: center;
+}
+
+.introduce-table-body {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.introduce-tr {
+  display: grid;
+  grid-template-columns: 60px 120px 1fr 140px 100px;
+  padding: 12px 16px;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background 0.2s;
+}
+
+.introduce-tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.introduce-tr:last-child {
+  border-bottom: none;
+}
+
+.introduce-td {
+  color: #fff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.introduce-td-index {
+  justify-content: center;
+  color: #b6b6b6;
+}
+
+.introduce-td-content {
+  overflow: hidden;
+}
+
+.content-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.content-preview:hover {
+  color: #67d5fd;
+}
+
+.introduce-td-time {
+  color: #b6b6b6;
+  font-size: 12px;
+}
+
+.introduce-td-actions {
+  justify-content: center;
+  gap: 8px;
+}
+
+.introduce-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 48px;
+  opacity: 0.6;
+  margin-bottom: 16px;
+}
+
+.empty-text {
+  color: #67d5fd;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.empty-desc {
+  color: #b6b6b6;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* 讲解词列表滚动条样式 */
+.introduce-table-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.introduce-table-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.introduce-table-body::-webkit-scrollbar-thumb {
+  background: rgba(103, 213, 253, 0.6);
+  border-radius: 3px;
+}
+
+.introduce-table-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(103, 213, 253, 0.8);
 }
 </style>

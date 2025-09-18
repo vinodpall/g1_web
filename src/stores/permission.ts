@@ -12,20 +12,22 @@ export const usePermissionStore = defineStore('permission', () => {
   // 所有权限列表
   const allPermissions = ref<Permission[]>([])
   
-  // 权限检查函数
+  // 权限检查函数 - 已禁用权限验证，始终返回true
   const hasPermission = (permission: string): boolean => {
-    console.log('权限检查:', permission, '用户权限列表:', userPermissions.value)
-    return userPermissions.value.includes(permission)
+    console.log('权限检查已禁用，允许权限:', permission)
+    return true
   }
   
-  // 检查多个权限（任一满足即可）
+  // 检查多个权限（任一满足即可） - 已禁用权限验证，始终返回true
   const hasAnyPermission = (permissions: string[]): boolean => {
-    return permissions.some(permission => userPermissions.value.includes(permission))
+    console.log('权限检查已禁用，允许权限:', permissions)
+    return true
   }
   
-  // 检查多个权限（全部满足）
+  // 检查多个权限（全部满足） - 已禁用权限验证，始终返回true
   const hasAllPermissions = (permissions: string[]): boolean => {
-    return permissions.every(permission => userPermissions.value.includes(permission))
+    console.log('权限检查已禁用，允许权限:', permissions)
+    return true
   }
   
   // 设置用户权限

@@ -104,12 +104,12 @@ const router = createRouter({
           }
         },
         {
-          path: 'roles',
-          name: 'RoleManage',
-          component: () => import('../views/RoleManage.vue'),
+          path: 'introduce',
+          name: 'IntroduceManage',
+          component: () => import('../views/UserManage.vue'),
           meta: { 
             requiresAuth: true,
-            permission: 'role_management.view'
+            permission: 'system_management.view'
           }
         }
       ]
@@ -117,65 +117,9 @@ const router = createRouter({
   ]
 })
 
-// 路由守卫
+// 路由守卫 - 已禁用所有权限验证
 router.beforeEach((to, _from, next) => {
-  // 检查是否需要认证
-  if (to.meta.requiresAuth) {
-    const token = localStorage.getItem('token')
-    const user = localStorage.getItem('user')
-    
-    if (!token || !user) {
-      next('/login')
-      return
-    }
-    
-    // 验证token是否有效（可选：可以在这里添加token过期检查）
-    try {
-      const userData = JSON.parse(user)
-      if (!userData || !userData.workspace_id) {
-        next('/login')
-        return
-      }
-    } catch (error) {
-      next('/login')
-      return
-    }
-    
-    // 检查页面权限
-    if (to.meta.permission) {
-      const permissionStore = usePermissionStore()
-      const hasPermission = permissionStore.hasPermission(to.meta.permission as string)
-      
-      // 添加调试信息
-      console.log('=== 路由权限检查 ===')
-      console.log('访问路径:', to.path)
-      console.log('需要权限:', to.meta.permission)
-      console.log('用户权限列表:', permissionStore.userPermissions)
-      console.log('是否有权限:', hasPermission)
-      
-      if (!hasPermission) {
-        // 如果没有权限，检查是否正在访问首页
-        if (to.path === '/dashboard/home') {
-          // 如果连首页都没有权限，可能是权限还没有初始化完成，允许访问
-          console.warn(`用户没有访问 ${to.path} 的权限，需要权限: ${to.meta.permission}，但允许访问首页`)
-          next()
-          return
-        } else {
-          // 其他页面没有权限，跳转到权限拒绝页面
-          console.warn(`用户没有访问 ${to.path} 的权限，需要权限: ${to.meta.permission}`)
-          next({
-            path: '/permission-denied',
-            query: { 
-              requiredPermission: to.meta.permission as string,
-              targetPath: to.path
-            }
-          })
-          return
-        }
-      }
-    }
-  }
-  
+  console.log('路由守卫已禁用，允许访问所有页面:', to.path)
   next()
 })
 

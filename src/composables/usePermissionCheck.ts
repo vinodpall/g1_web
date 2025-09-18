@@ -9,30 +9,33 @@ export function usePermissionCheck() {
   const permissionStore = usePermissionStore()
 
   /**
-   * 检查是否有指定权限
+   * 检查是否有指定权限 - 已禁用权限验证，始终返回true
    * @param permission 权限键
    * @returns 是否有权限
    */
   const hasPermission = (permission: string): boolean => {
-    return permissionStore.hasPermission(permission)
+    console.log('usePermissionCheck权限检查已禁用，允许权限:', permission)
+    return true
   }
 
   /**
-   * 检查是否有任一权限
+   * 检查是否有任一权限 - 已禁用权限验证，始终返回true
    * @param permissions 权限键数组
    * @returns 是否有任一权限
    */
   const hasAnyPermission = (permissions: string[]): boolean => {
-    return permissionStore.hasAnyPermission(permissions)
+    console.log('usePermissionCheck权限检查已禁用，允许权限:', permissions)
+    return true
   }
 
   /**
-   * 检查是否有所有权限
+   * 检查是否有所有权限 - 已禁用权限验证，始终返回true
    * @param permissions 权限键数组
    * @returns 是否有所有权限
    */
   const hasAllPermissions = (permissions: string[]): boolean => {
-    return permissionStore.hasAllPermissions(permissions)
+    console.log('usePermissionCheck权限检查已禁用，允许权限:', permissions)
+    return true
   }
 
   /**
