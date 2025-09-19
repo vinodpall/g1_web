@@ -3,11 +3,19 @@ import { authApi } from '../api/services'
 import { apiClient } from '../api/config'
 import { refreshEnvironmentConfig } from '../config/environment'
 import { useRobotStore } from '../stores/robot'
+import { useGuideStore } from '../stores/guide'
+import { useHallStore } from '../stores/hall'
+import { useZoneStore } from '../stores/zone'
+import { usePointStore } from '../stores/point'
 import type { User } from '../types'
 
 export function useAuth() {
   const user = ref<User | null>(null)
   const robotStore = useRobotStore()
+  const guideStore = useGuideStore()
+  const hallStore = useHallStore()
+  const zoneStore = useZoneStore()
+  const pointStore = usePointStore()
   const token = ref<string | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -71,6 +79,36 @@ export function useAuth() {
         console.warn('获取机器人列表失败:', robotErr)
       }
       
+      // 登录成功后按顺序获取讲解相关数据
+      try {
+        // 先获取点位名称和讲解对象（这两个可以并行）
+        await Promise.all([
+          guideStore.fetchPointNames(),
+          guideStore.fetchAudiences()
+        ])
+        console.log('点位名称和讲解对象数据已在登录时加载')
+        
+        // 然后获取讲解词（依赖前面的数据）
+        await guideStore.fetchScripts()
+        console.log('讲解词数据已在登录时加载')
+      } catch (guideErr) {
+        // 讲解相关数据获取失败不影响登录流程
+        console.warn('获取讲解相关数据失败:', guideErr)
+      }
+      
+      // 登录成功后获取展厅、展区和任务点列表
+      try {
+        await Promise.all([
+          hallStore.fetchHalls(),
+          zoneStore.fetchZones(),
+          pointStore.fetchPoints()
+        ])
+        console.log('展厅、展区和任务点数据已在登录时加载')
+      } catch (hallZonePointErr) {
+        // 展厅、展区和任务点数据获取失败不影响登录流程
+        console.warn('获取展厅、展区或任务点数据失败:', hallZonePointErr)
+      }
+      
       return { user: userData, token: access_token }
     } catch (err: any) {
       error.value = err.message || '登录失败'
@@ -89,6 +127,14 @@ export function useAuth() {
       
       // 清除机器人数据
       robotStore.clearRobots()
+      
+      // 清除点位名称数据
+      guideStore.clearCache()
+      
+      // 清除展厅、展区和任务点数据
+      hallStore.clearCache()
+      zoneStore.clearCache()
+      pointStore.clearCache()
       
       // 清除localStorage
       localStorage.removeItem('user')

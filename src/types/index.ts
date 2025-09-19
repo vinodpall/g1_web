@@ -234,3 +234,54 @@ export interface Permission {
   created_time: string
   updated_time: string
 }
+
+// 讲解词管理相关类型
+export interface GuidePointName {
+  id: number
+  name: string
+  code: string
+  is_active: boolean
+}
+
+export interface GuideAudience {
+  id: number
+  name: string
+  description: string | null
+  tts_config: any | null
+}
+
+export interface GuideScript {
+  id: number
+  audience_id: number
+  point_name_id: number
+  content: string
+}
+
+export interface Hall {
+  id: number
+  nav_name: string
+  nav_source: string | null
+  alias: string
+  is_enabled: boolean
+}
+
+export interface Zone {
+  id: number
+  hall_id: number
+  name: string
+  seq: number
+  is_enabled: boolean
+}
+
+export interface Point {
+  id: number
+  zone_id: number
+  type: 'explain' | 'action'  // explain为讲解点，action为辅助点
+  point_name_id: number
+  is_enabled: boolean
+  pose_x: number
+  pose_y: number
+  pose_theta: number
+  action_code: string | null
+  action_params: string | null
+}

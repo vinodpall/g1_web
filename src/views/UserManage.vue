@@ -109,7 +109,7 @@
                 
                 <div class="introduce-table-body">
                   <div 
-                    v-for="(item, index) in getIntroduceContentsByTarget()" 
+                    v-for="(item, index) in introduceContents" 
                     :key="item.id"
                     class="introduce-tr"
                   >
@@ -133,7 +133,7 @@
                 </div>
                 
                 <!-- 空状态 -->
-                <div v-if="getIntroduceContentsByTarget().length === 0" class="introduce-empty">
+                <div v-if="introduceContents.length === 0" class="introduce-empty">
                   <div class="empty-icon">📝</div>
                   <div class="empty-text">暂无讲解词</div>
                   <div class="empty-desc">点击上方"添加讲解词"按钮添加第一条讲解词</div>
@@ -426,6 +426,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserManagementStore } from '../stores/userManagement'
 import { useUserStore } from '../stores/user'
 import { usePermissionStore } from '../stores/permission'
+import { useGuideStore } from '../stores/guide'
 import PermissionDenied from '../components/PermissionDenied.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import ResultDialog from '../components/ResultDialog.vue'
@@ -438,6 +439,7 @@ const router = useRouter()
 const route = useRoute()
 const userManagementStore = useUserManagementStore()
 const userStore = useUserStore()
+const guideStore = useGuideStore()
 
 // 使用用户管理store中的数据
 const users = computed(() => userManagementStore.users || [])
@@ -518,12 +520,15 @@ const showPermissionDenied = ref(false)
 const requiredPermission = ref('')
 
 // 讲解词管理相关状态
-const selectedIntroduceTarget = ref('1') // 默认选择第一个
-const introduceTargets = ref([
-  { id: '1', name: '展厅A' },
-  { id: '2', name: '展厅B' },
-  { id: '3', name: '展厅C' }
-])
+const selectedIntroduceTarget = ref('') // 默认选择第一个
+
+// 使用computed从guideStore获取讲解对象
+const introduceTargets = computed(() => 
+  guideStore.audiences.map(audience => ({
+    id: audience.id.toString(),
+    name: audience.name
+  }))
+)
 const showAddIntroduceTargetDialog = ref(false)
 const showDeleteIntroduceTargetDialog = ref(false)
 const showAddIntroduceContentDialog = ref(false)
@@ -534,41 +539,37 @@ const newIntroduceContent = ref('')
 const showPointManageDialog = ref(false)
 const newPointName = ref('')
 const selectedPointForContent = ref('')
-const pointNames = ref([
-  { id: '1', name: '入口大厅' },
-  { id: '2', name: '展览区A' },
-  { id: '3', name: '展览区B' },
-  { id: '4', name: '休息区' },
-  { id: '5', name: '出口' }
-])
 
-// 讲解词内容数据
-const introduceContents = ref([
-  {
-    id: '1',
-    targetId: '1', // 讲解对象ID
-    pointId: '1',
-    pointName: '入口大厅',
-    content: '欢迎来到我们的展览馆，这里是入口大厅，请您跟随我继续参观。',
-    createTime: '2024-01-15 10:30:00'
-  },
-  {
-    id: '2',
-    targetId: '1',
-    pointId: '2',
-    pointName: '展览区A',
-    content: '这里是展览区A，展示了我们最新的科技产品和创新成果。',
-    createTime: '2024-01-15 11:00:00'
-  },
-  {
-    id: '3',
-    targetId: '2',
-    pointId: '3',
-    pointName: '展览区B',
-    content: '展览区B主要展示历史文物和传统工艺品，具有深厚的文化底蕴。',
-    createTime: '2024-01-15 11:30:00'
-  }
-])
+// 使用computed从guideStore获取点位名称
+const pointNames = computed(() => 
+  guideStore.pointNames.map(point => ({
+    id: point.id.toString(),
+    name: point.name,
+    code: point.code,
+    is_active: point.is_active
+  }))
+)
+
+// 讲解词内容数据 - 从API获取
+// 使用computed根据选中的讲解对象获取对应的讲解词列表
+const introduceContents = computed(() => {
+  if (!selectedIntroduceTarget.value) return []
+  
+  const audienceId = parseInt(selectedIntroduceTarget.value)
+  return guideStore.getScriptsByAudienceId(audienceId).map(script => {
+    // 获取点位名称
+    const pointName = guideStore.getPointNameById(script.point_name_id)
+    
+    return {
+      id: script.id.toString(),
+      targetId: script.audience_id.toString(),
+      pointId: script.point_name_id.toString(),
+      pointName: pointName ? pointName.name : '未知点位',
+      content: script.content,
+      createTime: '' // 创建时间置空
+    }
+  })
+})
 
 // 编辑讲解词相关状态
 const showEditIntroduceContentDialog = ref(false)
@@ -956,7 +957,25 @@ const handleDeleteIntroduceTarget = () => {
   showDeleteIntroduceTargetDialog.value = true
 }
 
-const handleAddIntroduceContent = () => {
+const handleAddIntroduceContent = async () => {
+  // 确保点位名称数据已加载
+  if (!guideStore.isPointNamesLoaded) {
+    try {
+      await guideStore.fetchPointNames()
+      console.log('添加讲解词时补充加载点位名称数据')
+    } catch (err) {
+      console.warn('获取点位名称失败:', err)
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '获取数据失败',
+        message: '',
+        details: '无法获取点位名称列表，请稍后重试'
+      }
+      return
+    }
+  }
+  
   // 默认选择第一个点位
   if (pointNames.value.length > 0) {
     selectedPointForContent.value = pointNames.value[0].id
@@ -971,7 +990,7 @@ const getSelectedTargetName = () => {
 }
 
 // 确认添加讲解对象
-const confirmAddIntroduceTarget = () => {
+const confirmAddIntroduceTarget = async () => {
   if (!newIntroduceTargetName.value.trim()) {
     resultDialog.value = {
       show: true,
@@ -983,45 +1002,63 @@ const confirmAddIntroduceTarget = () => {
     return
   }
   
-  // 生成新的ID
-  const newId = (Math.max(...introduceTargets.value.map(t => parseInt(t.id))) + 1).toString()
+  // 检查是否已存在同名讲解对象
+  const exists = introduceTargets.value.some(target => target.name === newIntroduceTargetName.value.trim())
+  if (exists) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '该讲解对象名称已存在'
+    }
+    return
+  }
   
-  // 添加到列表
-  introduceTargets.value.push({
-    id: newId,
-    name: newIntroduceTargetName.value.trim()
-  })
-  
-  // 清空输入并关闭弹窗
-  newIntroduceTargetName.value = ''
-  showAddIntroduceTargetDialog.value = false
-  
-  resultDialog.value = {
-    show: true,
-    type: 'success',
-    title: '添加成功',
-    message: '',
-    details: '讲解对象已添加'
+  try {
+    // 调用API创建讲解对象
+    const newAudience = await guideStore.createAudience(newIntroduceTargetName.value.trim())
+    
+    // 清空输入并关闭弹窗
+    newIntroduceTargetName.value = ''
+    showAddIntroduceTargetDialog.value = false
+    
+    // 自动选择新创建的讲解对象
+    selectedIntroduceTarget.value = newAudience.id.toString()
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '添加成功',
+      message: '',
+      details: '讲解对象已成功添加'
+    }
+  } catch (error) {
+    console.error('添加讲解对象失败:', error)
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '添加失败',
+      message: '',
+      details: error instanceof Error ? error.message : '添加讲解对象失败，请稍后重试'
+    }
   }
 }
 
 // 确认删除讲解对象
 const confirmDeleteIntroduceTarget = () => {
-  const targetIndex = introduceTargets.value.findIndex(t => t.id === selectedIntroduceTarget.value)
-  if (targetIndex > -1) {
-    introduceTargets.value.splice(targetIndex, 1)
-    selectedIntroduceTarget.value = ''
-    
-    showDeleteIntroduceTargetDialog.value = false
-    
-    resultDialog.value = {
-      show: true,
-      type: 'success',
-      title: '删除成功',
-      message: '',
-      details: '讲解对象已删除'
-    }
+  // TODO: 这里应该调用API来删除讲解对象
+  // 目前只显示提示信息
+  resultDialog.value = {
+    show: true,
+    type: 'info',
+    title: '功能提示',
+    message: '',
+    details: '删除讲解对象功能需要对接相应的API接口'
   }
+  
+  showDeleteIntroduceTargetDialog.value = false
 }
 
 // 获取选中的点位名称
@@ -1030,14 +1067,10 @@ const getSelectedPointName = () => {
   return point ? point.name : ''
 }
 
-// 获取当前选中讲解对象的讲解词列表
-const getIntroduceContentsByTarget = () => {
-  if (!selectedIntroduceTarget.value) return []
-  return introduceContents.value.filter(item => item.targetId === selectedIntroduceTarget.value)
-}
+// 获取当前选中讲解对象的讲解词列表 (现在直接使用 introduceContents computed)
 
 // 确认添加讲解词
-const confirmAddIntroduceContent = () => {
+const confirmAddIntroduceContent = async () => {
   if (!newIntroduceContent.value.trim()) {
     resultDialog.value = {
       show: true,
@@ -1049,42 +1082,84 @@ const confirmAddIntroduceContent = () => {
     return
   }
   
-  // 生成新的ID
-  const newId = (Math.max(0, ...introduceContents.value.map(item => parseInt(item.id))) + 1).toString()
-  
-  // 添加到讲解词列表
-  const newIntroduceItem = {
-    id: newId,
-    targetId: selectedIntroduceTarget.value,
-    pointId: selectedPointForContent.value,
-    pointName: getSelectedPointName(),
-    content: newIntroduceContent.value.trim(),
-    createTime: new Date().toLocaleString('zh-CN')
+  if (!selectedPointForContent.value) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请选择点位名称'
+    }
+    return
   }
   
-  introduceContents.value.push(newIntroduceItem)
+  if (!selectedIntroduceTarget.value) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请先选择讲解对象'
+    }
+    return
+  }
   
-  // 清空输入并关闭弹窗
-  selectedPointForContent.value = ''
-  newIntroduceContent.value = ''
-  showAddIntroduceContentDialog.value = false
-  
-  resultDialog.value = {
-    show: true,
-    type: 'success',
-    title: '添加成功',
-    message: '',
-    details: '讲解词已添加'
+  try {
+    // 调用API创建讲解词
+    const audienceId = parseInt(selectedIntroduceTarget.value)
+    const pointNameId = parseInt(selectedPointForContent.value)
+    const content = newIntroduceContent.value.trim()
+    
+    await guideStore.createScript(audienceId, pointNameId, content)
+    
+    // 清空输入并关闭弹窗
+    selectedPointForContent.value = ''
+    newIntroduceContent.value = ''
+    showAddIntroduceContentDialog.value = false
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '添加成功',
+      message: '',
+      details: '讲解词已成功添加'
+    }
+  } catch (error) {
+    console.error('添加讲解词失败:', error)
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '添加失败',
+      message: '',
+      details: error instanceof Error ? error.message : '添加讲解词失败，请稍后重试'
+    }
   }
 }
 
 // 点位名称管理方法
-const handlePointManage = () => {
+const handlePointManage = async () => {
   showPointManageDialog.value = true
+  
+  // 如果数据还未加载（比如登录时加载失败），尝试重新加载
+  if (!guideStore.isLoaded) {
+    try {
+      await guideStore.fetchPointNames()
+    } catch (error) {
+      console.error('获取点位名称失败:', error)
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '获取数据失败',
+        message: '',
+        details: '无法获取点位名称列表，请稍后重试'
+      }
+    }
+  }
 }
 
 // 添加点位名称
-const addPointName = () => {
+const addPointName = async () => {
   if (!newPointName.value.trim()) {
     resultDialog.value = {
       show: true,
@@ -1109,40 +1184,44 @@ const addPointName = () => {
     return
   }
   
-  // 生成新的ID
-  const newId = (Math.max(...pointNames.value.map(p => parseInt(p.id))) + 1).toString()
-  
-  // 添加到列表
-  pointNames.value.push({
-    id: newId,
-    name: newPointName.value.trim()
-  })
-  
-  // 清空输入
-  newPointName.value = ''
-  
-  resultDialog.value = {
-    show: true,
-    type: 'success',
-    title: '添加成功',
-    message: '',
-    details: '点位名称已添加'
+  try {
+    // 调用API创建点位名称
+    await guideStore.createPointName(newPointName.value.trim())
+    
+    // 清空输入
+    newPointName.value = ''
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '添加成功',
+      message: '',
+      details: '点位名称已成功添加'
+    }
+  } catch (error) {
+    console.error('添加点位名称失败:', error)
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '添加失败',
+      message: '',
+      details: error instanceof Error ? error.message : '添加点位名称失败，请稍后重试'
+    }
   }
 }
 
 // 删除点位名称
+// 注意：这个方法目前只显示提示，后续需要对接相应的API接口
 const deletePointName = (pointId: string) => {
-  const pointIndex = pointNames.value.findIndex(p => p.id === pointId)
-  if (pointIndex > -1) {
-    pointNames.value.splice(pointIndex, 1)
-    
-    resultDialog.value = {
-      show: true,
-      type: 'success',
-      title: '删除成功',
-      message: '',
-      details: '点位名称已删除'
-    }
+  // TODO: 这里应该调用API来删除点位名称
+  // 目前只显示提示信息
+  resultDialog.value = {
+    show: true,
+    type: 'info',
+    title: '功能提示',
+    message: '',
+    details: '删除点位名称功能需要对接相应的API接口'
   }
 }
 
@@ -1157,17 +1236,29 @@ const editIntroduceContent = (item: any) => {
 }
 
 // 删除讲解词
-const deleteIntroduceContent = (contentId: string) => {
-  const contentIndex = introduceContents.value.findIndex(item => item.id === contentId)
-  if (contentIndex > -1) {
-    introduceContents.value.splice(contentIndex, 1)
+const deleteIntroduceContent = async (contentId: string) => {
+  try {
+    const scriptId = parseInt(contentId)
     
+    // 调用API删除讲解词
+    await guideStore.deleteScript(scriptId)
+    
+    // 显示成功提示
     resultDialog.value = {
       show: true,
       type: 'success',
       title: '删除成功',
       message: '',
-      details: '讲解词已删除'
+      details: '讲解词已成功删除'
+    }
+  } catch (error) {
+    console.error('删除讲解词失败:', error)
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '删除失败',
+      message: '',
+      details: error instanceof Error ? error.message : '删除讲解词失败，请稍后重试'
     }
   }
 }
@@ -1179,18 +1270,7 @@ const showContentDetail = (content: string) => {
 }
 
 // 确认编辑讲解词
-const confirmEditIntroduceContent = () => {
-  if (!editIntroduceContentForm.value.pointId) {
-    resultDialog.value = {
-      show: true,
-      type: 'error',
-      title: '操作失败',
-      message: '',
-      details: '请选择点位'
-    }
-    return
-  }
-  
+const confirmEditIntroduceContent = async () => {
   if (!editIntroduceContentForm.value.content.trim()) {
     resultDialog.value = {
       show: true,
@@ -1202,34 +1282,46 @@ const confirmEditIntroduceContent = () => {
     return
   }
   
-  if (editingIntroduceContent.value) {
+  if (!editingIntroduceContent.value) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '未找到要编辑的讲解词'
+    }
+    return
+  }
+  
+  try {
     const item = editingIntroduceContent.value as any
-    const contentIndex = introduceContents.value.findIndex(c => c.id === item.id)
+    const scriptId = parseInt(item.id)
+    const content = editIntroduceContentForm.value.content.trim()
     
-    if (contentIndex > -1) {
-      // 获取点位名称
-      const selectedPoint = pointNames.value.find(p => p.id === editIntroduceContentForm.value.pointId)
-      
-      // 更新讲解词
-      introduceContents.value[contentIndex] = {
-        ...introduceContents.value[contentIndex],
-        pointId: editIntroduceContentForm.value.pointId,
-        pointName: selectedPoint ? selectedPoint.name : '',
-        content: editIntroduceContentForm.value.content.trim()
-      }
-      
-      // 关闭弹窗并清空表单
-      showEditIntroduceContentDialog.value = false
-      editingIntroduceContent.value = null
-      editIntroduceContentForm.value = { pointId: '', content: '' }
-      
-      resultDialog.value = {
-        show: true,
-        type: 'success',
-        title: '编辑成功',
-        message: '',
-        details: '讲解词已更新'
-      }
+    // 调用API更新讲解词
+    await guideStore.updateScript(scriptId, content)
+    
+    // 关闭弹窗并清空表单
+    showEditIntroduceContentDialog.value = false
+    editingIntroduceContent.value = null
+    editIntroduceContentForm.value = { pointId: '', content: '' }
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '编辑成功',
+      message: '',
+      details: '讲解词已成功更新'
+    }
+  } catch (error) {
+    console.error('编辑讲解词失败:', error)
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '编辑失败',
+      message: '',
+      details: error instanceof Error ? error.message : '编辑讲解词失败，请稍后重试'
     }
   }
 }
@@ -1239,6 +1331,29 @@ onMounted(async () => {
   console.log('UserManage组件加载')
   try {
     await loadUsers()
+    
+    // 确保讲解相关的所有数据都已加载完成
+    try {
+      // 确保点位名称数据已加载（讲解词显示需要）
+      if (!guideStore.isPointNamesLoaded) {
+        await guideStore.fetchPointNames()
+        console.log('点位名称数据补充加载完成')
+      }
+      
+      // 确保讲解对象数据已加载
+      if (!guideStore.isAudiencesLoaded) {
+        await guideStore.fetchAudiences()
+        console.log('讲解对象数据补充加载完成')
+      }
+      
+      // 确保讲解词数据已加载
+      if (!guideStore.isScriptsLoaded) {
+        await guideStore.fetchScripts()
+        console.log('讲解词数据补充加载完成')
+      }
+    } catch (err) {
+      console.warn('补充加载讲解数据失败:', err)
+    }
     
     // 确保讲解对象有值时默认选择第一个
     if (introduceTargets.value.length > 0 && !selectedIntroduceTarget.value) {

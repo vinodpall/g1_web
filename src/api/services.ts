@@ -300,4 +300,580 @@ export const userApi = {
   }
 }
 
+// 讲解词管理相关接口
+export const guideApi = {
+  // 获取点位名称列表
+  getPointNames: (token: string) => {
+    const url = `${API_BASE_URL}/guide/point-names`
+    
+    console.log('guideApi.getPointNames 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('点位名称API响应状态:', response.status)
+      console.log('点位名称API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('点位名称API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('点位名称API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('点位名称API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 创建点位名称
+  createPointName: (token: string, name: string) => {
+    const url = `${API_BASE_URL}/guide/point-names`
+    const requestData = { name }
+    
+    console.log('guideApi.createPointName 被调用')
+    console.log('请求URL:', url)
+    console.log('请求参数:', requestData)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    }).then(response => {
+      console.log('创建点位名称API响应状态:', response.status)
+      console.log('创建点位名称API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('创建点位名称API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('创建点位名称API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('创建点位名称API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 获取讲解对象列表
+  getAudiences: (token: string) => {
+    const url = `${API_BASE_URL}/guide/audiences`
+    
+    console.log('guideApi.getAudiences 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('讲解对象API响应状态:', response.status)
+      console.log('讲解对象API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('讲解对象API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('讲解对象API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('讲解对象API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 创建讲解对象
+  createAudience: (token: string, name: string) => {
+    const url = `${API_BASE_URL}/guide/audiences`
+    const requestData = { name }
+    
+    console.log('guideApi.createAudience 被调用')
+    console.log('请求URL:', url)
+    console.log('请求参数:', requestData)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    }).then(response => {
+      console.log('创建讲解对象API响应状态:', response.status)
+      console.log('创建讲解对象API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('创建讲解对象API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('创建讲解对象API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('创建讲解对象API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 获取讲解词列表
+  getScripts: (token: string) => {
+    const url = `${API_BASE_URL}/guide/scripts`
+    
+    console.log('guideApi.getScripts 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('讲解词API响应状态:', response.status)
+      console.log('讲解词API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('讲解词API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('讲解词API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('讲解词API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 创建讲解词
+  createScript: (token: string, scriptData: {
+    audience_id: number,
+    point_name_id: number,
+    content: string
+  }) => {
+    const url = `${API_BASE_URL}/guide/scripts`
+    
+    console.log('guideApi.createScript 被调用')
+    console.log('请求URL:', url)
+    console.log('请求参数:', scriptData)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(scriptData)
+    }).then(response => {
+      console.log('创建讲解词API响应状态:', response.status)
+      console.log('创建讲解词API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('创建讲解词API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('创建讲解词API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('创建讲解词API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 更新讲解词
+  updateScript: (token: string, scriptId: number, content: string) => {
+    const url = `${API_BASE_URL}/guide/scripts/${scriptId}`
+    const requestData = { content }
+    
+    console.log('guideApi.updateScript 被调用')
+    console.log('请求URL:', url)
+    console.log('请求参数:', requestData)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    }).then(response => {
+      console.log('更新讲解词API响应状态:', response.status)
+      console.log('更新讲解词API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('更新讲解词API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('更新讲解词API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('更新讲解词API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 删除讲解词
+  deleteScript: (token: string, scriptId: number) => {
+    const url = `${API_BASE_URL}/guide/scripts/${scriptId}`
+    
+    console.log('guideApi.deleteScript 被调用')
+    console.log('请求URL:', url)
+    console.log('删除讲解词ID:', scriptId)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('删除讲解词API响应状态:', response.status)
+      console.log('删除讲解词API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('删除讲解词API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      console.log('讲解词删除成功')
+      return response.ok
+    }).catch(error => {
+      console.error('删除讲解词API请求失败:', error)
+      throw error
+    })
+  }
+}
+
+// 展厅管理相关接口
+export const hallApi = {
+  // 获取展厅列表
+  getHalls: (token: string) => {
+    const url = `${API_BASE_URL}/halls`
+    
+    console.log('hallApi.getHalls 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('展厅API响应状态:', response.status)
+      console.log('展厅API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('展厅API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('展厅API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('展厅API请求失败:', error)
+      throw error
+    })
+  }
+}
+
+// 展区管理相关接口
+export const zoneApi = {
+  // 获取展区列表
+  getZones: (token: string) => {
+    const url = `${API_BASE_URL}/zones`
+    
+    console.log('zoneApi.getZones 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('展区API响应状态:', response.status)
+      console.log('展区API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('展区API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('展区API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('展区API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 创建新展区
+  createZone: (token: string, zoneData: { hall_id: number, name: string, seq: number, is_enabled: boolean }) => {
+    const url = `${API_BASE_URL}/zones`
+    
+    console.log('zoneApi.createZone 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('展区数据:', zoneData)
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(zoneData)
+    }).then(response => {
+      console.log('创建展区API响应状态:', response.status)
+      console.log('创建展区API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('创建展区API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('创建展区API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('创建展区API请求失败:', error)
+      throw error
+    })
+  }
+}
+
+// 任务点管理相关接口
+export const pointApi = {
+  // 获取任务点列表
+  getPoints: (token: string, zoneId?: number) => {
+    let url = `${API_BASE_URL}/points`
+    if (zoneId) {
+      url += `?zone_id=${zoneId}`
+    }
+    
+    console.log('pointApi.getPoints 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('展区ID:', zoneId || '全部')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('任务点API响应状态:', response.status)
+      console.log('任务点API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('任务点API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('任务点API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('任务点API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 创建新任务点
+  createPoint: (token: string, pointData: {
+    zone_id: number,
+    type: string,
+    point_name_id: number,
+    is_enabled: boolean,
+    pose_x: number,
+    pose_y: number,
+    pose_theta: number,
+    action_code: string,
+    action_params: string,
+    robot_sn: string
+  }) => {
+    const url = `${API_BASE_URL}/points`
+    
+    console.log('pointApi.createPoint 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('任务点数据:', pointData)
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(pointData)
+    }).then(response => {
+      console.log('创建任务点API响应状态:', response.status)
+      console.log('创建任务点API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('创建任务点API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('创建任务点API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('创建任务点API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 更新任务点
+  updatePoint: (token: string, pointId: number, pointData: {
+    zone_id?: number,
+    type?: string,
+    point_name_id?: number,
+    is_enabled?: boolean,
+    pose_x?: number,
+    pose_y?: number,
+    pose_theta?: number,
+    action_code?: string,
+    action_params?: string,
+    robot_sn?: string
+  }) => {
+    const url = `${API_BASE_URL}/points/${pointId}`
+    
+    console.log('pointApi.updatePoint 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('任务点ID:', pointId)
+    console.log('更新数据:', pointData)
+    
+    return fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(pointData)
+    }).then(response => {
+      console.log('更新任务点API响应状态:', response.status)
+      console.log('更新任务点API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('更新任务点API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('更新任务点API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('更新任务点API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 删除任务点
+  deletePoint: (token: string, pointId: number) => {
+    const url = `${API_BASE_URL}/points/${pointId}`
+    
+    console.log('pointApi.deletePoint 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('任务点ID:', pointId)
+    
+    return fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('删除任务点API响应状态:', response.status)
+      console.log('删除任务点API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('删除任务点API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      
+      // DELETE请求可能返回空响应
+      if (response.status === 204) {
+        return { success: true }
+      }
+      
+      return response.json()
+    }).then(data => {
+      console.log('删除任务点API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('删除任务点API请求失败:', error)
+      throw error
+    })
+  }
+}
+
 // 其他API接口已移除，等待重新对接

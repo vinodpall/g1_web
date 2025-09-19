@@ -160,13 +160,13 @@
               <div class="mission-table-header">
                 <div class="mission-th">序号</div>
                 <div class="mission-th">任务点名称</div>
+                <div class="mission-th">讲解点位</div>
                 <div class="mission-th">坐标X</div>
                 <div class="mission-th">坐标Y</div>
                 <div class="mission-th">角度</div>
                 <div class="mission-th">点位类型</div>
                 <div class="mission-th">机器人动作</div>
                 <div class="mission-th">机器人朝向</div>
-                <div class="mission-th">讲解词</div>
                 <div class="mission-th">创建时间</div>
                 <div class="mission-th">操作</div>
               </div>
@@ -180,13 +180,13 @@
                 <div v-else class="mission-tr" v-for="(point, idx) in currentTaskPoints" :key="point.id">
                   <div class="mission-td">{{ idx + 1 }}</div>
                   <div class="mission-td">{{ point.name }}</div>
+                  <div class="mission-td">{{ getPointNameByPointId(point.id) }}</div>
                   <div class="mission-td">{{ point.x.toFixed(2) }}</div>
                   <div class="mission-td">{{ point.y.toFixed(2) }}</div>
                   <div class="mission-td">{{ point.angle }}°</div>
                   <div class="mission-td">{{ point.pointType }}</div>
                   <div class="mission-td">{{ point.robotAction }}</div>
                   <div class="mission-td">{{ point.robotDirection }}</div>
-                  <div class="mission-td">{{ point.commentary }}</div>
                   <div class="mission-td">{{ formatTime(point.createdTime) }}</div>
                   <div class="mission-td">
                     <div class="user-action-btns">
@@ -316,14 +316,11 @@
           <div class="add-user-form">
             <div class="add-user-form-row">
               <label>展区名称：</label>
-              <div class="area-name-input-group">
-                <div class="area-name-prefix">{{ currentHallPrefix }}_</div>
-                <input 
-                  v-model="addAreaForm.name" 
-                  class="area-name-input" 
-                  placeholder="请输入展区名称" 
-                />
-              </div>
+              <input 
+                v-model="addAreaForm.name" 
+                class="user-input" 
+                placeholder="请输入展区名称" 
+              />
             </div>
           </div>
         </div>
@@ -341,8 +338,23 @@
         <div class="custom-dialog-content">
           <div class="add-user-form">
             <div class="add-user-form-row">
-              <label>点位名称：</label>
-              <input v-model="addTaskPointForm.name" class="user-input" placeholder="请输入点位名称" />
+              <label>任务点名称：</label>
+              <input v-model="addTaskPointForm.name" class="user-input" placeholder="请输入任务点名称" />
+            </div>
+            <div class="add-user-form-row">
+              <label>讲解点位：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="addTaskPointForm.pointNameId" class="user-select">
+                  <option v-for="pointName in guideStore.pointNames" :key="pointName.id" :value="pointName.id">
+                    {{ pointName.name }}
+                  </option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                  </svg>
+                </span>
+              </div>
             </div>
             <div class="add-user-form-row">
               <label>X坐标：</label>
@@ -365,7 +377,7 @@
                 </select>
                 <span class="custom-select-arrow">
                   <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
                   </svg>
                 </span>
               </div>
@@ -383,7 +395,7 @@
                 </select>
                 <span class="custom-select-arrow">
                   <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
                   </svg>
                 </span>
               </div>
@@ -399,23 +411,6 @@
                   <input type="radio" v-model="addTaskPointForm.robotDirection" value="后退" />
                   <span class="radio-label">后退</span>
                 </label>
-              </div>
-            </div>
-            <div class="add-user-form-row">
-              <label>讲解词：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="addTaskPointForm.commentary" class="user-select">
-                  <option value="点位1">点位1</option>
-                  <option value="点位2">点位2</option>
-                  <option value="点位3">点位3</option>
-                  <option value="点位4">点位4</option>
-                  <option value="点位5">点位5</option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
-                  </svg>
-                </span>
               </div>
             </div>
           </div>
@@ -447,7 +442,7 @@
                 </select>
                 <span class="custom-select-arrow">
                   <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
                   </svg>
                 </span>
               </div>
@@ -496,7 +491,7 @@
                 </select>
                 <span class="custom-select-arrow">
                   <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
                   </svg>
                 </span>
               </div>
@@ -511,7 +506,7 @@
                 </select>
                 <span class="custom-select-arrow">
                   <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#fff"/>
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
                   </svg>
                 </span>
               </div>
@@ -530,6 +525,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useHallStore } from '../stores/hall'
+import { useZoneStore } from '../stores/zone'
+import { usePointStore } from '../stores/point'
+import { useGuideStore } from '../stores/guide'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
@@ -568,6 +567,10 @@ import iconTakePhoto from '@/assets/source_data/svg_data/task_line_svg/take_phot
 
 const router = useRouter()
 const route = useRoute()
+const hallStore = useHallStore()
+const zoneStore = useZoneStore()
+const pointStore = usePointStore()
+const guideStore = useGuideStore()
 
 // 当前选中的标签页
 const currentTab = ref('hall')
@@ -575,10 +578,15 @@ const currentTab = ref('hall')
 // 展厅管理相关状态
 const isRecording = ref(false)
 const mapGenProgress = ref(65)
-const hallOptions = ref<Array<{ id: string; name: string; gridUrl?: string }>>([
-  { id: 'hall_a', name: 'A展厅' },
-  { id: 'hall_b', name: 'B展厅' }
-])
+
+// 使用computed从hallStore获取展厅列表
+const hallOptions = computed(() => 
+  hallStore.halls.map(hall => ({
+    id: hall.id.toString(),
+    name: hall.nav_name, // 使用nav_name作为显示名称
+    gridUrl: undefined // 可以后续添加网格图URL
+  }))
+)
 
 // 缓存相关常量
 const HALL_CACHE_KEY = 'selected_hall_cache'
@@ -602,7 +610,8 @@ const getHallFromCache = (): string => {
   } catch (error) {
     console.warn('Failed to get hall from cache:', error)
   }
-  return 'hall_a' // 默认值
+  // 默认返回第一个展厅的ID，如果没有展厅则返回空字符串
+  return hallOptions.value.length > 0 ? hallOptions.value[0].id : ''
 }
 
 // 初始化时从缓存获取展厅选择
@@ -624,6 +633,14 @@ const currentHallPrefix = computed(() => {
 // 监听展厅选择变化，实时保存到缓存
 watch(selectedHall, (newHallId) => {
   saveHallToCache(newHallId)
+  
+  // 当展厅切换时，重置展区选择为新展厅的第一个展区
+  if (areaList.value.length > 0) {
+    selectedAreaId.value = areaList.value[0].id
+    console.log('展厅切换，重新选择展区:', selectedAreaId.value)
+  } else {
+    selectedAreaId.value = ''
+  }
 }, { immediate: false })
 
 // 栅格编辑相关
@@ -667,26 +684,54 @@ interface MultiTask {
   executeTime?: string
 }
 
-const areaList = ref<Area[]>([
-  { id: '1', name: 'A展区', description: '主展示区域', createdTime: '2024-01-15 10:30:00' },
-  { id: '2', name: 'B展区', description: '互动体验区域', createdTime: '2024-01-16 14:20:00' },
-  { id: '3', name: 'C展区', description: '产品展示区域', createdTime: '2024-01-17 09:15:00' }
-])
+// 从API获取的展区列表，根据当前选中的展厅筛选
+const areaList = computed(() => {
+  if (!selectedHall.value) return []
+  
+  // 将selectedHall从string转换为number（因为hall id可能是字符串格式）
+  const hallId = typeof selectedHall.value === 'string' ? parseInt(selectedHall.value) : selectedHall.value
+  
+  // 根据当前选中的展厅获取展区列表
+  const zones = zoneStore.getZonesByHallId(hallId)
+  
+  // 转换为Area格式以兼容现有UI
+  return zones.map(zone => ({
+    id: zone.id.toString(),
+    name: zone.name,
+    description: '', // API中没有description字段，暂时设为空
+    createdTime: '' // API中没有createdTime字段，暂时设为空
+  }))
+})
 
-const taskPointList = ref<TaskPoint[]>([
-  { id: '1', areaId: '1', name: '入口讲解点', x: 10.5, y: 20.3, angle: 90, pointType: '讲解点', robotAction: '抬左手', robotDirection: '前进', commentary: '点位1', createdTime: '2024-01-15 11:00:00' },
-  { id: '2', areaId: '1', name: '中央展示点', x: 15.2, y: 25.8, angle: 180, pointType: '讲解点', robotAction: '挥手', robotDirection: '前进', commentary: '点位2', createdTime: '2024-01-15 11:30:00' },
-  { id: '3', areaId: '1', name: '出口辅助点', x: 8.7, y: 30.1, angle: 270, pointType: '辅助点', robotAction: '抬右手', robotDirection: '后退', commentary: '点位3', createdTime: '2024-01-15 12:00:00' },
-  { id: '4', areaId: '2', name: '体验区讲解点', x: 25.4, y: 18.6, angle: 45, pointType: '讲解点', robotAction: '挥手', robotDirection: '前进', commentary: '点位1', createdTime: '2024-01-16 15:00:00' },
-  { id: '5', areaId: '2', name: '充电辅助点', x: 30.0, y: 22.0, angle: 0, pointType: '辅助点', robotAction: '抬左手', robotDirection: '前进', commentary: '点位2', createdTime: '2024-01-16 15:30:00' },
-  { id: '6', areaId: '3', name: '产品展示点1', x: 40.2, y: 15.5, angle: 135, pointType: '讲解点', robotAction: '抬右手', robotDirection: '前进', commentary: '点位1', createdTime: '2024-01-17 10:00:00' },
-  { id: '7', areaId: '3', name: '产品展示点2', x: 42.8, y: 18.9, angle: 225, pointType: '讲解点', robotAction: '挥手', robotDirection: '后退', commentary: '点位2', createdTime: '2024-01-17 10:30:00' }
-])
-
-const selectedAreaId = ref<string>('1') // 默认选择第一个展区
+// 从API获取的任务点列表，根据当前选中的展区筛选
+const selectedAreaId = ref<string>('') // 默认选择第一个展区
 const currentTaskPoints = computed(() => {
   if (!selectedAreaId.value) return []
-  return taskPointList.value.filter(point => point.areaId === selectedAreaId.value)
+  
+  // 将selectedAreaId从string转换为number（因为API使用数字ID）
+  const zoneId = parseInt(selectedAreaId.value)
+  
+  // 根据当前选中的展区获取任务点列表
+  const points = pointStore.getPointsByZoneId(zoneId)
+  
+  // 转换为TaskPoint格式以兼容现有UI
+  return points.map(point => {
+    const pointName = guideStore.getPointNameById(point.point_name_id)
+    
+    return {
+      id: point.id.toString(),
+      areaId: point.zone_id.toString(),
+      name: pointName?.name || '未知点位',
+      x: point.pose_x,
+      y: point.pose_y,
+      angle: Math.round(point.pose_theta * 180 / Math.PI), // 将弧度转换为角度
+      pointType: point.type === 'explain' ? '讲解点' : '辅助点',
+      robotAction: point.action_code || '默认动作', // API中可能为null
+      robotDirection: '前进', // API中没有此字段，使用默认值
+      commentary: `点位${point.id}`, // API中没有此字段，使用默认值
+      createdTime: '' // API中没有此字段，暂时设为空
+    }
+  })
 })
 
 // 弹窗状态
@@ -701,14 +746,14 @@ const addAreaForm = ref({
 })
 
 const addTaskPointForm = ref({
-  name: '',
+  name: '', // 任务点名称
+  pointNameId: '', // 讲解点位ID
   x: 0,
   y: 0,
   angle: 0,
   pointType: '讲解点',
   robotAction: '抬左手',
-  robotDirection: '前进',
-  commentary: '点位1'
+  robotDirection: '前进'
 })
 
 // 多任务管理相关数据
@@ -1245,9 +1290,63 @@ const formatLocalDateTime = (date: Date) => {
 // 旧任务下发取消已移除
 
 // 页面加载时获取数据
-onMounted(() => {
-  // 确保从缓存加载的展厅选择在页面加载时生效
+onMounted(async () => {
+  // 确保展厅数据已加载
+  if (!hallStore.isLoaded) {
+    try {
+      await hallStore.fetchHalls()
+      console.log('展厅数据补充加载完成')
+    } catch (err) {
+      console.warn('获取展厅数据失败:', err)
+    }
+  }
+  
+  // 确保展区数据已加载
+  if (!zoneStore.isLoaded) {
+    try {
+      await zoneStore.fetchZones()
+      console.log('展区数据补充加载完成')
+    } catch (err) {
+      console.warn('获取展区数据失败:', err)
+    }
+  }
+  
+  // 确保任务点数据已加载
+  if (!pointStore.isLoaded) {
+    try {
+      await pointStore.fetchPoints()
+      console.log('任务点数据补充加载完成')
+    } catch (err) {
+      console.warn('获取任务点数据失败:', err)
+    }
+  }
+  
+  // 确保讲解相关数据已加载（任务点需要点位名称）
+  if (!guideStore.isPointNamesLoaded) {
+    try {
+      await guideStore.fetchPointNames()
+      console.log('点位名称数据补充加载完成')
+    } catch (err) {
+      console.warn('获取点位名称数据失败:', err)
+    }
+  }
+  
+  // 确保从缓存加载的展厅选择在页面加载时生效，如果没有有效选择则选择第一个
+  const cachedHall = getHallFromCache()
+  if (cachedHall && hallOptions.value.some(h => h.id === cachedHall)) {
+    selectedHall.value = cachedHall
+  } else if (hallOptions.value.length > 0) {
+    selectedHall.value = hallOptions.value[0].id
+    saveHallToCache(selectedHall.value)
+  }
+  
   console.log('页面加载，当前选中展厅:', selectedHall.value)
+  
+  // 设置默认选中的展区（当前选中展厅的第一个展区）
+  if (areaList.value.length > 0) {
+    selectedAreaId.value = areaList.value[0].id
+    console.log('默认选中展区:', selectedAreaId.value)
+  }
 })
 
 // 栅格图渲染（参考首页实现，简化版）
@@ -1663,12 +1762,10 @@ const handleDeleteArea = () => {
   if (!area) return
   
   if (confirm(`确定要删除展区"${area.name}"吗？删除后该展区下的所有任务点也将被删除。`)) {
-    // 删除展区
-    areaList.value = areaList.value.filter(a => a.id !== selectedAreaId.value)
-    // 删除该展区下的所有任务点
-    taskPointList.value = taskPointList.value.filter(p => p.areaId !== selectedAreaId.value)
+    // TODO: 实现删除展区的API调用
+    // 现在暂时只是提示，因为没有提供删除展区的接口
+    alert('删除展区功能暂未实现，需要对接删除API')
     selectedAreaId.value = ''
-    alert('展区删除成功')
   }
 }
 
@@ -1678,55 +1775,53 @@ const handleAddTaskPoint = () => {
   
   editingTaskPoint.value = null
   addTaskPointForm.value = { 
-    name: '', 
+    name: '',
+    pointNameId: guideStore.pointNames.length > 0 ? guideStore.pointNames[0].id.toString() : '',
     x: 0, 
     y: 0, 
     angle: 0, 
     pointType: '讲解点', 
     robotAction: '抬左手',
-    robotDirection: '前进',
-    commentary: '点位1' 
+    robotDirection: '前进'
   }
   showAddTaskPointDialog.value = true
 }
 
 // 确认新增展区
-const handleConfirmAddArea = () => {
+const handleConfirmAddArea = async () => {
   if (!addAreaForm.value.name.trim()) {
     alert('请输入展区名称')
     return
   }
   
-  // 获取前缀
-  const prefix = currentHallPrefix.value
-  if (!prefix) {
+  // 获取当前选中的展厅ID
+  if (!selectedHall.value) {
     alert('未选择有效的展厅')
     return
   }
   
-  // 组合完整的展区名称
-  const fullAreaName = `${prefix}_${addAreaForm.value.name.trim()}`
+  // 将selectedHall转换为数字格式（因为API需要数字类型的hall_id）
+  const hallId = typeof selectedHall.value === 'string' ? parseInt(selectedHall.value) : selectedHall.value
   
   if (editingArea.value) {
-    // 编辑模式
-    const index = areaList.value.findIndex(a => a.id === editingArea.value!.id)
-    if (index !== -1) {
-      areaList.value[index] = {
-        ...areaList.value[index],
-        name: fullAreaName
-      }
-    }
-    alert('展区更新成功')
+    // 编辑模式 - 暂时不支持，因为没有提供更新接口
+    alert('暂不支持编辑展区')
+    return
   } else {
-    // 新增模式
-    const newArea: Area = {
-      id: Date.now().toString(),
-      name: fullAreaName,
-      description: '', // 默认为空
-      createdTime: new Date().toLocaleString()
+    // 新增模式 - 调用API创建展区
+    try {
+      console.log('创建展区:', addAreaForm.value.name.trim(), '展厅ID:', hallId)
+      const newZone = await zoneStore.createZone(addAreaForm.value.name.trim(), hallId)
+      
+      // 创建成功后，自动选中新创建的展区
+      selectedAreaId.value = newZone.id.toString()
+      
+      alert(`展区添加成功：${newZone.name}`)
+    } catch (error) {
+      console.error('创建展区失败:', error)
+      alert(error instanceof Error ? error.message : '创建展区失败')
+      return
     }
-    areaList.value.push(newArea)
-    alert(`展区添加成功：${fullAreaName}`)
   }
   
   showAddAreaDialog.value = false
@@ -1739,9 +1834,15 @@ const handleCancelAddArea = () => {
 }
 
 // 确认新增任务点
-const handleConfirmAddTaskPoint = () => {
+const handleConfirmAddTaskPoint = async () => {
+  // 验证必填字段
   if (!addTaskPointForm.value.name.trim()) {
-    alert('请输入点位名称')
+    alert('请输入任务点名称')
+    return
+  }
+  
+  if (!addTaskPointForm.value.pointNameId) {
+    alert('请选择讲解点位')
     return
   }
   
@@ -1750,40 +1851,58 @@ const handleConfirmAddTaskPoint = () => {
     return
   }
   
+  if (!selectedAreaId.value) {
+    alert('未选择展区')
+    return
+  }
+  
   if (editingTaskPoint.value) {
-    // 编辑模式
-    const index = taskPointList.value.findIndex(p => p.id === editingTaskPoint.value!.id)
-    if (index !== -1) {
-      taskPointList.value[index] = {
-        ...taskPointList.value[index],
-        name: addTaskPointForm.value.name,
-        x: addTaskPointForm.value.x,
-        y: addTaskPointForm.value.y,
-        angle: addTaskPointForm.value.angle,
-        pointType: addTaskPointForm.value.pointType,
-        robotAction: addTaskPointForm.value.robotAction,
-        robotDirection: addTaskPointForm.value.robotDirection,
-        commentary: addTaskPointForm.value.commentary
+    // 编辑模式 - 调用API更新任务点
+    try {
+      const pointData = {
+        type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
+        point_name_id: parseInt(addTaskPointForm.value.pointNameId),
+        pose_x: addTaskPointForm.value.x,
+        pose_y: addTaskPointForm.value.y,
+        pose_theta: addTaskPointForm.value.angle * Math.PI / 180, // 角度转弧度
+        action_code: addTaskPointForm.value.robotAction,
+        action_params: '', // 暂时为空
+        robot_sn: 'DEFAULT_ROBOT' // 使用默认值
       }
+      
+      console.log('更新任务点:', editingTaskPoint.value.id, pointData)
+      const updatedPoint = await pointStore.updatePoint(parseInt(editingTaskPoint.value.id), pointData)
+      
+      alert(`任务点更新成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(updatedPoint.point_name_id)?.name || '未知点位'}`)
+    } catch (error) {
+      console.error('更新任务点失败:', error)
+      alert(error instanceof Error ? error.message : '更新任务点失败')
+      return
     }
-    alert('任务点更新成功')
   } else {
-    // 新增模式
-    const newTaskPoint: TaskPoint = {
-      id: Date.now().toString(),
-      areaId: selectedAreaId.value,
-      name: addTaskPointForm.value.name,
-      x: addTaskPointForm.value.x,
-      y: addTaskPointForm.value.y,
-      angle: addTaskPointForm.value.angle,
-      pointType: addTaskPointForm.value.pointType,
-      robotAction: addTaskPointForm.value.robotAction,
-      robotDirection: addTaskPointForm.value.robotDirection,
-      commentary: addTaskPointForm.value.commentary,
-      createdTime: new Date().toLocaleString()
+    // 新增模式 - 调用API创建任务点
+    try {
+      const pointData = {
+        zone_id: parseInt(selectedAreaId.value),
+        type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
+        point_name_id: parseInt(addTaskPointForm.value.pointNameId),
+        pose_x: addTaskPointForm.value.x,
+        pose_y: addTaskPointForm.value.y,
+        pose_theta: addTaskPointForm.value.angle * Math.PI / 180, // 角度转弧度
+        action_code: addTaskPointForm.value.robotAction,
+        action_params: '', // 暂时为空
+        robot_sn: 'DEFAULT_ROBOT' // 使用默认值，因为表单中移除了此字段
+      }
+      
+      console.log('创建任务点:', pointData)
+      const newPoint = await pointStore.createPoint(pointData)
+      
+      alert(`任务点创建成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(newPoint.point_name_id)?.name || '未知点位'}`)
+    } catch (error) {
+      console.error('创建任务点失败:', error)
+      alert(error instanceof Error ? error.message : '创建任务点失败')
+      return
     }
-    taskPointList.value.push(newTaskPoint)
-    alert('任务点添加成功')
   }
   
   showAddTaskPointDialog.value = false
@@ -1798,30 +1917,49 @@ const handleCancelAddTaskPoint = () => {
 // 编辑任务点
 const onClickEditTaskPoint = (point: TaskPoint) => {
   editingTaskPoint.value = point
+  // 从point的实际数据中获取point_name_id（需要查找原始Point数据）
+  const originalPoint = pointStore.getPointById(parseInt(point.id))
+  
   addTaskPointForm.value = {
     name: point.name,
+    pointNameId: originalPoint?.point_name_id?.toString() || '',
     x: point.x,
     y: point.y,
     angle: point.angle,
     pointType: point.pointType,
     robotAction: point.robotAction,
-    robotDirection: point.robotDirection,
-    commentary: point.commentary
+    robotDirection: point.robotDirection
   }
   showAddTaskPointDialog.value = true
 }
 
 // 删除任务点
-const onClickDeleteTaskPoint = (point: TaskPoint) => {
+const onClickDeleteTaskPoint = async (point: TaskPoint) => {
   if (confirm(`确定要删除任务点"${point.name}"吗？`)) {
-    taskPointList.value = taskPointList.value.filter(p => p.id !== point.id)
-    alert('任务点删除成功')
+    try {
+      console.log('删除任务点:', point.id)
+      await pointStore.deletePoint(parseInt(point.id))
+      
+      alert(`任务点删除成功：${point.name}`)
+    } catch (error) {
+      console.error('删除任务点失败:', error)
+      alert(error instanceof Error ? error.message : '删除任务点失败')
+    }
   }
 }
 
 // 时间格式化
 const formatTime = (time: string) => {
   return time
+}
+
+// 根据任务点ID获取对应的讲解点位名称
+const getPointNameByPointId = (taskPointId: string) => {
+  const originalPoint = pointStore.getPointById(parseInt(taskPointId))
+  if (!originalPoint) return '未知点位'
+  
+  const pointName = guideStore.getPointNameById(originalPoint.point_name_id)
+  return pointName?.name || '未知点位'
 }
 
 // 多任务管理相关方法
@@ -3003,7 +3141,7 @@ const showErrorMessage = (message: string) => {
 }
 
 .add-area-task-dialog .add-user-form label {
-  min-width: 60px;
+  min-width: 90px;
   font-size: 14px;
   font-weight: 500;
 }
@@ -3167,7 +3305,7 @@ const showErrorMessage = (message: string) => {
 }
 
 .add-user-form label {
-  min-width: 80px;
+  min-width: 90px;
   color: #67d5fd;
   font-size: 14px;
   text-align: right;
