@@ -41,15 +41,6 @@ const router = createRouter({
           }
         },
         {
-          path: 'dock-control',
-          name: 'DockControl',
-          component: () => import('../views/DockControl.vue'),
-          meta: { 
-            requiresAuth: true,
-            permission: 'dock_control.view'
-          }
-        },
-        {
           path: 'mission',
           name: 'Mission',
           component: () => import('../views/Mission.vue'),
@@ -59,39 +50,12 @@ const router = createRouter({
           }
         },
         {
-          path: 'mission-logs',
-          name: 'MissionLogs',
-          component: () => import('../views/MissionLogs.vue'),
-          meta: { 
-            requiresAuth: true,
-            permission: 'task_logs.view'
-          }
-        },
-        {
-          path: 'mission-records',
-          name: 'MissionRecords',
-          component: () => import('../views/MissionRecords.vue'),
-          meta: { 
-            requiresAuth: true,
-            permission: 'task_records.view'
-          }
-        },
-        {
           path: 'device-manage',
           name: 'DeviceManage',
           component: () => import('../views/DeviceManage.vue'),
           meta: { 
             requiresAuth: true,
             permission: 'device_management.view'
-          }
-        },
-        {
-          path: 'alarm-log',
-          name: 'AlarmLog',
-          component: () => import('../views/AlarmLog.vue'),
-          meta: { 
-            requiresAuth: true,
-            permission: 'device_management.log.view'
           }
         },
         {
@@ -119,7 +83,7 @@ const router = createRouter({
 
 // 路由守卫 - 已禁用所有权限验证
 router.beforeEach((to, _from, next) => {
-  console.log('路由守卫已禁用，允许访问所有页面:', to.path)
+    // 路由守卫已禁用，允许访问所有页面
   next()
 })
 

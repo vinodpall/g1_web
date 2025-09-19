@@ -3,7 +3,7 @@ import { usePermissionStore } from '../stores/permission'
 
 // 权限检查函数 - 已禁用权限验证，始终返回true
 function checkPermission(permissions: string | string[]): boolean {
-  console.log('权限指令检查已禁用，允许权限:', permissions)
+  // 权限指令检查已禁用
   return true
 }
 
@@ -18,13 +18,13 @@ function showPermissionDeniedMessage(permission: string) {
 // 权限验证指令（隐藏无权限元素） - 已禁用，不隐藏任何元素
 export const permission = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    console.log('权限指令已禁用，显示所有元素:', binding.value)
+    // 权限指令已禁用，显示所有元素
     // 确保元素可见
     el.style.display = ''
   },
   
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    console.log('权限指令已禁用，显示所有元素:', binding.value)
+    // 权限指令已禁用，显示所有元素
     // 确保元素可见
     el.style.display = ''
   }
@@ -33,13 +33,13 @@ export const permission = {
 // 权限验证指令（全部满足） - 已禁用，不隐藏任何元素
 export const permissionAll = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    console.log('权限指令(全部)已禁用，显示所有元素:', binding.value)
+    // 权限指令(全部)已禁用，显示所有元素
     // 确保元素可见
     el.style.display = ''
   },
   
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    console.log('权限指令(全部)已禁用，显示所有元素:', binding.value)
+    // 权限指令(全部)已禁用，显示所有元素
     // 确保元素可见
     el.style.display = ''
   }
@@ -48,12 +48,12 @@ export const permissionAll = {
 // 权限验证指令（点击检查，不隐藏元素，显示弹窗） - 已禁用，允许所有点击
 export const permissionClick = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    console.log('权限点击指令已禁用，允许所有点击:', binding.value)
+    // 权限点击指令已禁用，允许所有点击
     // 不做任何权限检查，允许正常点击
   },
   
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    console.log('权限点击指令已禁用，允许所有点击:', binding.value)
+    // 权限点击指令已禁用，允许所有点击
     // 不做任何权限检查，允许正常点击
   }
 }
@@ -61,12 +61,12 @@ export const permissionClick = {
 // 权限验证指令（点击检查，不隐藏元素，使用自定义弹窗） - 已禁用，允许所有点击
 export const permissionClickDialog = {
   mounted(el: HTMLElement, binding: DirectiveBinding) {
-    console.log('权限点击弹窗指令已禁用，允许所有点击:', binding.value)
+    // 权限点击弹窗指令已禁用，允许所有点击
     // 不做任何权限检查，允许正常点击
   },
   
   updated(el: HTMLElement, binding: DirectiveBinding) {
-    console.log('权限点击弹窗指令已禁用，允许所有点击:', binding.value)
+    // 权限点击弹窗指令已禁用，允许所有点击
     // 不做任何权限检查，允许正常点击
   }
 }

@@ -65,21 +65,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useTaskProgressStore } from '../stores/taskProgress'
 import { useUserStore } from '../stores/user'
-import { usePermission } from '../composables/usePermission'
+// import { usePermission } from '../composables/usePermission' // 文件已删除
 import PermissionDenied from './PermissionDenied.vue'
 
 const taskProgressStore = useTaskProgressStore()
 const userStore = useUserStore()
-const { 
-  showPermissionDenied, 
-  requiredPermission, 
-  closePermissionDenied, 
-  contactAdmin,
-  checkPermission 
-} = usePermission()
+// const { 
+//   showPermissionDenied, 
+//   requiredPermission, 
+//   closePermissionDenied, 
+//   contactAdmin,
+//   checkPermission 
+// } = usePermission() // 已删除，临时模拟
+const showPermissionDenied = ref(false)
+const requiredPermission = ref('')
+const closePermissionDenied = () => { showPermissionDenied.value = false }
+const contactAdmin = () => console.log('contactAdmin - 等待重新对接')
+const checkPermission = () => true // 临时返回true
 
 // 计算属性
 const showTaskCompletionDialog = computed(() => {

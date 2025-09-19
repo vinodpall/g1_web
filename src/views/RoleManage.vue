@@ -191,7 +191,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useRoles, usePermissions } from '../composables/useApi'
+// import { useRoles, usePermissions } from '../composables/useApi' // API已移除，等待重新对接
 import { usePermissionStore } from '../stores/permission'
 import { mapPermissionsToSections, mapFrontendToBackendPermissions, mapBackendToFrontendPermissions, mapBackendPermissionObjectsToFrontend } from '../utils/permissionMapper'
 import type { PermissionSection } from '../utils/permissionMapper'

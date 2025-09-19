@@ -56,11 +56,11 @@ export default defineConfig(({ mode }) => {
     const environment = mergedEnv.VITE_APP_ENVIRONMENT || 'intranet'
     console.log('🔧 Vite配置 - 当前环境:', environment)
     if (environment === 'internet') {
-      console.log('🔧 Vite配置 - 使用外网代理:', 'http://10.10.1.37:8000')
-      return 'http://10.10.1.37:8000'
+      console.log('🔧 Vite配置 - 使用外网代理:', 'http://10.10.1.3:8000')
+      return 'http://10.10.1.3:8000'
     } else {
-      console.log('🔧 Vite配置 - 使用内网代理:', 'http://172.16.88.152:8000')
-      return 'http://172.16.88.152:8000'
+      console.log('🔧 Vite配置 - 使用内网代理:', 'http://172.16.100.100:8000')
+      return 'http://172.16.100.100:8000'
     }
   }
 

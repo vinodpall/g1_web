@@ -1,17 +1,40 @@
 export interface User {
   id: number
   username: string
-  userfullname: string
-  is_activate: string
-  is_superuser: string
-  created_by: string | null
-  created_time: string
-  updated_by: string | null
-  updated_time: string
-  workspace_id: string
-  user_type: number
-  roles: Role[] | string[] | ReadonlyArray<Role> | ReadonlyArray<string> // 兼容后端返回的只读数组
-  workspace_name: string | null
+  email: string
+  full_name: string
+  is_active: boolean
+  is_superuser: boolean
+  // 保留旧字段以兼容现有代码
+  userfullname?: string
+  is_activate?: string
+  created_by?: string | null
+  created_time?: string
+  updated_by?: string | null
+  updated_time?: string
+  workspace_id?: string
+  user_type?: number
+  roles?: Role[] | string[] | ReadonlyArray<Role> | ReadonlyArray<string>
+  workspace_name?: string | null
+}
+
+export interface Robot {
+  sn: string
+  name: string
+  model: string
+  firmware_version: string
+  ip_address: string
+  mac_address: string
+  location: string
+  status: 'active' | 'inactive' | 'maintenance' | 'error'
+  online: boolean
+  mqtt_client_id: string
+  mqtt_status_topic: string
+  notes: string
+  id: number
+  created_at: string
+  updated_at: string
+  last_seen_at: string | null
 }
 
 export interface Dock {

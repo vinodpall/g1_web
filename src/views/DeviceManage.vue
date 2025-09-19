@@ -24,7 +24,11 @@
                 <span class="device-top-title">机器人管理</span>
               </div>
               <div class="device-top-row">
-                <input v-model="filter.keyword" class="device-input" placeholder="请输入关键字搜索" />
+                <input 
+                  v-model="filter.keyword" 
+                  class="device-input" 
+                  placeholder="请输入关键字搜索" 
+                />
                 <button class="device-btn" @click="handleSearch">查询</button>
                 <button class="device-btn device-btn-add" @click="handleAddRobot">添加机器人</button>
               </div>
@@ -38,7 +42,7 @@
                   :key="device.id"
                 >
                   <div class="device-card-header">
-                    <span class="device-card-title">{{ device.device_name || device.nickname || '-' }}</span>
+                    <span class="device-card-title">{{ device.name || '-' }}</span>
                     <span class="device-card-delete" v-permission-click-dialog="'device_management.device.delete'" @click="handleDelete(device.id.toString())">
                       <img :src="rubbishIcon" alt="删除" />
                     </span>
@@ -48,13 +52,14 @@
                       <img :src="getDeviceImage(device)" class="device-card-img" />
                     </div>
                     <div class="device-card-info">
-                      <div class="info-row"><span class="info-label">名称：</span><span class="info-value">{{ device.device_name || device.nickname || '-' }}</span></div>
-                      <div class="info-row"><span class="info-label">编号：</span><span class="info-value">{{ device.id || '-' }}</span></div>
-                      <div class="info-row"><span class="info-label">SN：</span><span class="info-value">{{ device.device_sn || '-' }}</span></div>
+                      <div class="info-row"><span class="info-label">名称：</span><span class="info-value">{{ device.name || '-' }}</span></div>
+                      <div class="info-row"><span class="info-label">SN：</span><span class="info-value">{{ device.sn || '-' }}</span></div>
+                      <div class="info-row"><span class="info-label">型号：</span><span class="info-value">{{ device.model || '-' }}</span></div>
                       <div class="info-row"><span class="info-label">状态：</span><span class="info-value" :class="getStatusClass(device)">{{ formatStatus(device) }}</span></div>
-                      <div class="info-row"><span class="info-label">电量：</span><span class="info-value">{{ formatBattery(device) }}</span></div>
+                      <div class="info-row"><span class="info-label">在线：</span><span class="info-value" :class="device.online ? 'status-online' : 'status-offline'">{{ device.online ? '是' : '否' }}</span></div>
+                      <div class="info-row"><span class="info-label">位置：</span><span class="info-value">{{ device.location || '-' }}</span></div>
                       <div class="info-row"><span class="info-label">创建日期：</span><span class="info-value">{{ formatCreateDate(device) }}</span></div>
-                      <div class="info-row"><span class="info-label">说明：</span><span class="info-value">{{ device.description || device.remark || '-' }}</span></div>
+                      <div class="info-row"><span class="info-label">备注：</span><span class="info-value">{{ device.notes || '-' }}</span></div>
                     </div>
                   </div>
                 </div>
@@ -91,20 +96,72 @@
                 <div class="add-device-modal-right">
                   <div class="add-device-form">
                     <div class="add-device-row">
-                      <label>名称：</label>
-                      <input v-model="robotForm.name" class="add-device-input" placeholder="请输入机器人名称" />
+                      <label><span class="required">*</span>SN：</label>
+                      <input 
+                        v-model="robotForm.sn" 
+                        class="add-device-input" 
+                        :class="{ 'error': formErrors.sn }"
+                        placeholder="请输入设备序列号（必填）" 
+                      />
+                      <div v-if="formErrors.sn" class="error-message">{{ formErrors.sn }}</div>
                     </div>
                     <div class="add-device-row">
-                      <label>编号：</label>
-                      <input v-model="robotForm.id" class="add-device-input" placeholder="请输入编号" />
+                      <label><span class="required">*</span>名称：</label>
+                      <input 
+                        v-model="robotForm.name" 
+                        class="add-device-input" 
+                        :class="{ 'error': formErrors.name }"
+                        placeholder="请输入机器人名称（必填）" 
+                      />
+                      <div v-if="formErrors.name" class="error-message">{{ formErrors.name }}</div>
                     </div>
                     <div class="add-device-row">
-                      <label>SN：</label>
-                      <input v-model="robotForm.sn" class="add-device-input" placeholder="请输入设备序列号" />
+                      <label>型号：</label>
+                      <input v-model="robotForm.model" class="add-device-input" placeholder="请输入机器人型号" />
                     </div>
                     <div class="add-device-row">
-                      <label>说明：</label>
-                      <textarea v-model="robotForm.description" class="add-device-textarea" placeholder="请输入机器人说明" rows="3"></textarea>
+                      <label>固件版本：</label>
+                      <input v-model="robotForm.firmware_version" class="add-device-input" placeholder="请输入固件版本" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>IP地址：</label>
+                      <input v-model="robotForm.ip_address" class="add-device-input" placeholder="请输入IP地址" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>MAC地址：</label>
+                      <input v-model="robotForm.mac_address" class="add-device-input" placeholder="请输入MAC地址" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>位置：</label>
+                      <input v-model="robotForm.location" class="add-device-input" placeholder="请输入机器人位置" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>状态：</label>
+                      <select v-model="robotForm.status" class="add-device-input">
+                        <option value="active">活跃</option>
+                        <option value="inactive">非活跃</option>
+                        <option value="maintenance">维护中</option>
+                        <option value="error">故障</option>
+                      </select>
+                    </div>
+                    <div class="add-device-row">
+                      <label>是否在线：</label>
+                      <select v-model="robotForm.online" class="add-device-input">
+                        <option :value="true">在线</option>
+                        <option :value="false">离线</option>
+                      </select>
+                    </div>
+                    <div class="add-device-row">
+                      <label>MQTT ID：</label>
+                      <input v-model="robotForm.mqtt_client_id" class="add-device-input" placeholder="请输入MQTT ID" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>MQTT Topic：</label>
+                      <input v-model="robotForm.mqtt_status_topic" class="add-device-input" placeholder="请输入MQTT Topic" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>备注：</label>
+                      <textarea v-model="robotForm.notes" class="add-device-textarea" placeholder="请输入机器人备注" rows="3"></textarea>
                     </div>
                   </div>
                   <div class="add-device-actions">
@@ -121,9 +178,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import equipmengStoreIcon from '@/assets/source_data/svg_data/equipmeng_store.svg'
+import { useRobotStore } from '../stores/robot'
+import { useUserStore } from '../stores/user'
+import robotManagementIcon from '@/assets/source_data/robot_source/robot_management.svg'
 import dock3Img from '@/assets/source_data/dock3.png'
 import m4tdImg from '@/assets/source_data/plane_2.png'
 import g1CompStandImg from '@/assets/source_data/robot_source/g1_comp_stand.png'
@@ -132,79 +191,20 @@ import videoIcon from '@/assets/source_data/svg_data/video.svg'
 
 const router = useRouter()
 const route = useRoute()
+const robotStore = useRobotStore()
+const userStore = useUserStore()
 
-// 假数据
-const devices = ref([
-  {
-    id: 'G1-001',
-    device_name: 'G1-1',
-    nickname: 'G1-1',
-    device_sn: 'G1SN20240001',
-    bound_status: true,
-    login_time: '2024-09-18T10:30:00Z',
-    battery_level: 85,
-    created_at: '2024-01-15T08:00:00Z',
-    description: '第一台G1机器人，用于巡检任务'
-  },
-  {
-    id: 'G1-002',
-    device_name: 'G1-2',
-    nickname: 'G1-2',
-    device_sn: 'G1SN20240002',
-    bound_status: true,
-    login_time: null,
-    battery_level: 67,
-    created_at: '2024-02-20T09:15:00Z',
-    description: '第二台G1机器人，用于安防巡逻'
-  },
-  {
-    id: 'G1-003',
-    device_name: 'G1-3',
-    nickname: 'G1-3',
-    device_sn: 'G1SN20240003',
-    bound_status: false,
-    login_time: null,
-    battery_level: 42,
-    created_at: '2024-03-10T14:20:00Z',
-    description: '第三台G1机器人，备用设备'
-  },
-  {
-    id: 'G1-004',
-    device_name: 'G1-4',
-    nickname: 'G1-4',
-    device_sn: 'G1SN20240004',
-    bound_status: true,
-    login_time: '2024-09-18T11:45:00Z',
-    battery_level: 91,
-    created_at: '2024-04-05T16:30:00Z',
-    description: '第四台G1机器人，用于物料运输'
-  },
-  {
-    id: 'G1-005',
-    device_name: 'G1-5',
-    nickname: 'G1-5',
-    device_sn: 'G1SN20240005',
-    bound_status: true,
-    login_time: '2024-09-18T12:20:00Z',
-    battery_level: 73,
-    created_at: '2024-05-12T10:45:00Z',
-    description: '第五台G1机器人，用于环境监测'
-  },
-  {
-    id: 'G1-006',
-    device_name: 'G1-6',
-    nickname: 'G1-6',
-    device_sn: 'G1SN20240006',
-    bound_status: false,
-    login_time: null,
-    battery_level: 28,
-    created_at: '2024-06-08T15:10:00Z',
-    description: '第六台G1机器人，测试设备'
-  }
-])
+// 使用机器人store中的数据
+const devices = computed(() => robotStore.robots || [])
+
+// 从缓存加载机器人数据
+const loadRobotsFromCache = () => {
+  robotStore.hydrateFromCache()
+  console.log('已从缓存加载机器人数据:', devices.value.length, '个机器人')
+}
 
 const sidebarTabs = [
-  { key: 'manage', label: '机器人管理', icon: equipmengStoreIcon }
+  { key: 'manage', label: '机器人管理', icon: robotManagementIcon }
 ]
 const currentTab = ref('manage')
 
@@ -218,7 +218,9 @@ onMounted(() => {
   console.log('DeviceManage组件加载')
   // 同步路由状态
   syncTabWithRoute()
-  console.log('机器人列表加载完成:', devices.value)
+  // 从缓存加载机器人数据
+  loadRobotsFromCache()
+  console.log('机器人列表加载完成:', devices.value.length, '个机器人')
 })
 
 // 监听路由变化
@@ -232,14 +234,49 @@ const handleTabClick = (key: string) => {
 }
 
 const filter = ref<{ keyword: string }>({ keyword: '' })
-const handleSearch = () => {
-  // 简单的本地搜索功能（可以后续扩展）
+
+const handleSearch = async () => {
+  console.log('handleSearch 被调用')
   const keyword = filter.value.keyword.trim()
   console.log('搜索关键字:', keyword)
-  // 这里可以添加本地过滤逻辑
+  
+  try {
+    const token = userStore.token
+    if (!token) {
+      console.error('用户未登录')
+      alert('用户未登录，请先登录')
+      return
+    }
+    
+    console.log('开始调用API搜索')
+    await robotStore.fetchRobots(token, keyword)
+    console.log('搜索API调用完成')
+    
+  } catch (error) {
+    console.error('搜索失败:', error)
+    alert('搜索失败：' + (error as Error).message)
+  }
 }
-const handleDelete = (id: string) => {
-  // 删除设备逻辑
+
+const handleDelete = async (id: string) => {
+  if (!confirm('确定要删除这个机器人吗？')) {
+    return
+  }
+  
+  try {
+    const robotId = parseInt(id)
+    const token = userStore.token
+    if (!token) {
+      console.error('用户未登录')
+      return
+    }
+    
+    await robotStore.deleteRobot(token, robotId)
+    console.log('机器人删除成功:', id)
+  } catch (error) {
+    console.error('删除机器人失败:', error)
+    alert('删除机器人失败，请稍后重试')
+  }
 }
 
 // 弹窗控制
@@ -258,22 +295,49 @@ const closeVideoModal = () => {
 const showAddRobotModal = ref(false)
 const imageInput = ref<HTMLInputElement>()
 const robotForm = ref({
-  name: '',
-  id: '',
   sn: '',
-  description: '',
+  name: '',
+  model: '',
+  firmware_version: '',
+  ip_address: '',
+  mac_address: '',
+  location: '',
+  status: 'inactive',
+  online: false,
+  mqtt_client_id: '',
+  mqtt_status_topic: '',
+  notes: '',
   imagePreview: ''
+})
+
+// 表单验证错误
+const formErrors = ref({
+  sn: '',
+  name: ''
 })
 
 const handleAddRobot = () => {
   showAddRobotModal.value = true
   // 重置表单
   Object.assign(robotForm.value, {
-    name: '',
-    id: '',
     sn: '',
-    description: '',
+    name: '',
+    model: '',
+    firmware_version: '',
+    ip_address: '',
+    mac_address: '',
+    location: '',
+    status: 'inactive',
+    online: false,
+    mqtt_client_id: '',
+    mqtt_status_topic: '',
+    notes: '',
     imagePreview: ''
+  })
+  // 重置表单验证错误
+  Object.assign(formErrors.value, {
+    sn: '',
+    name: ''
   })
 }
 
@@ -303,28 +367,71 @@ const resetImage = () => {
   }
 }
 
-const handleAddRobotSubmit = () => {
-  // 生成新的机器人数据
-  const newRobot = {
-    id: robotForm.value.id || `G1-${String(devices.value.length + 1).padStart(3, '0')}`,
-    device_name: robotForm.value.name,
-    nickname: robotForm.value.name,
-    device_sn: robotForm.value.sn || `G1SN2024${String(devices.value.length + 1).padStart(4, '0')}`,
-    bound_status: true, // 简化为总是绑定状态
-    login_time: null, // 默认为离线状态
-    battery_level: 0, // 默认电量为0
-    created_at: new Date().toISOString(),
-    description: robotForm.value.description,
-    custom_image: robotForm.value.imagePreview
+// 表单验证
+const validateForm = () => {
+  let isValid = true
+  
+  // 重置错误信息
+  formErrors.value.sn = ''
+  formErrors.value.name = ''
+  
+  // 验证SN（必填）
+  if (!robotForm.value.sn.trim()) {
+    formErrors.value.sn = 'SN是必填项'
+    isValid = false
   }
   
-  // 添加到设备列表
-  devices.value.push(newRobot)
+  // 验证名称（必填）
+  if (!robotForm.value.name.trim()) {
+    formErrors.value.name = '名称是必填项'
+    isValid = false
+  }
   
-  // 关闭弹窗
-  showAddRobotModal.value = false
+  return isValid
+}
+
+const handleAddRobotSubmit = async () => {
+  // 表单验证
+  if (!validateForm()) {
+    return
+  }
   
-  console.log('添加新机器人:', newRobot)
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('用户未登录，请先登录')
+      return
+    }
+    
+    // 准备机器人数据
+    const robotData = {
+      sn: robotForm.value.sn.trim(),
+      name: robotForm.value.name.trim(),
+      model: robotForm.value.model || '',
+      firmware_version: robotForm.value.firmware_version || '',
+      ip_address: robotForm.value.ip_address || '',
+      mac_address: robotForm.value.mac_address || '',
+      location: robotForm.value.location || '',
+      status: robotForm.value.status || 'inactive',
+      online: robotForm.value.online || false,
+      mqtt_client_id: robotForm.value.mqtt_client_id || '',
+      mqtt_status_topic: robotForm.value.mqtt_status_topic || '',
+      notes: robotForm.value.notes || ''
+    }
+    
+    // 调用API创建机器人
+    await robotStore.createRobot(token, robotData)
+    
+    // 关闭弹窗
+    showAddRobotModal.value = false
+    
+    console.log('机器人创建成功:', robotData)
+    alert('机器人创建成功！')
+    
+  } catch (error) {
+    console.error('创建机器人失败:', error)
+    alert('创建机器人失败，请稍后重试')
+  }
 }
 
 // 示例设备数据
@@ -363,38 +470,30 @@ const deviceList = ref([
 
 // 辅助函数：获取设备图片
 const getDeviceImage = (device: any) => {
-  // 如果有自定义图片则使用自定义图片，否则使用默认的g1_comp_stand图片
-  return device.custom_image || g1CompStandImg
+  // 使用默认的g1_comp_stand图片
+  return g1CompStandImg
 }
 
 // 辅助函数：格式化状态
 const formatStatus = (device: any) => {
-  // 根据bound_status和login_time判断状态，只有在线和离线两种
-  if (device.bound_status && device.login_time) {
-    return '在线'
-  } else {
-    return '离线'
+  // 状态映射
+  const statusMap: { [key: string]: string } = {
+    'active': '活跃',
+    'inactive': '非活跃',
+    'maintenance': '维护中',
+    'error': '故障'
   }
+  return statusMap[device.status] || device.status || '-'
 }
 
 // 辅助函数：获取状态样式类名
 const getStatusClass = (device: any) => {
-  if (device.bound_status && device.login_time) {
+  if (device.status === 'active') {
     return 'status-online'
+  } else if (device.status === 'error') {
+    return 'status-error'
   } else {
     return 'status-offline'
-  }
-}
-
-// 辅助函数：格式化电量
-const formatBattery = (device: any) => {
-  // 如果有电量字段，显示百分比；否则显示默认值
-  if (device.battery_level !== undefined && device.battery_level !== null) {
-    return `${device.battery_level}%`
-  } else if (device.battery_percentage !== undefined && device.battery_percentage !== null) {
-    return `${device.battery_percentage}%`
-  } else {
-    return '-'
   }
 }
 
@@ -415,6 +514,41 @@ const formatCreateDate = (device: any) => {
 
 <style scoped>
 @import './mission-common.css';
+
+/* 表单验证样式 */
+.required {
+  color: #ff4d4f;
+  margin-right: 4px;
+}
+
+.add-device-input.error {
+  border-color: #ff4d4f !important;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2) !important;
+}
+
+.error-message {
+  color: #ff4d4f;
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.2;
+}
+
+.status-error {
+  color: #ff4d4f !important;
+}
+
+/* 下拉框样式优化 */
+.add-device-input select,
+select.add-device-input {
+  background-color: transparent !important;
+}
+
+.add-device-input select option,
+select.add-device-input option {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+  color: #fff !important;
+}
+
 .device-top-card {
   margin-bottom: 4px;
   background: linear-gradient(135deg, #0a2a3a 80%, #0a0f1c 100%);
@@ -855,7 +989,7 @@ const formatCreateDate = (device: any) => {
   margin-bottom: 2px;
 }
 .add-device-row label {
-  min-width: 80px;
+  min-width: 100px;
   color: #b8c7d9;
   font-size: 14px;
   text-align: right;

@@ -55,8 +55,7 @@ const contactAdmin = () => {
 
 // 应用启动时初始化
 onMounted(async () => {
-  // 开始任务进度轮询
-  taskProgressStore.startPolling()
+  // 轮询功能已移除，使用手动获取
   
   // 初始化权限系统
   try {
@@ -72,9 +71,8 @@ onMounted(async () => {
   document.addEventListener('permission-denied', handlePermissionDenied as EventListener)
 })
 
-// 应用卸载时停止轮询
+// 应用卸载时清理
 onUnmounted(() => {
-  taskProgressStore.stopPolling()
   document.removeEventListener('permission-denied', handlePermissionDenied as EventListener)
 })
 </script>

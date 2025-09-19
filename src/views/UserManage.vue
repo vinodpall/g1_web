@@ -56,15 +56,27 @@
               <div class="mission-th">序号</div>
               <div class="mission-th">用户名</div>
               <div class="mission-th">姓名</div>
-              <div class="mission-th">注册时间</div>
+              <div class="mission-th">邮箱</div>
+              <div class="mission-th">状态</div>
+              <div class="mission-th">角色</div>
               <div class="mission-th">操作</div>
             </div>
             <div class="mission-table-body">
               <div class="mission-tr" v-for="(user, idx) in users" :key="user.id">
                 <div class="mission-td">{{ idx + 1 }}</div>
                 <div class="mission-td">{{ user.username }}</div>
-                <div class="mission-td">{{ user.userfullname || '-' }}</div>
-                <div class="mission-td">{{ formatTime(user.created_time) }}</div>
+                <div class="mission-td">{{ user.full_name || user.userfullname || '-' }}</div>
+                <div class="mission-td">{{ user.email || '-' }}</div>
+                <div class="mission-td">
+                  <span :class="user.is_active ? 'status-active' : 'status-inactive'">
+                    {{ user.is_active ? '活跃' : '非活跃' }}
+                  </span>
+                </div>
+                <div class="mission-td">
+                  <span :class="user.is_superuser ? 'status-super' : 'status-normal'">
+                    {{ user.is_superuser ? '超级管理员' : '普通用户' }}
+                  </span>
+                </div>
                 <div class="mission-td">
                   <div class="user-action-btns">
                     <button class="icon-btn" title="编辑" @click="onClickEditUser(user)"><img :src="editIcon" /></button>
@@ -86,20 +98,10 @@
             
             <!-- 讲解词列表 -->
             <div v-else class="introduce-list-content">
-              <div class="introduce-list-header">
-                <div class="introduce-list-title">
-                  <span class="target-name">{{ getSelectedTargetName() }}</span>
-                  <span class="target-desc">的讲解词列表</span>
-                </div>
-                <div class="introduce-list-count">
-                  共 {{ getIntroduceContentsByTarget().length }} 条讲解词
-                </div>
-              </div>
-              
               <div class="introduce-list-table">
                 <div class="introduce-table-header">
                   <div class="introduce-th introduce-th-index">序号</div>
-                  <div class="introduce-th introduce-th-point">关联点位</div>
+                  <div class="introduce-th introduce-th-point">点位名称</div>
                   <div class="introduce-th introduce-th-content">讲解词内容</div>
                   <div class="introduce-th introduce-th-time">创建时间</div>
                   <div class="introduce-th introduce-th-actions">操作</div>
@@ -114,7 +116,7 @@
                     <div class="introduce-td introduce-td-index">{{ index + 1 }}</div>
                     <div class="introduce-td introduce-td-point">{{ item.pointName }}</div>
                     <div class="introduce-td introduce-td-content">
-                      <div class="content-preview" :title="item.content">
+                      <div class="content-preview" @click="showContentDetail(item.content)">
                         {{ item.content }}
                       </div>
                     </div>
@@ -149,9 +151,36 @@
         <div class="custom-dialog-title">新增用户</div>
         <div class="custom-dialog-content">
           <div class="add-user-form">
-            <div class="add-user-form-row"><label>用户名：</label><input v-model="addUserForm.username" class="user-input" placeholder="请输入用户名" /></div>
-            <div class="add-user-form-row"><label>姓名：</label><input v-model="addUserForm.name" class="user-input" placeholder="请输入姓名" /></div>
-            <div class="add-user-form-row"><label>密码：</label><input v-model="addUserForm.password" type="password" class="user-input" placeholder="请输入密码" /></div>
+            <div class="add-user-form-row">
+              <label><span class="required">*</span>用户名：</label>
+              <input v-model="addUserForm.username" class="user-input" placeholder="请输入用户名" />
+            </div>
+            <div class="add-user-form-row">
+              <label><span class="required">*</span>姓名：</label>
+              <input v-model="addUserForm.full_name" class="user-input" placeholder="请输入姓名" />
+            </div>
+            <div class="add-user-form-row">
+              <label><span class="required">*</span>密码：</label>
+              <input v-model="addUserForm.password" type="password" class="user-input" placeholder="请输入密码" />
+            </div>
+            <div class="add-user-form-row">
+              <label>邮箱：</label>
+              <input v-model="addUserForm.email" type="email" class="user-input" placeholder="请输入邮箱地址" />
+            </div>
+            <div class="add-user-form-row">
+              <label>是否激活：</label>
+              <select v-model="addUserForm.is_active" class="user-input">
+                <option :value="true">是</option>
+                <option :value="false">否</option>
+              </select>
+            </div>
+            <div class="add-user-form-row">
+              <label>超级管理员：</label>
+              <select v-model="addUserForm.is_superuser" class="user-input">
+                <option :value="false">否</option>
+                <option :value="true">是</option>
+              </select>
+            </div>
           </div>
         </div>
         <div class="custom-dialog-actions">
@@ -266,15 +295,14 @@
         <div class="custom-dialog-title">添加讲解词</div>
         <div class="custom-dialog-content">
           <div class="add-user-form">
-            <div class="add-user-form-row">
-              <label>选择点位：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="selectedPointForContent" class="user-select">
-                  <option value="">请选择点位</option>
-                  <option v-for="point in pointNames" :key="point.id" :value="point.id">
-                    {{ point.name }}
-                  </option>
-                </select>
+             <div class="add-user-form-row">
+               <label>点位：</label>
+               <div class="custom-select-wrapper">
+                 <select v-model="selectedPointForContent" class="user-select">
+                   <option v-for="point in pointNames" :key="point.id" :value="point.id">
+                     {{ point.name }}
+                   </option>
+                 </select>
                 <span class="custom-select-arrow">
                   <svg width="12" height="12" viewBox="0 0 12 12">
                     <polygon points="2,4 6,8 10,4" fill="#fff"/>
@@ -374,14 +402,29 @@
         </div>
       </div>
     </div>
+
+    <!-- 查看讲解词详情弹窗 -->
+    <div v-if="showContentDetailDialog" class="custom-dialog-mask">
+      <div class="custom-dialog content-detail-dialog">
+        <div class="custom-dialog-title">讲解词详情</div>
+        <div class="custom-dialog-content">
+          <div class="content-detail-text">
+            {{ contentDetailText }}
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="showContentDetailDialog = false">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useUsers } from '../composables/useApi'
-// 取消按钮上的权限包装，改为点击时校验
+import { useUserManagementStore } from '../stores/userManagement'
+import { useUserStore } from '../stores/user'
 import { usePermissionStore } from '../stores/permission'
 import PermissionDenied from '../components/PermissionDenied.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
@@ -393,9 +436,13 @@ import deleteIcon from '@/assets/source_data/svg_data/delete.svg'
 
 const router = useRouter()
 const route = useRoute()
+const userManagementStore = useUserManagementStore()
+const userStore = useUserStore()
 
-// 使用用户管理API
-const { users, loading, error, fetchUsers, createUser, updateUser, deleteUser } = useUsers()
+// 使用用户管理store中的数据
+const users = computed(() => userManagementStore.users || [])
+const loading = computed(() => userManagementStore.loading)
+const error = computed(() => userManagementStore.error)
 
 const sidebarTabs = [
   { key: 'user', label: '用户管理', icon: userIcon, path: '/dashboard/users' },
@@ -418,11 +465,17 @@ const filter = ref({
 })
 const onSearch = async () => {
   try {
-    await fetchUsers({ 
-      skip: 0, 
-      limit: 100,
-      search: filter.value.username || filter.value.name 
-    })
+    const token = userStore.token
+    if (!token) {
+      console.error('用户未登录')
+      errorMessage.value = '用户未登录，请先登录'
+      showErrorMessage.value = true
+      return
+    }
+    
+    const searchQuery = filter.value.username || filter.value.name
+    await userManagementStore.fetchUsers(token, searchQuery, 0, 100)
+    
   } catch (err: any) {
     console.error('搜索用户失败:', err)
     
@@ -438,6 +491,23 @@ const onSearch = async () => {
     // 显示错误弹窗
     errorMessage.value = errorMsg
     showErrorMessage.value = true
+  }
+}
+
+// 页面加载时获取用户列表
+const loadUsers = async () => {
+  try {
+    const token = userStore.token
+    if (!token) {
+      console.error('用户未登录')
+      return
+    }
+    
+    await userManagementStore.fetchUsers(token)
+    console.log('用户列表加载完成:', users.value.length, '个用户')
+    
+  } catch (err: any) {
+    console.error('加载用户列表失败:', err)
   }
 }
 
@@ -508,6 +578,10 @@ const editIntroduceContentForm = ref({
   content: ''
 })
 
+// 查看讲解词详情相关状态
+const showContentDetailDialog = ref(false)
+const contentDetailText = ref('')
+
 // 错误提示相关状态
 const showErrorMessage = ref(false)
 const errorMessage = ref('')
@@ -524,12 +598,11 @@ const resultDialog = ref({
 
 const addUserForm = ref({
   username: '',
-  name: '',
+  email: '',
+  full_name: '',
   password: '',
-  is_activate: '1',
-  is_superuser: '0',
-  workspace_id: '123456',
-  user_type: 1
+  is_active: true,
+  is_superuser: false
 })
 
 const editUserForm = ref({
@@ -549,6 +622,15 @@ const hasPermission = (permission: string) => permissionStore.hasPermission(perm
 
 const handleAddUser = () => {
   if (hasPermission('system_management.user.create')) {
+    // 重置表单
+    addUserForm.value = {
+      username: '',
+      email: '',
+      full_name: '',
+      password: '',
+      is_active: true,
+      is_superuser: false
+    }
     showAddUserDialog.value = true
   } else {
     requiredPermission.value = 'system_management.user.create'
@@ -576,38 +658,78 @@ const onClickDeleteUser = (user: any) => {
 
 const onAddUserConfirm = async () => {
   try {
-    // 将表单数据转换为API需要的格式
-    const apiUserData = {
-      username: addUserForm.value.username,
-      userfullname: addUserForm.value.name,
+    // 表单验证
+    if (!addUserForm.value.username.trim()) {
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '新增用户失败',
+        message: '',
+        details: '请输入用户名'
+      }
+      return
+    }
+    
+    
+    if (!addUserForm.value.full_name.trim()) {
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '新增用户失败',
+        message: '',
+        details: '请输入姓名'
+      }
+      return
+    }
+    
+    if (!addUserForm.value.password.trim()) {
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '新增用户失败',
+        message: '',
+        details: '请输入密码'
+      }
+      return
+    }
+    
+    const token = userStore.token
+    if (!token) {
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '新增用户失败',
+        message: '',
+        details: '用户未登录，请先登录'
+      }
+      return
+    }
+    
+    // 准备用户数据
+    const userData = {
+      username: addUserForm.value.username.trim(),
+      email: addUserForm.value.email.trim() || '',
+      full_name: addUserForm.value.full_name.trim(),
       password: addUserForm.value.password,
-      is_activate: '1', // 默认激活
-      is_superuser: '0', // 默认不是超级用户
-      created_by: null, // 后端会自动设置
-      created_time: new Date().toISOString(), // 后端会自动设置
-      updated_by: null, // 后端会自动设置
-      updated_time: new Date().toISOString(), // 后端会自动设置
-      workspace_id: '123456', // 默认工作空间
-      user_type: 1
+      is_active: addUserForm.value.is_active,
+      is_superuser: addUserForm.value.is_superuser
     }
     
     // 创建用户
-    const newUser = await createUser(apiUserData)
+    await userManagementStore.createUser(token, userData)
     
+    // 关闭弹窗并重置表单
     showAddUserDialog.value = false
     addUserForm.value = { 
-      username: '', 
-      name: '', 
+      username: '',
+      email: '',
+      full_name: '',
       password: '',
-      is_activate: '1',
-      is_superuser: '0',
-      workspace_id: '123456',
-      user_type: 1
+      is_active: true,
+      is_superuser: false
     }
     
-    // 重新获取用户列表以更新显示
-    await fetchUsers({ skip: 0, limit: 100 })
-    console.log('用户创建成功，列表已刷新')
+    console.log('用户创建成功')
     
     // 显示成功结果
     resultDialog.value = {
@@ -615,7 +737,7 @@ const onAddUserConfirm = async () => {
       type: 'success',
       title: '新增用户成功',
       message: '',
-      details: ''
+      details: '用户已成功创建'
     }
     
   } catch (err: any) {
@@ -835,6 +957,10 @@ const handleDeleteIntroduceTarget = () => {
 }
 
 const handleAddIntroduceContent = () => {
+  // 默认选择第一个点位
+  if (pointNames.value.length > 0) {
+    selectedPointForContent.value = pointNames.value[0].id
+  }
   showAddIntroduceContentDialog.value = true
 }
 
@@ -912,17 +1038,6 @@ const getIntroduceContentsByTarget = () => {
 
 // 确认添加讲解词
 const confirmAddIntroduceContent = () => {
-  if (!selectedPointForContent.value) {
-    resultDialog.value = {
-      show: true,
-      type: 'error',
-      title: '操作失败',
-      message: '',
-      details: '请选择点位'
-    }
-    return
-  }
-  
   if (!newIntroduceContent.value.trim()) {
     resultDialog.value = {
       show: true,
@@ -1057,6 +1172,12 @@ const deleteIntroduceContent = (contentId: string) => {
   }
 }
 
+// 显示讲解词详情
+const showContentDetail = (content: string) => {
+  contentDetailText.value = content
+  showContentDetailDialog.value = true
+}
+
 // 确认编辑讲解词
 const confirmEditIntroduceContent = () => {
   if (!editIntroduceContentForm.value.pointId) {
@@ -1082,7 +1203,7 @@ const confirmEditIntroduceContent = () => {
   }
   
   if (editingIntroduceContent.value) {
-    const item = editingIntroduceContent.value
+    const item = editingIntroduceContent.value as any
     const contentIndex = introduceContents.value.findIndex(c => c.id === item.id)
     
     if (contentIndex > -1) {
@@ -1115,8 +1236,9 @@ const confirmEditIntroduceContent = () => {
 
 // 页面加载时获取用户列表
 onMounted(async () => {
+  console.log('UserManage组件加载')
   try {
-    await fetchUsers({ skip: 0, limit: 100 })
+    await loadUsers()
     
     // 确保讲解对象有值时默认选择第一个
     if (introduceTargets.value.length > 0 && !selectedIntroduceTarget.value) {
@@ -1758,5 +1880,92 @@ onMounted(async () => {
 
 .introduce-table-body::-webkit-scrollbar-thumb:hover {
   background: rgba(103, 213, 253, 0.8);
+}
+
+/* 查看讲解词详情弹窗样式 */
+.content-detail-dialog {
+  min-width: 500px;
+  max-width: 700px;
+}
+
+.content-detail-text {
+  background: rgba(22, 65, 89, 0.3);
+  border-radius: 8px;
+  padding: 20px;
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.8;
+  max-height: 400px;
+  overflow-y: auto;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* 内容预览点击样式优化 */
+.content-preview {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.content-preview:hover {
+  color: #67d5fd;
+}
+
+/* 内容详情文本滚动条样式 */
+.content-detail-text::-webkit-scrollbar {
+  width: 6px;
+}
+
+.content-detail-text::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.content-detail-text::-webkit-scrollbar-thumb {
+  background: rgba(103, 213, 253, 0.6);
+  border-radius: 3px;
+}
+
+.content-detail-text::-webkit-scrollbar-thumb:hover {
+  background: rgba(103, 213, 253, 0.8);
+}
+
+/* 用户状态样式 */
+.status-active {
+  color: #52c41a;
+  font-weight: 500;
+}
+
+.status-inactive {
+  color: #ff4d4f;
+  font-weight: 500;
+}
+
+.status-super {
+  color: #faad14;
+  font-weight: 500;
+}
+
+.status-normal {
+  color: #67d5fd;
+  font-weight: 500;
+}
+
+/* 必填字段标识样式 */
+.required {
+  color: #ff4d4f;
+  margin-right: 4px;
+}
+
+/* 下拉框样式优化 */
+.user-input select,
+select.user-input {
+  background-color: transparent !important;
+}
+
+.user-input select option,
+select.user-input option {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+  color: #fff !important;
 }
 </style>

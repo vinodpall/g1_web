@@ -91,8 +91,9 @@ const formatTime = (timestamp: number) => {
 
 // 查看报警日志
 const viewAlarmLog = () => {
+  console.log('报警日志功能已移除')
   alertNotificationStore.closeAlertDialog()
-  router.push('/dashboard/alarm-log')
+  // router.push('/dashboard/alarm-log') // 页面已删除
 }
 
 // 确认报警

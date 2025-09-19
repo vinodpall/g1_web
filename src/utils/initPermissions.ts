@@ -23,7 +23,7 @@ export async function initUserPermissions() {
     
 
     
-    // 处理方式1：从顶层的permissions数组中提取（/users/me接口返回的数据结构）
+    // 处理方式1：从顶层的permissions数组中提取（从登录响应数据中获取）
     if (user.permissions && Array.isArray(user.permissions)) {
       console.log('从顶层permissions数组提取权限:', user.permissions)
       user.permissions.forEach((permission: any) => {

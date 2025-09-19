@@ -1,21 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useWaylineJobs } from '../composables/useApi'
-import { visionApi } from '../api/services'
-import { useDevices } from '../composables/useApi'
+// import { useWaylineJobs, useDevices } from '../composables/useApi' // API已移除，等待重新对接
+// import { visionApi } from '../api/services' // API已移除
 
 export const useTaskProgressStore = defineStore('taskProgress', () => {
   // 任务进度数据
   const waylineProgress = ref<any>(null)
   const waylineJobDetail = ref<any>(null)
   
-  // 轮询状态
-  const isPolling = ref(false)
-  const pollingTimer = ref<number | null>(null)
-  
-  // 轮询频率配置
-  const POLLING_INTERVAL_ACTIVE = 3000  // 有任务时：3秒
-  const POLLING_INTERVAL_IDLE = 10000   // 无任务时：10秒
+  // 轮询功能已移除
   
   // 任务完成弹窗状态
   const showTaskCompletionDialog = ref(false)
@@ -30,9 +23,13 @@ export const useTaskProgressStore = defineStore('taskProgress', () => {
   const lastTaskStatus = ref<string | null>(null)
   const lastJobId = ref<string | null>(null)
   
-  // 获取缓存的设备信息
-  const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
-  const { fetchWaylineProgress, fetchWaylineJobDetail } = useWaylineJobs()
+  // 获取缓存的设备信息 - API已移除，使用临时替代
+  // const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
+  // const { fetchWaylineProgress, fetchWaylineJobDetail } = useWaylineJobs()
+  const getCachedDeviceSns = () => ({ dockSns: [], droneSns: [] })
+  const getCachedWorkspaceId = () => localStorage.getItem('workspace_id')
+  const fetchWaylineProgress = () => Promise.resolve(null)
+  const fetchWaylineJobDetail = () => Promise.resolve(null)
   
   // 计算任务状态
   const taskStatus = computed(() => {
@@ -68,20 +65,9 @@ export const useTaskProgressStore = defineStore('taskProgress', () => {
   
   // 获取任务异常数量
   const getTaskAlertCount = async (jobId: string): Promise<number> => {
-    try {
-      const workspaceId = getCachedWorkspaceId()
-      if (!workspaceId) return 0
-      
-      const response = await visionApi.getAlerts(workspaceId, {
-        job_id: jobId,
-        limit: 1000 // 获取所有异常
-      })
-      
-      return response.total || 0
-    } catch (error) {
-      console.error('获取任务异常数量失败:', error)
-      return 0
-    }
+    // visionApi已移除，临时返回0
+    console.log('getTaskAlertCount - 等待重新对接')
+    return 0
   }
   
   // 检测任务状态变化
@@ -140,92 +126,46 @@ export const useTaskProgressStore = defineStore('taskProgress', () => {
     }
   }
   
-  // 开始轮询任务进度
-  const startPolling = () => {
-    if (isPolling.value) return
-    
-    isPolling.value = true
-    
-    const pollTaskProgress = async () => {
-      try {
-        const workspaceId = getCachedWorkspaceId()
-        const { dockSns } = getCachedDeviceSns()
-        
-        if (!workspaceId || dockSns.length === 0) {
-          return
-        }
-        
-        // 获取第一个机场的任务进度
-        const dockSn = dockSns[0]
-        const progressData = await fetchWaylineProgress(workspaceId, dockSn)
-        
-        // 检查progressData是否有效
-        if (!progressData) {
-          waylineProgress.value = null
-          waylineJobDetail.value = null
-          return
-        }
-        
-        waylineProgress.value = progressData
-        
-        // 如果有任务，获取详细信息
-        if (progressData.job_id) {
-          const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
-          waylineJobDetail.value = jobDetail
-        } else {
-          waylineJobDetail.value = null
-        }
-        
-        // 检查任务状态变化
-        checkTaskStatusChange()
-        
-      } catch (error) {
-        console.error('轮询任务进度失败:', error)
-        // 设置默认值，避免后续访问null
+  // 手动获取任务进度（移除轮询机制）
+  const fetchTaskProgress = async () => {
+    try {
+      const workspaceId = getCachedWorkspaceId()
+      const { dockSns } = getCachedDeviceSns()
+      
+      if (!workspaceId || dockSns.length === 0) {
+        return
+      }
+      
+      // 获取第一个机场的任务进度
+      const dockSn = dockSns[0]
+      const progressData = await fetchWaylineProgress(workspaceId, dockSn)
+      
+      // 检查progressData是否有效
+      if (!progressData) {
         waylineProgress.value = null
         waylineJobDetail.value = null
-      }
-    }
-    
-    // 动态轮询函数
-    const startDynamicPolling = () => {
-      // 立即执行一次
-      pollTaskProgress()
-      
-      // 根据任务状态动态调整轮询频率
-      const adjustPollingInterval = () => {
-        // 清除当前定时器
-        if (pollingTimer.value) {
-          clearInterval(pollingTimer.value)
-        }
-        
-        // 根据是否有任务来决定轮询频率
-        const hasActiveTask = waylineProgress.value && waylineProgress.value.job_id
-        const interval = hasActiveTask ? POLLING_INTERVAL_ACTIVE : POLLING_INTERVAL_IDLE
-        
-        // 设置新的定时器
-        pollingTimer.value = setInterval(() => {
-          pollTaskProgress()
-          // 每次轮询后重新调整频率
-          adjustPollingInterval()
-        }, interval) as unknown as number
+        return
       }
       
-      // 启动动态轮询
-      adjustPollingInterval()
+      waylineProgress.value = progressData
+      
+      // 如果有任务，获取详细信息
+      if (progressData.job_id) {
+        const jobDetail = await fetchWaylineJobDetail(workspaceId, progressData.job_id)
+        waylineJobDetail.value = jobDetail
+      } else {
+        waylineJobDetail.value = null
+      }
+      
+      // 检查任务状态变化
+      checkTaskStatusChange()
+      
+    } catch (error) {
+      console.error('获取任务进度失败:', error)
+      // 设置默认值，避免后续访问null
+      waylineProgress.value = null
+      waylineJobDetail.value = null
     }
-    
-    // 启动动态轮询
-    startDynamicPolling()
-  }
-  
-  // 停止轮询
-  const stopPolling = () => {
-    if (pollingTimer.value) {
-      clearInterval(pollingTimer.value)
-      pollingTimer.value = null
-    }
-    isPolling.value = false
   }
   
   // 关闭任务完成弹窗
@@ -236,16 +176,9 @@ export const useTaskProgressStore = defineStore('taskProgress', () => {
   
   // 跳转到任务日志页面
   const goToMissionLogs = () => {
+    console.log('任务日志功能已移除')
     closeTaskCompletionDialog()
-    // 使用延迟跳转，确保弹窗完全关闭后再跳转
-    const jobId = taskCompletionData.value?.jobId
-    setTimeout(() => {
-      if (jobId) {
-        window.location.href = `/#/dashboard/mission-logs?job_id=${jobId}`
-      } else {
-        window.location.href = '/#/dashboard/mission-logs'
-      }
-    }, 100)
+    // 页面已删除，不再跳转
   }
   
 
@@ -254,7 +187,6 @@ export const useTaskProgressStore = defineStore('taskProgress', () => {
     // 状态
     waylineProgress: computed(() => waylineProgress.value),
     waylineJobDetail: computed(() => waylineJobDetail.value),
-    isPolling: computed(() => isPolling.value),
     taskStatus: computed(() => taskStatus.value),
     taskProgressPercent: computed(() => taskProgressPercent.value),
     
@@ -263,8 +195,7 @@ export const useTaskProgressStore = defineStore('taskProgress', () => {
     taskCompletionData: computed(() => taskCompletionData.value),
     
     // 方法
-    startPolling,
-    stopPolling,
+    fetchTaskProgress,  // 替换轮询为手动获取
     closeTaskCompletionDialog,
     goToMissionLogs
   }

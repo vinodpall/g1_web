@@ -20,40 +20,40 @@
                 <div class="robot-details-section">
                   <div class="robot-detail-item">
                     <span class="detail-label">名称：</span>
-                    <span class="detail-value">a区导览机器人</span>
+                    <span class="detail-value">{{ robotDisplayInfo.name }}</span>
                   </div>
                   <div class="robot-detail-item">
                     <span class="detail-label">型号：</span>
-                    <span class="detail-value">G1</span>
+                    <span class="detail-value">{{ robotDisplayInfo.model }}</span>
                   </div>
                   <div class="robot-detail-item">
                     <span class="detail-label">状态：</span>
                     <span class="status-indicator">
-                      <span class="status-dot online"></span>
-                      <span class="status-text">在线</span>
+                      <span class="status-dot" :class="{ 'online': robotDisplayInfo.isOnline, 'offline': !robotDisplayInfo.isOnline }"></span>
+                      <span class="status-text">{{ robotDisplayInfo.statusText }}</span>
                     </span>
                   </div>
                   <div class="robot-detail-item">
                     <span class="detail-label">编号：</span>
-                    <span class="detail-value">SN-20231108</span>
+                    <span class="detail-value">{{ robotDisplayInfo.sn }}</span>
                   </div>
                   <!-- 电量和信号强度移到右侧 -->
                   <div class="status-indicators-row">
                     <div class="status-indicator-item">
                       <div class="status-icon battery-icon">
-                        <div class="battery-level" style="width: 30%"></div>
+                        <div class="battery-level" :style="{ width: robotDisplayInfo.batteryLevel + '%' }"></div>
                       </div>
-                      <span class="status-percentage">30%</span>
+                      <span class="status-percentage">{{ robotDisplayInfo.batteryLevel }}%</span>
                     </div>
                     <div class="status-indicator-item">
                       <div class="status-icon wifi-icon">
                         <div class="wifi-bars">
-                          <div class="bar bar1"></div>
-                          <div class="bar bar2"></div>
-                          <div class="bar bar3"></div>
+                          <div class="bar bar1" :class="{ 'active': robotDisplayInfo.signalStrength !== 'none' }"></div>
+                          <div class="bar bar2" :class="{ 'active': ['medium', 'strong'].includes(robotDisplayInfo.signalStrength) }"></div>
+                          <div class="bar bar3" :class="{ 'active': robotDisplayInfo.signalStrength === 'strong' }"></div>
                         </div>
                       </div>
-                      <span class="status-text">弱</span>
+                      <span class="status-text">{{ robotDisplayInfo.signalStrength === 'weak' ? '弱' : robotDisplayInfo.signalStrength === 'medium' ? '中' : robotDisplayInfo.signalStrength === 'strong' ? '强' : '无' }}</span>
                     </div>
                   </div>
                 </div>
@@ -899,9 +899,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useHmsAlerts, useDevices, useWaylineJobs } from '../composables/useApi'
-import { controlApi, waylineApi, livestreamApi } from '../api/services'
-import { useDeviceStatus } from '../composables/useDeviceStatus'
+// import { useHmsAlerts, useDevices, useWaylineJobs } from '../composables/useApi' // API已移除，等待重新对接
+// import { controlApi, waylineApi, livestreamApi } from '../api/services' // API已移除
+// import { useDeviceStatus } from '../composables/useDeviceStatus' // API已移除
 import { config } from '../config/environment'
 import { getVideoStreams, getVideoStream, getDefaultVideoType } from '../utils/videoCache'
 import * as echarts from 'echarts'
@@ -919,41 +919,115 @@ import droneBatteryChargeIcon from '@/assets/source_data/svg_data/drone_battery_
 const router = useRouter()
 
 // 使用HMS报警API和设备管理API
-const { hmsAlerts, loading, error, fetchDeviceHms, setAllAlerts } = useHmsAlerts()
-const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices()
+// const { hmsAlerts, loading, error, fetchDeviceHms, setAllAlerts } = useHmsAlerts() // API已移除
+const hmsAlerts = ref([])
+const loading = ref(false)
+const error = ref(null)
+const fetchDeviceHms = () => {}
+const setAllAlerts = () => {}
+// const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices() // API已移除
+const getCachedDeviceSns = () => ({ dockSns: [], droneSns: [] })
+const getCachedWorkspaceId = () => localStorage.getItem('workspace_id')
 
 
 
 // 使用航线任务API
-const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineDetail, cancelReturnHome, stopJob, pauseJob, resumeJob, executeJob } = useWaylineJobs()
+// const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineDetail, cancelReturnHome, stopJob, pauseJob, resumeJob, executeJob } = useWaylineJobs() // API已移除
+const waylineFiles = ref([])
+const fetchWaylineFiles = () => {}
+const createJob = () => {}
+const fetchWaylineDetail = () => {}
+const cancelReturnHome = () => {}
+const stopJob = () => {}
+const pauseJob = () => {}
+const resumeJob = () => {}
+const executeJob = () => {}
 
-// 使用设备状态API
-const { 
-  fetchDeviceStatus, 
-  fetchMainDeviceStatus,
-  fetchDroneStatus,
-  position, 
-  environment, 
-  dockStatus, 
-  droneStatus, 
-  gpsStatus,
-  formatCoordinate,
-  formatHeight,
-  formatSpeed,
-  formatTemperature,
-  formatHumidity,
-  formatWindSpeed,
-  formatRainfall,
-  formatBattery,
-  formatNetworkRate,
-  formatAccTime,
-  formatFlightDistance
-} = useDeviceStatus()
+// 使用设备状态API - 已移除，临时模拟
+// const { 
+//   fetchDeviceStatus, 
+//   fetchMainDeviceStatus,
+//   fetchDroneStatus,
+//   position, 
+//   environment, 
+//   dockStatus, 
+//   droneStatus, 
+//   gpsStatus,
+//   formatCoordinate,
+//   formatHeight,
+//   formatSpeed,
+//   formatTemperature,
+//   formatHumidity,
+//   formatWindSpeed,
+//   formatRainfall,
+//   formatBattery,
+//   formatNetworkRate,
+//   formatAccTime,
+//   formatFlightDistance
+// } = useDeviceStatus()
+
+// 临时模拟数据和函数
+const fetchDeviceStatus = () => {}
+const fetchMainDeviceStatus = () => {}
+const fetchDroneStatus = () => {}
+const position = ref({ longitude: 0, latitude: 0, height: 0 })
+const environment = ref({ environmentTemperature: 0, humidity: 0, windSpeed: 0, rainfall: 0 })
+const dockStatus = ref({ isOnline: false, coverState: 0, chargeState: 0, batteryPercent: 0, networkRate: 0, jobNumber: 0, accTime: 0, coverText: '' })
+const droneStatus = ref({ isOnline: false, inDock: false, batteryPercent: 0, horizontalSpeed: 0, totalFlightTime: 0, totalFlightDistance: 0, rtkNumber: 0, gimbalYaw: 0, attitude: { pitch: 0, roll: 0, yaw: 0 } })
+const gpsStatus = ref({ signal: 0 })
+const formatCoordinate = (val: any, precision?: any) => val || '--'
+const formatHeight = (val: any, unit?: any) => val || '--'
+const formatSpeed = (val: any, unit?: any) => val || '--'
+const formatTemperature = (val: any, unit?: any) => val || '--'
+const formatHumidity = (val: any, unit?: any) => val || '--'
+const formatWindSpeed = (val: any, unit?: any) => val || '--'
+const formatRainfall = (val: any, unit?: any) => val || '--'
+const formatBattery = (val: any, showIcon?: any) => val || '--'
+const formatNetworkRate = (val: any, unit?: any) => val || '--'
+const formatAccTime = (val: any, unit?: any) => val || '--'
+const formatFlightDistance = (val: any, unit?: any) => val || '--'
 
 // 使用全局任务进度store
 import { useTaskProgressStore } from '../stores/taskProgress'
 import { parseErrorMessage } from '../utils/errorCodes'
 const taskProgressStore = useTaskProgressStore()
+
+// 使用机器人store
+import { useRobotStore } from '../stores/robot'
+const robotStore = useRobotStore()
+
+// 当前选中的机器人信息
+const currentRobot = computed(() => {
+  return robotStore.selectedRobot
+})
+
+// 机器人显示信息的计算属性
+const robotDisplayInfo = computed(() => {
+  const robot = currentRobot.value
+  if (!robot) {
+    return {
+      name: 'a区导览机器人',
+      model: 'G1',
+      status: 'offline',
+      statusText: '离线',
+      sn: 'SN-20231108',
+      batteryLevel: 30,
+      signalStrength: 'weak',
+      isOnline: false
+    }
+  }
+  
+  return {
+    name: robot.name,
+    model: robot.model,
+    status: robot.online ? 'online' : 'offline',
+    statusText: robot.online ? '在线' : '离线',
+    sn: robot.sn,
+    batteryLevel: 30, // 暂时固定，后续可从robot数据中获取
+    signalStrength: 'weak', // 暂时固定，后续可从robot数据中获取
+    isOnline: robot.online
+  }
+})
 
 // 当前标签页
 const currentTab = ref('device')
@@ -972,12 +1046,13 @@ const loadLatestInspectionAlerts = async () => {
       return
     }
     
-    // 调用vision API获取巡检告警数据
-    const { visionApi } = await import('../api/services')
-    const response = await visionApi.getAlerts(workspaceId, {
-      limit: 3,
-      offset: 0
-    })
+    // 调用vision API获取巡检告警数据 - API已移除
+    // const { visionApi } = await import('../api/services')
+    // const response = await visionApi.getAlerts(workspaceId, {
+    //   limit: 3,
+    //   offset: 0
+    // })
+    const response = null // 临时模拟
     
     if (response && response.alerts) {
       inspectionAlarmData.value = response.alerts.slice(0, 3)
@@ -985,7 +1060,7 @@ const loadLatestInspectionAlerts = async () => {
       downloadThumbnails(response.alerts.slice(0, 3))
     }
   } catch (err) {
-    console.error('获取巡检告警数据失败:', err)
+    // 静默处理错误
     // 静默处理错误
   }
 }
@@ -1092,9 +1167,7 @@ const loadingFlightStats = ref(false)
 const flightStatsError = ref('')
 
 // 设备状态刷新定时器
-let statusRefreshTimer: number | null = null
-// 无人机状态刷新定时器（2秒一次）
-let droneStatusRefreshTimer: number | null = null
+// 轮询定时器已移除
 
 // 任务动态相关数据
 const taskPoints = ref([
@@ -1110,7 +1183,7 @@ const isTaskPaused = ref(false)
 const toggleTaskExecution = () => {
   isTaskPaused.value = !isTaskPaused.value
   // 这里可以添加实际的暂停/恢复逻辑
-  console.log(isTaskPaused.value ? '任务已暂停' : '任务已恢复')
+    // 任务状态切换
 }
 
 // 舱盖状态警报声相关
@@ -1313,7 +1386,7 @@ const switchGimbal = async (videoType: 'dock' | 'drone_visible' | 'drone_infrare
     videoStreamUrl.value = targetStream.url
     currentVideoType.value = videoType
     
-    console.log(`已切换到${getVideoTypeName(videoType)}视频流`)
+    // 视频流切换完成
     
     // 选择视频后关闭菜单
     gimbalMenuVisible.value = false
@@ -1921,7 +1994,7 @@ const updateMapMarkers = (shouldCenter = false) => {
   
   // 检查是否有位置数据
   if (position.value && position.value.longitude && position.value.latitude) {
-    // console.log('定位数据可用:', position.value)
+    // 定位数据可用
     const wgsLongitude = position.value.longitude
     const wgsLatitude = position.value.latitude
     
@@ -2070,7 +2143,7 @@ const initVideoPlayer = () => {
     if (defaultStream) {
       videoStreamUrl.value = defaultStream.url
       currentVideoType.value = defaultVideoType
-      console.log(`首页初始化：使用默认视频流 ${defaultVideoType}`)
+        // 使用默认视频流
     }
   }
   
@@ -2696,7 +2769,7 @@ const onDispatchTaskConfirm = async () => {
     }
 
     const response = await createJob(workspaceId, taskData)
-    console.log('任务创建成功:', response)
+      // 任务创建成功
     
     if (response && response.job_id) {
       // 立即任务需要调用execute接口
@@ -2709,7 +2782,7 @@ const onDispatchTaskConfirm = async () => {
           })
           alert('立即任务创建并执行成功')
         } catch (executeErr) {
-          console.error('任务执行失败:', executeErr)
+          // 任务执行失败
           alert('立即任务创建成功，但执行失败')
         }
       } else {
@@ -2722,7 +2795,7 @@ const onDispatchTaskConfirm = async () => {
     
     dispatchTaskDialog.value.visible = false
   } catch (err) {
-    console.error('任务下发失败:', err)
+    // 任务下发失败
     alert('任务下发失败')
   }
 }
@@ -2755,7 +2828,7 @@ const handleCancelTask = async () => {
     
     // 任务进度由全局store自动更新
   } catch (err) {
-    console.error('取消任务失败:', err)
+    // 取消任务失败
     alert('取消任务失败')
   }
 }
@@ -2779,7 +2852,7 @@ const handlePauseRoute = async () => {
     
     // 任务进度由全局store自动更新
   } catch (err) {
-    console.error('航线暂停失败:', err)
+    // 航线暂停失败
     alert('航线暂停失败')
   }
 }
@@ -2803,7 +2876,7 @@ const handleResumeRoute = async () => {
     
     // 任务进度由全局store自动更新
   } catch (err) {
-    console.error('航线恢复失败:', err)
+    // 航线恢复失败
     alert('航线恢复失败')
   }
 }
@@ -2832,7 +2905,7 @@ const handleCancelReturnHome = async () => {
     
     // 任务进度由全局store自动更新
   } catch (err) {
-    console.error('取消返航失败:', err)
+    // 取消返航失败
     alert('取消返航失败')
   }
 }
@@ -2867,7 +2940,7 @@ const handleReturnHome = async () => {
     }
     
   } catch (error: any) {
-    console.error('一键返航失败:', error)
+    // 一键返航失败
     const errorMsg = parseErrorMessage(error)
     alert(`一键返航失败: ${errorMsg}`)
   }
@@ -3361,7 +3434,7 @@ watch(() => videoStreamUrl.value, (newUrl) => {
 
 // 组件挂载时初始化
 onMounted(async () => {
-  console.log('开始初始化首页')
+  // 初始化首页
   
   // 初始化警报声（使用Web Audio API生成）
   
@@ -3373,11 +3446,11 @@ onMounted(async () => {
   
   // 加载机场状态数据
   await loadDockStatus()
-  console.log('机场状态加载完成:', dockStatus.value)
+  // 机场状态加载完成
   
   // 加载无人机状态数据
   await loadDroneStatus()
-  console.log('无人机状态加载完成:', droneStatus.value)
+  // 无人机状态加载完成
   
   // 加载航线文件列表
   await loadWaylineFiles()
@@ -3414,8 +3487,7 @@ onMounted(async () => {
     lineChart?.resize()
   })
 
-  console.log('数据加载完成，开始初始化地图')
-  console.log('当前定位数据:', position.value)
+  // 开始初始化地图
   
   // 初始化地图
   if (mapContainer.value) {
@@ -3454,9 +3526,7 @@ onMounted(async () => {
       
       // 地图加载完成后更新机场标记
       amapInstance.on('complete', () => {
-        console.log('地图加载完成，开始定位')
-        console.log('当前定位数据:', position.value)
-        console.log('当前机场状态:', dockStatus.value)
+        // 地图加载完成，开始定位
         
         // 地图加载完成后立即尝试定位
         updateMapMarkers(isInitialLoad.value)
@@ -3465,8 +3535,7 @@ onMounted(async () => {
         
         // 如果第一次定位失败，延迟后再次尝试
         setTimeout(() => {
-          console.log('延迟后再次尝试定位')
-          // console.log('当前定位数据:', position.value)
+          // 延迟后再次尝试定位
           if (isInitialLoad.value) {
             updateMapMarkers(true)
             isInitialLoad.value = false
@@ -3478,21 +3547,7 @@ onMounted(async () => {
     })
   }
   
-  // 设置机场状态自动刷新（每5秒）- 仅刷新状态，不重复刷新地图
-  statusRefreshTimer = setInterval(async () => {
-    await loadDockStatus()
-  }, 5000)
-  
-  // 设置无人机状态自动刷新（每2秒）
-  droneStatusRefreshTimer = setInterval(async () => {
-    await loadDroneStatus()
-    // 更新地图标记
-    if (amapInstance) {
-      updateMapMarkers()
-    }
-  }, 2000)
-  
-  // 航线任务进度现在由全局store管理，无需本地轮询
+  // 轮询功能已移除，使用手动刷新或事件驱动更新
 })
 
 // 组件卸载时清理
@@ -3500,19 +3555,7 @@ onUnmounted(() => {
   // 移除全局点击事件监听器
   document.removeEventListener('click', handleGlobalClick)
   
-  // 清理机场状态刷新定时器
-  if (statusRefreshTimer) {
-    clearInterval(statusRefreshTimer)
-    statusRefreshTimer = null
-  }
-  
-  // 清理无人机状态刷新定时器
-  if (droneStatusRefreshTimer) {
-    clearInterval(droneStatusRefreshTimer)
-    droneStatusRefreshTimer = null
-  }
-  
-  // 航线任务进度现在由全局store管理，无需清理本地定时器
+  // 轮询定时器已移除，无需清理
   // 清理图表动画定时器
   if (chartAnimationTimer) {
     clearInterval(chartAnimationTimer)
@@ -3710,13 +3753,8 @@ const clearWaylineDisplay = () => {
 
     // 显示航点和航线（仅在需要时重绘，避免每次都清空重画）
     const displayWayline = async () => {
-  console.log('displayWayline 开始执行')
-  console.log('amapInstance:', !!amapInstance)
-  console.log('amapApiRef:', !!amapApiRef)
-  console.log('waylineJobDetail:', waylineJobDetail.value)
-  
+  // 检查必要条件
   if (!amapInstance || !amapApiRef || !waylineJobDetail.value) {
-    console.log('displayWayline 条件不满足，退出')
     return
   }
   
@@ -3736,46 +3774,46 @@ const clearWaylineDisplay = () => {
       clearWaylineDisplay()
   
   try {
-    console.log('waylineJobDetail完整数据:', waylineJobDetail.value)
+    // 检查waylineJobDetail数据
     
     // 检查是否有waylines数据
     let waylines = waylineJobDetail.value.waylines
-    console.log('waylines:', waylines)
+    // 获取waylines数据
     
     // 如果没有waylines数据，尝试通过file_id获取航线文件详情
     if (!waylines || waylines.length === 0) {
-      console.log('没有找到waylines数据，尝试通过file_id获取航线文件详情')
+      // 尝试通过file_id获取航线文件详情
       const workspaceId = getCachedWorkspaceId()
       const fileId = waylineJobDetail.value.file_id
       
       if (workspaceId && fileId) {
-        console.log('获取航线文件详情 - workspaceId:', workspaceId, 'fileId:', fileId)
+        // 获取航线文件详情
         try {
           const waylineDetail = await fetchWaylineDetail(workspaceId, fileId)
-          console.log('航线文件详情:', waylineDetail)
+          // 航线文件详情获取成功
           waylines = waylineDetail.waylines
-          console.log('从文件详情获取的waylines:', waylines)
+          // 从文件详情获取waylines
         } catch (error) {
-          console.error('获取航线文件详情失败:', error)
+          // 获取航线文件详情失败
           return
         }
       } else {
-        console.log('缺少workspaceId或fileId，无法获取航线文件详情')
+        // 缺少workspaceId或fileId
         return
       }
     }
     
     if (!waylines || waylines.length === 0) {
-      console.log('仍然没有找到waylines数据')
+      // 没有找到waylines数据
       return
     }
     
     const wayline = waylines[0] // 取第一个航线
     const waypoints = wayline.waypoints || []
-    console.log('waypoints:', waypoints)
+    // 获取waypoints数据
     
     if (waypoints.length === 0) {
-      console.log('没有找到waypoints数据')
+      // 没有找到waypoints数据
       return
     }
     
@@ -3783,16 +3821,16 @@ const clearWaylineDisplay = () => {
     const markers: any[] = []
     const path: [number, number][] = []
     
-    console.log('开始创建航点标记，共', waypoints.length, '个航点')
+    // 开始创建航点标记
     
     waypoints.forEach((waypoint: any, index: number) => {
       const [wgsLng, wgsLat] = waypoint.coordinates || [0, 0]
-      console.log(`航点 ${index + 1}:`, { wgsLng, wgsLat })
+      // 处理航点坐标
       
       if (wgsLng && wgsLat) {
         // 将WGS84坐标转换为GCJ-02坐标
         const gcjCoords = transformWGS84ToGCJ02(wgsLng, wgsLat)
-        console.log(`航点 ${index + 1} 转换后坐标:`, gcjCoords)
+        // 坐标转换完成
         
         // 创建航点标记
         const marker = new amapApiRef.Marker({
@@ -3813,17 +3851,17 @@ const clearWaylineDisplay = () => {
         markers.push(marker)
         amapInstance.add(marker)
         path.push([gcjCoords.longitude, gcjCoords.latitude])
-        console.log(`航点 ${index + 1} 已添加到地图`)
+        // 航点添加到地图
       } else {
-        console.log(`航点 ${index + 1} 坐标无效，跳过`)
+        // 航点坐标无效
       }
     })
     
     waylineMarkers.value = markers
-    console.log('航点标记创建完成，共', markers.length, '个标记')
+    // 航点标记创建完成
     
     // 创建航线
-    console.log('准备创建航线，路径点数:', path.length)
+    // 准备创建航线
     if (path.length > 1) {
       waylinePolyline.value = new amapApiRef.Polyline({
         path: path,
@@ -3833,9 +3871,9 @@ const clearWaylineDisplay = () => {
         strokeStyle: 'solid'
       })
       amapInstance.add(waylinePolyline.value)
-      console.log('航线已添加到地图')
+      // 航线已添加到地图
       } else {
-        console.log('路径点数不足，无法创建航线')
+        // 路径点数不足
       }
       // 记录本次渲染对应的任务ID与状态
       lastWaylineJobId.value = currentJobId
@@ -3845,7 +3883,7 @@ const clearWaylineDisplay = () => {
     updateCurrentWaypoint()
     
   } catch (error) {
-    console.error('显示航线失败:', error)
+    // 显示航线失败
   }
 }
 
@@ -3895,7 +3933,7 @@ const updateCurrentWaypoint = () => {
       })
       
       amapInstance.add(currentWaypointMarker.value)
-      console.log(`当前航点 ${currentWaypointIndex + 1} 已添加到地图`)
+        // 当前航点已添加到地图
     }
   }
 }
@@ -4072,7 +4110,13 @@ const centerToDroneMarker = () => {
 }
 
 .status-dot.online {
-  background-color: #4caf50;
+  background-color: #2ed573;
+  box-shadow: 0 0 4px rgba(46, 213, 115, 0.6);
+}
+
+.status-dot.offline {
+  background-color: #ff4757;
+  box-shadow: 0 0 4px rgba(255, 71, 87, 0.6);
 }
 
 .status-text {
@@ -4143,8 +4187,13 @@ const centerToDroneMarker = () => {
 }
 
 .bar {
-  background: #00bcd4;
+  background: rgba(0, 188, 212, 0.3);
   border-radius: 1px;
+  transition: background-color 0.3s ease;
+}
+
+.bar.active {
+  background: #00bcd4;
 }
 
 .bar1 {

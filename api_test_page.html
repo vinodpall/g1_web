@@ -223,6 +223,22 @@
             </div>
         </div>
 
+        <!-- 机器人API测试 -->
+        <div class="control-panel">
+            <h4>机器人API测试</h4>
+            <div class="row">
+                <div class="col-md-12">
+                    <button class="btn btn-info form-control" onclick="getRobots()">获取机器人列表</button>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-12">
+                    <label>机器人列表结果:</label>
+                    <div id="robotsResult" class="result-box"></div>
+                </div>
+            </div>
+        </div>
+
         <div class="row">
             <!-- 左侧：控制面板 -->
             <div class="col-md-4">
@@ -1386,13 +1402,17 @@
             }
             
             try {
-                const data = new FormData();
-                data.append('username', username);
-                data.append('password', password);
+                const loginData = {
+                    username: username,
+                    password: password
+                };
                 
-                const response = await fetch(`${document.getElementById('apiUrl').value}/api/v1/login/access-token`, {
+                const response = await fetch(`${document.getElementById('apiUrl').value}/api/v1/login`, {
                     method: 'POST',
-                    body: data
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(loginData)
                 });
                 
                 const result = await response.json();
@@ -1415,6 +1435,38 @@
             document.getElementById('loginStatus').className = 'status-indicator status-offline';
             document.getElementById('loginStatusText').textContent = '未登录';
             log('已登出', 'info');
+        }
+
+        // 获取机器人列表
+        async function getRobots() {
+            const token = document.getElementById('apiToken').value;
+            if (!token) {
+                log('请先登录获取token', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${document.getElementById('apiUrl').value}/api/v1/robots/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('robotsResult').textContent = JSON.stringify(result, null, 2);
+                    log(`获取机器人列表成功，共 ${result.length} 个机器人`, 'success');
+                } else {
+                    log(`获取机器人列表失败: ${result.detail || '未知错误'}`, 'error');
+                    document.getElementById('robotsResult').textContent = JSON.stringify(result, null, 2);
+                }
+            } catch (error) {
+                log(`获取机器人列表请求失败: ${error.message}`, 'error');
+                document.getElementById('robotsResult').textContent = `Error: ${error.message}`;
+            }
         }
 
         // 直播控制

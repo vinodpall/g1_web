@@ -13,7 +13,7 @@
         <router-link to="/dashboard/mission" class="nav-item" :class="{ active: $route.path.includes('mission') }">
           展厅管理
         </router-link>
-        <router-link to="/dashboard/device-manage" class="nav-item" :class="{ active: $route.path === '/dashboard/device-manage' || $route.path === '/dashboard/alarm-log' }">
+        <router-link to="/dashboard/device-manage" class="nav-item" :class="{ active: $route.path === '/dashboard/device-manage' }">
           机器人管理
         </router-link>
         <router-link to="/dashboard/users" class="nav-item" :class="{ active: $route.path.includes('users') || $route.path.includes('introduce') }">
@@ -22,14 +22,15 @@
       </nav>
       
       <div class="header-right">
-        <!-- 机场名称下拉框 -->
-        <div class="el-select">
+
+        <!-- 机器人选择器 -->
+        <div class="el-select robot-selector">
           <div class="el-select__wrapper" 
-               :class="{ 'is-active': isSelectActive }" 
-               @click.stop="toggleSelect">
+               :class="{ 'is-active': isRobotSelectActive }" 
+               @click.stop="toggleRobotSelect">
             <div class="el-select__selection">
               <div class="el-select__selected-item el-select__placeholder">
-                <span>{{ selectedDock?.device_name || '选择机场' }}</span>
+                <span>{{ selectedRobot?.name || '选择机器人' }}</span>
               </div>
             </div>
             <div class="el-select__suffix">
@@ -41,17 +42,22 @@
             </div>
           </div>
           
-          <!-- 下拉选项 -->
-          <div class="el-select__dropdown" v-show="isSelectActive" @click.stop>
+          <!-- 机器人下拉选项 -->
+          <div class="el-select__dropdown" v-show="isRobotSelectActive" @click.stop>
             <div class="el-select__dropdown-list">
               <div 
-                v-for="dock in docks" 
-                :key="dock.device_sn"
+                v-for="robot in robotOptions" 
+                :key="robot.value"
                 class="el-select__dropdown-item"
-                :class="{ 'is-selected': dock.device_sn === selectedDockSn }"
-                @click="selectDock(dock.device_sn)"
-              >
-                {{ dock.device_name }}
+                :class="{ 'is-selected': selectedRobotId === robot.value }"
+                @click="selectRobot(robot.value)">
+                <div class="robot-item">
+                  <span class="status-indicator" :class="{ 'online': robot.online, 'offline': !robot.online }"></span>
+                  <span class="robot-name">{{ robot.label }}</span>
+                </div>
+              </div>
+              <div v-if="robotOptions.length === 0" class="el-select__dropdown-item is-disabled">
+                暂无机器人
               </div>
             </div>
           </div>
@@ -91,56 +97,45 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { useDeviceStore } from '../stores/device'
-import { useDevices } from '../composables/useApi'
-import { dockApi } from '../api/services'
-import { useDeviceStatus } from '../composables/useDeviceStatus'
+import { useRobotStore } from '../stores/robot'
+// import { useDevices } from '../composables/useApi' // API已移除，等待重新对接
+// import { dockApi } from '../api/services' // API已移除
+// import { useDeviceStatus } from '../composables/useDeviceStatus' // API已移除
 // 导入背景图片
 import titleBg from '/src/assets/source_data/bg_data/title.png'
 
 const router = useRouter()
 const userStore = useUserStore()
-const deviceStore = useDeviceStore()
+const robotStore = useRobotStore()
 
-// 设备状态管理
-const { fetchDeviceStatus, deviceStatus } = useDeviceStatus()
 
 const user = computed(() => userStore.user)
-const docks = computed(() => deviceStore.docks)
-const selectedDockSn = computed({
-  get: () => deviceStore.selectedDockSn,
-  set: (value) => deviceStore.setSelectedDock(value)
-})
 
-const selectedDock = computed(() => {
-  return docks.value.find(dock => dock.device_sn === selectedDockSn.value)
-})
+// 机器人相关状态
+const robotOptions = computed(() => robotStore.robotOptions)
+const selectedRobotId = computed(() => robotStore.selectedRobotId)
+const selectedRobot = computed(() => robotStore.selectedRobot)
 
-const isSelectActive = ref(false)
+const isRobotSelectActive = ref(false)
 
-const toggleSelect = () => {
-  isSelectActive.value = !isSelectActive.value
-  handleDockChange()
+// 机器人选择相关方法
+const toggleRobotSelect = () => {
+  isRobotSelectActive.value = !isRobotSelectActive.value
 }
 
-const handleDockChange = () => {
-  // 处理机场选择逻辑
-  console.log('当前选中的机场:', selectedDock.value?.device_name)
-}
-
-const selectDock = (sn: string) => {
-  selectedDockSn.value = sn
-  isSelectActive.value = false
+const selectRobot = (robotId: number) => {
+  robotStore.selectRobot(robotId)
+  isRobotSelectActive.value = false
 }
 
 // 点击外部关闭下拉列表
 const closeSelect = (event: Event) => {
   const target = event.target as Element
   if (!target.closest('.el-select')) {
-    isSelectActive.value = false
+    isRobotSelectActive.value = false
   }
 }
 
@@ -178,54 +173,22 @@ document.addEventListener('click', closeUserMenu)
 
 // 急停状态计算
 const isStopActive = computed(() => {
-  return deviceStatus.value?.emergency_stop_state || false
+  return false // 暂时返回false，等待重新对接API
 })
 
 // 急停按钮点击处理
 const toggleStop = async () => {
-  if (!selectedDockSn.value) {
-    console.warn('未选择机场')
-    return
-  }
-
-  try {
-    await dockApi.emergencyStop(selectedDockSn.value)
-    console.log('急停操作成功')
-    // 操作成功后刷新设备状态
-    await fetchDeviceStatus(selectedDockSn.value)
-  } catch (error) {
-    console.error('急停操作失败:', error)
-    // 可以在这里添加错误提示
-  }
+  // 急停API已移除，等待重新对接
+  console.log('急停操作 - 等待重新对接')
 }
 
-// 监听选中的机场变化，自动获取设备状态
-watch(selectedDockSn, async (newDockSn) => {
-  if (newDockSn) {
-    await fetchDeviceStatus(newDockSn)
-  }
-})
-
-// 页面加载时恢复设备列表和状态
+// 页面加载时初始化
 onMounted(async () => {
-  // 先尝试从本地缓存恢复设备列表
-  deviceStore.hydrateFromCache()
-
-  // 如果没有设备，调用接口获取并缓存
-  if (!deviceStore.devices || deviceStore.devices.length === 0) {
-    try {
-      const { fetchDevices } = useDevices()
-      const list = await fetchDevices()
-      deviceStore.setDevices(list)
-    } catch (e) {
-      // 忽略网络错误，保持静默
-    }
-  }
-
-  // 恢复并拉取选中机场的状态
-  if (selectedDockSn.value) {
-    await fetchDeviceStatus(selectedDockSn.value)
-  }
+  // 先从缓存恢复机器人数据
+  robotStore.hydrateFromCache()
+  
+  // 初始化选中的机器人（从localStorage恢复）
+  robotStore.initSelectedRobot()
 })
 </script>
 
@@ -377,14 +340,15 @@ onMounted(async () => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: clamp(10px, 1.5vw, 15px);
+  gap: clamp(8px, 1.2vw, 12px); /* 减少元素间距 */
   position: relative;
   z-index: 1;
   margin-right: clamp(10px, 1.5vw, 15px);
   flex-shrink: 0;
   min-width: 0;
   flex: 0 0 auto;
-  width: clamp(250px, 30vw, 350px); /* 增加宽度范围 */
+  width: clamp(280px, 32vw, 380px); /* 增加整体宽度给机器人选择器更多空间 */
+  justify-content: flex-end; /* 右对齐，避免挤压 */
 }
 
 /* 机场选择器样式 */
@@ -399,6 +363,12 @@ onMounted(async () => {
   display: inline-block;
   position: relative;
   vertical-align: middle;
+}
+
+/* 机器人选择器宽度覆盖 - 放在基础样式后面 */
+.robot-selector.el-select {
+  width: clamp(150px, 22vw, 260px) !important;
+  min-width: 150px !important;
 }
 
 .el-select__wrapper {
@@ -528,6 +498,44 @@ onMounted(async () => {
   background: rgba(0, 188, 212, 0.3);
   color: #00bcd4;
   font-weight: bold;
+}
+
+/* 机器人选择器特定样式 */
+.robot-selector {
+  margin-right: 10px;
+  margin-left: -10px; /* 往左移动 */
+}
+
+.robot-selector .el-select__dropdown-item {
+  padding: 10px 16px;
+}
+
+.robot-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-indicator.online {
+  background-color: #2ed573;
+  box-shadow: 0 0 4px rgba(46, 213, 115, 0.6);
+}
+
+.status-indicator.offline {
+  background-color: #ff4757;
+  box-shadow: 0 0 4px rgba(255, 71, 87, 0.6);
+}
+
+.robot-name {
+  color: inherit;
+  font-size: 14px;
 }
 
 /* 急停按钮样式 */
@@ -722,6 +730,11 @@ onMounted(async () => {
     min-width: 100px;
   }
   
+  .robot-selector.el-select {
+    min-width: 150px !important;
+    width: 150px !important;
+  }
+  
   .dock-selector {
     max-width: clamp(60px, 12vw, 100px);
     font-size: clamp(10px, 1.2vw, 14px);
@@ -775,6 +788,10 @@ onMounted(async () => {
     width: 160px;
   }
   
+  .robot-selector.el-select {
+    width: 200px !important;
+  }
+  
   .stop-btn {
     width: 45px;
     height: 45px;
@@ -803,6 +820,10 @@ onMounted(async () => {
   
   .el-select {
     width: 170px;
+  }
+  
+  .robot-selector.el-select {
+    width: 220px !important;
   }
   
   .stop-btn {
