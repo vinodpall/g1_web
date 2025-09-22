@@ -7,7 +7,7 @@
     <div class="login-content">
       <div class="login-left">
         <div class="logo-section">
-          <img src="/src/assets/source_data/plane_2.png" alt="logo" class="logo" />
+          <img src="/src/assets/source_data/robot_source/robot_logo.svg" alt="logo" class="logo" />
           <h1 class="title">机器人管控平台</h1>
         </div>
         <!-- <div class="drone-illustration">

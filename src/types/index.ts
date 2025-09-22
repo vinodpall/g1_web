@@ -273,15 +273,51 @@ export interface Zone {
   is_enabled: boolean
 }
 
+export interface TourPreset {
+  id: number
+  name: string
+  description: string | null
+  hall_id: number
+}
+
 export interface Point {
   id: number
   zone_id: number
   type: 'explain' | 'action'  // explain为讲解点，action为辅助点
   point_name_id: number
+  custom_name: string // 自定义任务点名称
   is_enabled: boolean
   pose_x: number
   pose_y: number
   pose_theta: number
   action_code: string | null
   action_params: string | null
+}
+
+// 任务预设详情中的任务点信息
+export interface TourPresetPoint {
+  id: number
+  type: 'explain' | 'action'
+  custom_name: string | null
+  is_enabled: boolean
+  point_name_id: number
+  pose_x: number
+  pose_y: number
+  pose_theta: number
+}
+
+// 任务预设详情项
+export interface TourPresetItem {
+  id: number
+  preset_id: number
+  seq: number
+  zone_id: number
+  zone_name: string
+  zone_enabled: boolean
+  hall_id: number
+  hall_alias: string
+  hall_nav_name: string
+  points: TourPresetPoint[]
+  points_count: number
+  enabled_points_count: number
 }

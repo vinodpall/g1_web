@@ -144,6 +144,7 @@ export const usePointStore = defineStore('point', () => {
     zone_id: number,
     type: 'explain' | 'action',
     point_name_id: number,
+    custom_name: string,
     pose_x: number,
     pose_y: number,
     pose_theta: number,
@@ -184,6 +185,7 @@ export const usePointStore = defineStore('point', () => {
         zone_id: pointData.zone_id,
         type: pointData.type,
         point_name_id: pointData.point_name_id,
+        custom_name: pointData.custom_name,
         is_enabled: true, // 默认启用
         pose_x: pointData.pose_x,
         pose_y: pointData.pose_y,
@@ -215,6 +217,7 @@ export const usePointStore = defineStore('point', () => {
     name?: string,
     type?: 'explain' | 'action',
     point_name_id?: number,
+    custom_name?: string,
     pose_x?: number,
     pose_y?: number,
     pose_theta?: number,
@@ -239,6 +242,7 @@ export const usePointStore = defineStore('point', () => {
       
       if (pointData.type) requestData.type = pointData.type
       if (pointData.point_name_id) requestData.point_name_id = pointData.point_name_id
+      if (pointData.custom_name !== undefined) requestData.custom_name = pointData.custom_name
       if (pointData.pose_x !== undefined) requestData.pose_x = pointData.pose_x
       if (pointData.pose_y !== undefined) requestData.pose_y = pointData.pose_y
       if (pointData.pose_theta !== undefined) requestData.pose_theta = pointData.pose_theta

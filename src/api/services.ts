@@ -629,12 +629,16 @@ export const hallApi = {
 // 展区管理相关接口
 export const zoneApi = {
   // 获取展区列表
-  getZones: (token: string) => {
-    const url = `${API_BASE_URL}/zones`
+  getZones: (token: string, hallId?: number) => {
+    let url = `${API_BASE_URL}/zones`
+    if (hallId) {
+      url += `?hall_id=${hallId}`
+    }
     
     console.log('zoneApi.getZones 被调用')
     console.log('请求URL:', url)
     console.log('请求token:', token ? '存在' : '不存在')
+    console.log('展厅ID:', hallId || '全部')
     
     return fetch(url, {
       method: 'GET',
@@ -696,6 +700,296 @@ export const zoneApi = {
       console.error('创建展区API请求失败:', error)
       throw error
     })
+  },
+
+  // 删除展区
+  deleteZone: (token: string, zoneId: number) => {
+    const url = `${API_BASE_URL}/zones/${zoneId}`
+    
+    console.log('zoneApi.deleteZone 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('展区ID:', zoneId)
+    
+    return fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('删除展区API响应状态:', response.status)
+      console.log('删除展区API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('删除展区API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      // 删除操作通常返回空响应或成功消息
+      return response.status === 204 ? { success: true } : response.json()
+    }).then(data => {
+      console.log('删除展区API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('删除展区API请求失败:', error)
+      throw error
+    })
+  }
+}
+
+// 展厅任务管理相关接口
+export const tourApi = {
+  // 获取展厅任务预设列表
+  getTourPresets: (token: string) => {
+    const url = `${API_BASE_URL}/tours/presets`
+    
+    console.log('tourApi.getTourPresets 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('展厅任务API响应状态:', response.status)
+      console.log('展厅任务API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('展厅任务API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('展厅任务API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('展厅任务API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 创建新展厅任务预设
+  createTourPreset: (token: string, presetData: { name: string, description: string | null, hall_id: number }) => {
+    const url = `${API_BASE_URL}/tours/presets`
+    
+    console.log('tourApi.createTourPreset 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('任务预设数据:', presetData)
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(presetData)
+    }).then(response => {
+      console.log('创建展厅任务API响应状态:', response.status)
+      console.log('创建展厅任务API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('创建展厅任务API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('创建展厅任务API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('创建展厅任务API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 获取任务预设详情（包含任务点）
+  getTourPresetItems: (token: string, presetId: number) => {
+    const url = `${API_BASE_URL}/tours/presets/${presetId}/items`
+    
+    console.log('tourApi.getTourPresetItems 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('预设ID:', presetId)
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('任务预设详情API响应状态:', response.status)
+      console.log('任务预设详情API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('任务预设详情API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('任务预设详情API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('任务预设详情API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 添加任务预设项（展区任务）
+  addTourPresetItem: (token: string, presetId: number, itemData: { zone_id: number, seq?: number }) => {
+    const url = `${API_BASE_URL}/tours/presets/${presetId}/items`
+    
+    console.log('tourApi.addTourPresetItem 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('预设ID:', presetId)
+    console.log('任务预设项数据:', itemData)
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(itemData)
+    }).then(response => {
+      console.log('添加任务预设项API响应状态:', response.status)
+      console.log('添加任务预设项API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('添加任务预设项API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('添加任务预设项API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('添加任务预设项API请求失败:', error)
+      throw error
+    })
+  }
+}
+
+// 导航SLAM相关接口
+export const navigationApi = {
+  // 展厅地图录制接口
+  slamControl: (token: string, slamData: { sn: string, map_name: string, action: number, data_name: string }) => {
+    const url = `${API_BASE_URL}/navigation/recording`
+    
+    console.log('navigationApi.slamControl 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('SLAM数据:', slamData)
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(slamData)
+    }).then(response => {
+      console.log('SLAM控制API响应状态:', response.status)
+      console.log('SLAM控制API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('SLAM控制API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('SLAM控制API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('SLAM控制API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 生成地图接口
+  generateMap: (token: string, mapData: { sn: string, map_name: string, action: number, data_name: string }) => {
+    const url = `${API_BASE_URL}/navigation/slam`
+    
+    console.log('navigationApi.generateMap 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('地图生成数据:', mapData)
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(mapData)
+    }).then(response => {
+      console.log('生成地图API响应状态:', response.status)
+      console.log('生成地图API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('生成地图API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('生成地图API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('生成地图API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 获取数据包列表接口
+  getDataPackages: (token: string) => {
+    const url = `${API_BASE_URL}/v1/navigation/data/list`
+    
+    console.log('navigationApi.getDataPackages 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('获取数据包列表API响应状态:', response.status)
+      console.log('获取数据包列表API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('获取数据包列表API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('获取数据包列表API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('获取数据包列表API请求失败:', error)
+      throw error
+    })
   }
 }
 
@@ -744,6 +1038,7 @@ export const pointApi = {
     zone_id: number,
     type: string,
     point_name_id: number,
+    custom_name: string,
     is_enabled: boolean,
     pose_x: number,
     pose_y: number,
@@ -791,6 +1086,7 @@ export const pointApi = {
     zone_id?: number,
     type?: string,
     point_name_id?: number,
+    custom_name?: string,
     is_enabled?: boolean,
     pose_x?: number,
     pose_y?: number,

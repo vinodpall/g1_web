@@ -36,9 +36,9 @@
                   <button
                     class="mission-btn mission-btn-pause hall-btn"
                     :disabled="isRecording"
-                    @click="startGenerateHallMap"
+                    @click="isGeneratingMap ? generateHallMap() : startGenerateHallMap()"
                   >
-                    生成展厅地图
+                    {{ isGeneratingMap ? '停止生成地图' : '生成展厅地图' }}
                   </button>
                 </div>
                 <div class="map-progress">
@@ -216,9 +216,9 @@
                     <span class="area-filter-label">展厅任务列表</span>
                     <div class="custom-select-wrapper">
                       <select v-model="selectedHallTaskList" class="area-select">
-                        <option value="list1">任务列表1</option>
-                        <option value="list2">任务列表2</option>
-                        <option value="list3">任务列表3</option>
+                        <option v-for="preset in hallTourPresets" :key="preset.id" :value="preset.id.toString()">
+                          {{ preset.name }}
+                        </option>
                       </select>
                       <span class="custom-select-arrow">
                         <svg width="12" height="12" viewBox="0 0 12 12">
@@ -260,42 +260,43 @@
             <div class="mission-table-card card">
               <div class="mission-table-header">
                 <div class="mission-th" style="flex: 0 0 80px;">序号</div>
-                <div class="mission-th" style="flex: 1;">展厅名称</div>
                 <div class="mission-th" style="flex: 1;">展区名称</div>
-                <div class="mission-th" style="flex: 1;">创建时间</div>
-                <div class="mission-th" style="flex: 0 0 180px;">操作</div>
+                <div class="mission-th" style="flex: 0 0 120px;">任务点数量</div>
+                <div class="mission-th" style="flex: 3;">任务点详情</div>
+                <div class="mission-th" style="flex: 0 0 80px;">操作</div>
               </div>
               <div class="mission-table-body">
-                <div v-if="currentMultiTasks.length === 0" class="empty-state">
-                  <span>暂无展厅任务数据</span>
+                <div v-if="!selectedHallTaskList" class="empty-state">
+                  <span>请选择展厅任务查看详情</span>
+                </div>
+                <div v-else-if="tourStore.isLoadingItems" class="empty-state">
+                  <span>加载中...</span>
+                </div>
+                <div v-else-if="currentMultiTasks.length === 0" class="empty-state">
+                  <span>该任务暂无展区数据</span>
                 </div>
                 <div v-else class="mission-tr" v-for="(task, idx) in currentMultiTasks" :key="task.id">
-                  <div class="mission-td" style="flex: 0 0 80px;">{{ idx + 1 }}</div>
-                  <div class="mission-td" style="flex: 1;">{{ task.hallName || '展厅ABC' }}</div>
-                  <div class="mission-td" style="flex: 1;">{{ task.areaName }}</div>
-                  <div class="mission-td" style="flex: 1;">{{ formatTime(task.createdTime) }}</div>
-                  <div class="mission-td" style="flex: 0 0 180px;">
+                  <div class="mission-td" style="flex: 0 0 80px;">{{ task.seq }}</div>
+                  <div class="mission-td" style="flex: 1;">{{ task.zoneName }}</div>
+                  <div class="mission-td" style="flex: 0 0 120px;">{{ task.pointsCount }}</div>
+                  <div class="mission-td points-detail-cell" style="flex: 3;">
+                    <div class="points-visual-display">
+                      <span 
+                        v-for="(point, pIdx) in task.points.slice(0, 10)" 
+                        :key="point.id" 
+                        class="point-name-tag"
+                        :class="getPointTypeClass(point)"
+                      >
+                        {{ getPointDisplayName(point) }}
+                      </span>
+                      <span v-if="task.points.length > 10" class="more-points-indicator">
+                        +
+                      </span>
+                    </div>
+                  </div>
+                  <div class="mission-td" style="flex: 0 0 80px;">
                     <div class="user-action-btns">
-                      <button 
-                        class="icon-btn move-btn" 
-                        title="上移" 
-                        @click="onClickMoveUp(task, idx)"
-                        :disabled="idx === 0"
-                      >
-                        <img :src="arrowUpIcon" />
-                      </button>
-                      <button 
-                        class="icon-btn move-btn" 
-                        title="下移" 
-                        @click="onClickMoveDown(task, idx)"
-                        :disabled="idx === currentMultiTasks.length - 1"
-                      >
-                        <img :src="arrowDownIcon" />
-                      </button>
-                      <button class="icon-btn" title="编辑" @click="onClickEditMultiTask(task)">
-                        <img :src="editIcon" />
-                      </button>
-                      <button class="icon-btn" title="删除" @click="onClickDeleteMultiTask(task)">
+                      <button class="icon-btn" title="删除" @click="onClickDeleteTaskPreset(task)">
                         <img :src="deleteIcon" />
                       </button>
                     </div>
@@ -342,6 +343,20 @@
               <input v-model="addTaskPointForm.name" class="user-input" placeholder="请输入任务点名称" />
             </div>
             <div class="add-user-form-row">
+              <label>点位类型：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="addTaskPointForm.pointType" class="user-select">
+                  <option value="讲解点">讲解点</option>
+                  <option value="辅助点">辅助点</option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div v-if="addTaskPointForm.pointType === '讲解点'" class="add-user-form-row">
               <label>讲解点位：</label>
               <div class="custom-select-wrapper">
                 <select v-model="addTaskPointForm.pointNameId" class="user-select">
@@ -358,29 +373,15 @@
             </div>
             <div class="add-user-form-row">
               <label>X坐标：</label>
-              <input v-model.number="addTaskPointForm.x" type="number" step="0.01" class="user-input" placeholder="请输入X坐标" />
+              <input v-model.number="addTaskPointForm.x" type="number" step="0.01" class="user-input no-spinners" placeholder="请输入X坐标" />
             </div>
             <div class="add-user-form-row">
               <label>Y坐标：</label>
-              <input v-model.number="addTaskPointForm.y" type="number" step="0.01" class="user-input" placeholder="请输入Y坐标" />
+              <input v-model.number="addTaskPointForm.y" type="number" step="0.01" class="user-input no-spinners" placeholder="请输入Y坐标" />
             </div>
             <div class="add-user-form-row">
               <label>角度：</label>
-              <input v-model.number="addTaskPointForm.angle" type="number" min="0" max="360" class="user-input" placeholder="请输入角度(0-360)" />
-            </div>
-            <div class="add-user-form-row">
-              <label>点位类型：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="addTaskPointForm.pointType" class="user-select">
-                  <option value="讲解点">讲解点</option>
-                  <option value="辅助点">辅助点</option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
-                  </svg>
-                </span>
-              </div>
+              <input v-model.number="addTaskPointForm.angle" type="number" min="0" max="360" class="user-input no-spinners" placeholder="请输入角度(0-360)" />
             </div>
             <div class="add-user-form-row">
               <label>机器人动作：</label>
@@ -464,7 +465,7 @@
           <div class="add-user-form">
             <div class="add-user-form-row">
               <label>展厅任务名称：</label>
-              <input v-model="hallTaskName" class="user-input" placeholder="请输入展厅任务名称" />
+              <input v-model="addHallTaskForm.name" class="user-input" placeholder="请输入展厅任务名称" />
             </div>
           </div>
         </div>
@@ -482,25 +483,16 @@
         <div class="custom-dialog-content">
           <div class="add-user-form">
             <div class="add-user-form-row">
-              <label>展厅：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="selectedHallForAreaTask" @change="onHallChange" class="user-select">
-                  <option value="abc">展厅ABC</option>
-                  <option value="def">展厅DEF</option>
-                  <option value="ghi">展厅GHI</option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
-                  </svg>
-                </span>
+              <label>当前展厅：</label>
+              <div class="current-hall-display">
+                {{ getCurrentHallName() }}
               </div>
             </div>
             <div class="add-user-form-row">
               <label>展区：</label>
               <div class="custom-select-wrapper">
-                <select v-model="selectedAreaForTask" class="user-select" :disabled="!selectedHallForAreaTask">
-                  <option v-for="area in filteredAreas" :key="area.id" :value="area.id">
+                <select v-model="selectedAreaForTask" class="user-select">
+                  <option v-for="area in currentHallZones" :key="area.id" :value="area.id.toString()">
                     {{ area.name }}
                   </option>
                 </select>
@@ -519,16 +511,85 @@
         </div>
       </div>
     </div>
+
+    <!-- 地图录制弹窗 -->
+    <div v-if="showRecordingDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">展厅地图录制</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>展厅数据包名称：</label>
+              <input 
+                v-model="recordingForm.dataName" 
+                type="text" 
+                class="user-input" 
+                placeholder="请输入数据包名称"
+                maxlength="50"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="handleCancelRecording">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="handleConfirmStartRecording">开始录制</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 生成地图弹窗 -->
+    <div v-if="showGenerateMapDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">生成展厅地图</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>展厅数据包：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="generateMapForm.dataName" class="user-select">
+                  <option v-for="(packageName, index) in rawDataPackages" :key="packageName" :value="packageName">
+                    {{ processDataPackageName(packageName) }}
+                  </option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>地图名称：</label>
+              <input 
+                v-model="generateMapForm.mapName" 
+                type="text" 
+                class="user-input" 
+                placeholder="请输入地图名称"
+                maxlength="50"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="handleCancelGenerateMap">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="handleConfirmGenerateMap">开始生成</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useHallStore } from '../stores/hall'
 import { useZoneStore } from '../stores/zone'
 import { usePointStore } from '../stores/point'
 import { useGuideStore } from '../stores/guide'
+import { useTourStore } from '../stores/tour'
+import { useUserStore } from '../stores/user'
+import { navigationApi } from '@/api/services'
+import type { Zone, TourPreset } from '@/types'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
 import trackLogsIcon from '@/assets/source_data/svg_data/track_logs.svg'
@@ -571,6 +632,8 @@ const hallStore = useHallStore()
 const zoneStore = useZoneStore()
 const pointStore = usePointStore()
 const guideStore = useGuideStore()
+const tourStore = useTourStore()
+const userStore = useUserStore()
 
 // 当前选中的标签页
 const currentTab = ref('hall')
@@ -578,6 +641,35 @@ const currentTab = ref('hall')
 // 展厅管理相关状态
 const isRecording = ref(false)
 const mapGenProgress = ref(65)
+
+// 地图录制弹窗相关状态
+const showRecordingDialog = ref(false)
+const recordingForm = ref({
+  dataName: ''
+})
+
+// 生成地图弹窗相关状态
+const showGenerateMapDialog = ref(false)
+const isGeneratingMap = ref(false)
+const generateMapForm = ref({
+  dataName: '',
+  mapName: ''
+})
+
+// 可用的数据包列表（从API获取）
+const availableDataPackages = ref<string[]>([])
+const rawDataPackages = ref<string[]>([])
+
+// 处理数据包名称，去掉@符号后面的时间戳
+const processDataPackageName = (packageName: string): string => {
+  const atIndex = packageName.indexOf('@')
+  return atIndex !== -1 ? packageName.substring(0, atIndex) : packageName
+}
+
+// 格式化后的数据包选项
+const formattedDataPackages = computed(() => 
+  rawDataPackages.value.map(packageName => processDataPackageName(packageName))
+)
 
 // 使用computed从hallStore获取展厅列表
 const hallOptions = computed(() => 
@@ -624,6 +716,11 @@ const currentSelectedHallName = computed(() => {
   return hall ? hall.name : '未选择展厅'
 })
 
+// 获取当前展厅名称的函数（用于添加展区任务弹窗）
+const getCurrentHallName = () => {
+  return currentSelectedHallName.value
+}
+
 // 获取当前选中展厅的前缀（直接使用完整展厅名称）
 const currentHallPrefix = computed(() => {
   const hall = hallOptions.value.find(h => h.id === selectedHall.value)
@@ -631,15 +728,26 @@ const currentHallPrefix = computed(() => {
 })
 
 // 监听展厅选择变化，实时保存到缓存
-watch(selectedHall, (newHallId) => {
+watch(selectedHall, async (newHallId) => {
   saveHallToCache(newHallId)
   
-  // 当展厅切换时，重置展区选择为新展厅的第一个展区
+  // 当展厅切换时，重新获取展区数据
+  await fetchCurrentHallZones()
+  
+  // 重置展区选择为新展厅的第一个展区
   if (areaList.value.length > 0) {
     selectedAreaId.value = areaList.value[0].id
     console.log('展厅切换，重新选择展区:', selectedAreaId.value)
   } else {
     selectedAreaId.value = ''
+  }
+  
+  // 重置展厅任务列表选择
+  if (hallTourPresets.value.length > 0) {
+    selectedHallTaskList.value = hallTourPresets.value[0].id.toString()
+    console.log('展厅切换，重新选择展厅任务:', selectedHallTaskList.value)
+  } else {
+    selectedHallTaskList.value = ''
   }
 }, { immediate: false })
 
@@ -684,18 +792,54 @@ interface MultiTask {
   executeTime?: string
 }
 
-// 从API获取的展区列表，根据当前选中的展厅筛选
-const areaList = computed(() => {
-  if (!selectedHall.value) return []
+// 展厅任务详情表格的数据接口
+interface TaskPresetDisplay {
+  id: string
+  seq: number
+  zoneName: string
+  hallName: string
+  pointsCount: number
+  enabledPointsCount: number
+  zoneEnabled: boolean
+  points: any[]
+  createdTime: string
+  status: string
+}
+
+// 当前展厅的展区数据状态
+const currentHallZones = ref<Zone[]>([])
+const loadingZones = ref(false)
+
+// 获取当前选中展厅的展区数据
+const fetchCurrentHallZones = async () => {
+  if (!selectedHall.value) {
+    currentHallZones.value = []
+    return
+  }
   
-  // 将selectedHall从string转换为number（因为hall id可能是字符串格式）
+  try {
+    loadingZones.value = true
   const hallId = typeof selectedHall.value === 'string' ? parseInt(selectedHall.value) : selectedHall.value
   
-  // 根据当前选中的展厅获取展区列表
-  const zones = zoneStore.getZonesByHallId(hallId)
-  
-  // 转换为Area格式以兼容现有UI
-  return zones.map(zone => ({
+    console.log('获取展厅展区数据，展厅ID:', hallId)
+    const zones = await zoneStore.fetchZones(false, hallId)
+    currentHallZones.value = zones || []
+    
+    // 如果当前选中的展区不在新的展区列表中，重置选择
+    if (selectedAreaId.value && !currentHallZones.value.find(z => z.id.toString() === selectedAreaId.value)) {
+      selectedAreaId.value = currentHallZones.value.length > 0 ? currentHallZones.value[0].id.toString() : ''
+    }
+  } catch (error) {
+    console.error('获取展区数据失败:', error)
+    currentHallZones.value = []
+  } finally {
+    loadingZones.value = false
+  }
+}
+
+// 从当前展厅的展区数据转换为Area格式以兼容现有UI
+const areaList = computed(() => {
+  return currentHallZones.value.map(zone => ({
     id: zone.id.toString(),
     name: zone.name,
     description: '', // API中没有description字段，暂时设为空
@@ -721,7 +865,7 @@ const currentTaskPoints = computed(() => {
     return {
       id: point.id.toString(),
       areaId: point.zone_id.toString(),
-      name: pointName?.name || '未知点位',
+      name: point.custom_name || pointName?.name || '未知点位', // 优先显示custom_name
       x: point.pose_x,
       y: point.pose_y,
       angle: Math.round(point.pose_theta * 180 / Math.PI), // 将弧度转换为角度
@@ -756,6 +900,19 @@ const addTaskPointForm = ref({
   robotDirection: '前进'
 })
 
+// 监听点位类型变化，当选择辅助点时清空讲解点位选择
+watch(() => addTaskPointForm.value.pointType, (newPointType) => {
+  if (newPointType === '辅助点') {
+    // 选择辅助点时，清空讲解点位选择
+    addTaskPointForm.value.pointNameId = ''
+  } else if (newPointType === '讲解点' && !addTaskPointForm.value.pointNameId) {
+    // 选择讲解点且当前没有选择讲解点位时，自动选择第一个
+    if (guideStore.pointNames.length > 0) {
+      addTaskPointForm.value.pointNameId = guideStore.pointNames[0].id.toString()
+    }
+  }
+})
+
 // 多任务管理相关数据
 const multiTaskList = ref<MultiTask[]>([
   { id: '1', name: '巡检任务A', taskType: '巡检', areaId: '1', areaName: 'abc_23', hallName: '展厅ABC', status: 'completed', createdTime: '2024-01-15 09:00:00', executeTime: '2024-01-15 09:30:00' },
@@ -764,10 +921,52 @@ const multiTaskList = ref<MultiTask[]>([
   { id: '4', name: '清洁任务D', taskType: '清洁', areaId: '4', areaName: 'ghi_89', hallName: '展厅GHI', status: 'failed', createdTime: '2024-01-18 14:00:00', executeTime: '2024-01-18 14:20:00' }
 ])
 
-const selectedHallTaskList = ref<string>('list1') // 默认选择第一个任务列表
-const currentMultiTasks = computed(() => {
-  // 这里可以根据selectedHallTaskList来筛选任务
-  return multiTaskList.value
+// 根据当前选中展厅获取展厅任务预设列表
+const hallTourPresets = computed(() => {
+  if (!selectedHall.value) return []
+  
+  const hallId = typeof selectedHall.value === 'string' ? parseInt(selectedHall.value) : selectedHall.value
+  return tourStore.getTourPresetsByHallId(hallId)
+})
+
+const selectedHallTaskList = ref<string>('') // 默认选择第一个任务列表
+
+// 当选中的展厅任务改变时，获取任务详情
+watch(selectedHallTaskList, async (newTaskId) => {
+  if (newTaskId) {
+    try {
+      console.log('展厅任务选择改变，获取任务详情:', newTaskId)
+      await tourStore.fetchTourPresetItems(parseInt(newTaskId))
+    } catch (error) {
+      console.error('获取展厅任务详情失败:', error)
+    }
+  } else {
+    // 清空任务详情
+    tourStore.clearPresetItems()
+  }
+}, { immediate: false })
+
+// 将任务预设详情转换为表格显示格式
+const currentMultiTasks = computed((): TaskPresetDisplay[] => {
+  if (!tourStore.currentPresetItems || tourStore.currentPresetItems.length === 0) {
+    return []
+  }
+  
+  // 按id排序，然后序号从1开始
+  return tourStore.currentPresetItems
+    .sort((a, b) => a.id - b.id)
+    .map((item, index) => ({
+      id: item.id.toString(),
+      seq: index + 1, // 序号从1开始
+      zoneName: item.zone_name,
+      hallName: item.hall_alias || item.hall_nav_name,
+      pointsCount: item.points_count,
+      enabledPointsCount: item.enabled_points_count,
+      zoneEnabled: item.zone_enabled,
+      points: item.points,
+      createdTime: '', // API没有提供此字段
+      status: item.zone_enabled ? 'enabled' : 'disabled'
+    }))
 })
 
 // 任务控制相关数据
@@ -777,28 +976,13 @@ const selectedVisitorType = ref<string>('')
 
 // 新增展厅任务相关数据
 const showAddHallTaskDialog = ref<boolean>(false)
-const hallTaskName = ref<string>('')
+const addHallTaskForm = ref({
+  name: ''
+})
 
 // 添加展区任务相关数据
 const showAddAreaTaskDialog = ref<boolean>(false)
-const selectedHallForAreaTask = ref<string>('abc') // 默认选择第一个展厅
 const selectedAreaForTask = ref<string>('')
-
-// 模拟展区数据，包含展厅前缀
-const allAreas = ref([
-  { id: '1', name: 'abc_23', hallPrefix: 'abc' },
-  { id: '2', name: 'abc_45', hallPrefix: 'abc' },
-  { id: '3', name: 'def_12', hallPrefix: 'def' },
-  { id: '4', name: 'def_67', hallPrefix: 'def' },
-  { id: '5', name: 'ghi_89', hallPrefix: 'ghi' },
-  { id: '6', name: 'ghi_34', hallPrefix: 'ghi' }
-])
-
-// 根据选择的展厅筛选展区
-const filteredAreas = computed(() => {
-  if (!selectedHallForAreaTask.value) return []
-  return allAreas.value.filter(area => area.hallPrefix === selectedHallForAreaTask.value)
-})
 
 const toggleEditMode = () => { 
   isEditMode.value = !isEditMode.value
@@ -1017,15 +1201,181 @@ const downloadPGMToLocal = (pgmData: Uint8Array) => {
   }
 }
 
-// 动作：开始/停止录制、生成地图/栅格图（此处占位，后端对接时替换）
-const startHallRecording = () => { isRecording.value = true }
-const stopHallRecording = () => { isRecording.value = false }
-const generateHallMap = () => { /* TODO: 生成地图 */ }
+// 地图录制相关函数
+const startHallRecording = () => {
+  // 打开输入弹窗
+  recordingForm.value.dataName = ''
+  showRecordingDialog.value = true
+}
+
+const stopHallRecording = async () => {
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('未找到认证token')
+      return
+    }
+
+    // 停止录包
+    const slamData = {
+      sn: '',
+      map_name: '',
+      action: 0,
+      data_name: ''
+    }
+
+    await navigationApi.slamControl(token, slamData)
+    isRecording.value = false
+    alert('地图录制已停止')
+  } catch (error) {
+    console.error('停止地图录制失败:', error)
+    alert(error instanceof Error ? error.message : '停止地图录制失败')
+  }
+}
+
+// 确认开始录制
+const handleConfirmStartRecording = async () => {
+  if (!recordingForm.value.dataName.trim()) {
+    alert('请输入展厅数据包名称')
+    return
+  }
+
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('未找到认证token')
+      return
+    }
+
+    // 开始录包
+    const slamData = {
+      sn: '',
+      map_name: '',
+      action: 1,
+      data_name: recordingForm.value.dataName.trim()
+    }
+
+    await navigationApi.slamControl(token, slamData)
+    isRecording.value = true
+    showRecordingDialog.value = false
+    alert(`地图录制已开始\n数据包名称：${recordingForm.value.dataName}`)
+  } catch (error) {
+    console.error('开始地图录制失败:', error)
+    alert(error instanceof Error ? error.message : '开始地图录制失败')
+  }
+}
+
+// 取消录制
+const handleCancelRecording = () => {
+  showRecordingDialog.value = false
+  recordingForm.value.dataName = ''
+}
+// 生成地图相关函数
+const startGenerateHallMap = async () => {
+  // 先加载数据包列表
+  await loadDataPackages()
+  
+  // 打开生成地图弹窗，默认选择第一个数据包
+  generateMapForm.value.dataName = rawDataPackages.value.length > 0 ? rawDataPackages.value[0] : ''
+  generateMapForm.value.mapName = ''
+  showGenerateMapDialog.value = true
+}
+
+const generateHallMap = async () => {
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('未找到认证token')
+      return
+    }
+
+    // 停止生成地图
+    const mapData = {
+      sn: '',
+      map_name: '',
+      action: 0,
+      data_name: ''
+    }
+
+    await navigationApi.generateMap(token, mapData)
+    isGeneratingMap.value = false
+    alert('地图生成已停止')
+  } catch (error) {
+    console.error('停止地图生成失败:', error)
+    alert(error instanceof Error ? error.message : '停止地图生成失败')
+  }
+}
+
+// 确认开始生成地图
+const handleConfirmGenerateMap = async () => {
+  if (!generateMapForm.value.dataName.trim()) {
+    alert('暂无可用的展厅数据包')
+    return
+  }
+  
+  if (!generateMapForm.value.mapName.trim()) {
+    alert('请输入地图名称')
+    return
+  }
+
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('未找到认证token')
+      return
+    }
+
+    // 开始生成地图
+    const mapData = {
+      sn: '',
+      map_name: generateMapForm.value.mapName.trim(),
+      action: 1,
+      data_name: generateMapForm.value.dataName.trim()
+    }
+
+    await navigationApi.generateMap(token, mapData)
+    isGeneratingMap.value = true
+    showGenerateMapDialog.value = false
+    alert(`地图生成已开始\n数据包：${processDataPackageName(generateMapForm.value.dataName)}\n地图名称：${generateMapForm.value.mapName}`)
+  } catch (error) {
+    console.error('开始地图生成失败:', error)
+    alert(error instanceof Error ? error.message : '开始地图生成失败')
+  }
+}
+
+// 取消生成地图
+const handleCancelGenerateMap = () => {
+  showGenerateMapDialog.value = false
+  generateMapForm.value.dataName = ''
+  generateMapForm.value.mapName = ''
+}
+
+// 加载数据包列表
+const loadDataPackages = async () => {
+  try {
+    const token = userStore.token
+    if (!token) {
+      console.warn('未找到认证token')
+      return
+    }
+
+    const response = await navigationApi.getDataPackages(token)
+    
+    if (response.error_code === 0 && Array.isArray(response.result)) {
+      rawDataPackages.value = response.result
+      console.log('数据包列表加载成功:', response.result)
+    } else {
+      console.error('获取数据包列表失败:', response.error_msg || '未知错误')
+      rawDataPackages.value = []
+    }
+  } catch (error) {
+    console.error('加载数据包列表失败:', error)
+    rawDataPackages.value = []
+  }
+}
 const generateHallGrid = () => { /* TODO: 生成栅格图并更新对应hall的gridUrl */ }
 
 // 进度条默认值展示（后续可对接真实进度）
-
-const startGenerateHallMap = () => { /* 预留：生成展厅地图动作，不影响进度条展示 */ }
 
 // 航线相关功能已移除
 
@@ -1047,8 +1397,19 @@ const sidebarTabs = [
   { key: 'multitask', label: '展厅任务', icon: multiTaskIcon, path: '/dashboard/mission' }
 ]
 
-const handleTabClick = (tab: any) => {
+const handleTabClick = async (tab: any) => {
   currentTab.value = tab.key
+  
+  // 当切换到展厅任务标签页时，确保展厅任务预设数据已加载
+  if (tab.key === 'multitask' && !tourStore.isLoaded) {
+    try {
+      console.log('=== 切换到展厅任务标签页，开始加载数据 ===')
+      await tourStore.fetchTourPresets()
+      console.log('展厅任务预设数据加载完成')
+    } catch (err) {
+      console.warn('切换到展厅任务时获取预设数据失败:', err)
+    }
+  }
 }
 
 // 旧航线选择交互已移除
@@ -1301,15 +1662,7 @@ onMounted(async () => {
     }
   }
   
-  // 确保展区数据已加载
-  if (!zoneStore.isLoaded) {
-    try {
-      await zoneStore.fetchZones()
-      console.log('展区数据补充加载完成')
-    } catch (err) {
-      console.warn('获取展区数据失败:', err)
-    }
-  }
+  // 展区数据现在按展厅动态加载，不需要全局预加载
   
   // 确保任务点数据已加载
   if (!pointStore.isLoaded) {
@@ -1331,6 +1684,21 @@ onMounted(async () => {
     }
   }
   
+  // 确保展厅任务预设数据已加载
+  console.log('=== 检查展厅任务预设数据加载状态 ===')
+  console.log('tourStore.isLoaded:', tourStore.isLoaded)
+  if (!tourStore.isLoaded) {
+    try {
+      console.log('=== 开始加载展厅任务预设数据 ===')
+      await tourStore.fetchTourPresets()
+      console.log('展厅任务预设数据补充加载完成')
+    } catch (err) {
+      console.warn('获取展厅任务预设数据失败:', err)
+    }
+  } else {
+    console.log('展厅任务预设数据已加载，跳过')
+  }
+  
   // 确保从缓存加载的展厅选择在页面加载时生效，如果没有有效选择则选择第一个
   const cachedHall = getHallFromCache()
   if (cachedHall && hallOptions.value.some(h => h.id === cachedHall)) {
@@ -1342,10 +1710,19 @@ onMounted(async () => {
   
   console.log('页面加载，当前选中展厅:', selectedHall.value)
   
+  // 获取当前选中展厅的展区数据
+  await fetchCurrentHallZones()
+  
   // 设置默认选中的展区（当前选中展厅的第一个展区）
   if (areaList.value.length > 0) {
     selectedAreaId.value = areaList.value[0].id
     console.log('默认选中展区:', selectedAreaId.value)
+  }
+  
+  // 设置默认选中的展厅任务（当前选中展厅的第一个任务预设）
+  if (hallTourPresets.value.length > 0) {
+    selectedHallTaskList.value = hallTourPresets.value[0].id.toString()
+    console.log('默认选中展厅任务:', selectedHallTaskList.value)
   }
 })
 
@@ -1355,8 +1732,23 @@ let hallGridCleanup: (() => void) | null = null
 
 const loadAndRenderHallPGM = async () => {
   try {
+    // 等待 DOM 更新完成
+    await nextTick()
+    
     const canvas = hallGridCanvas.value
-    if (!canvas) return
+    if (!canvas) {
+      console.warn('Canvas element not found, retrying...')
+      // 如果 canvas 未准备好，稍后重试
+      setTimeout(() => loadAndRenderHallPGM(), 100)
+      return
+    }
+    
+    // 检查 canvas 是否在 DOM 中且可见
+    if (!canvas.isConnected || !canvas.offsetParent) {
+      console.warn('Canvas not visible, retrying...')
+      setTimeout(() => loadAndRenderHallPGM(), 100)
+      return
+    }
     // 示例：可以根据 selectedHall 切换不同资源，这里先固定为 gridMap.pgm
     const url = new URL('../assets/source_data/pgm_data/gridMap.pgm', import.meta.url).href
     const response = await fetch(url)
@@ -1591,10 +1983,30 @@ watch(selectedHall, () => {
   loadAndRenderHallPGM()
 })
 
+// 监听标签页切换，当切换到展厅管理时重新渲染栅格图
+watch(currentTab, (newTab) => {
+  if (newTab === 'hall') {
+    console.log('Switched to hall tab, reloading grid...')
+    // 延迟一点时间确保标签页内容已经显示
+    setTimeout(() => {
+      loadAndRenderHallPGM()
+    }, 100)
+  }
+})
+
 onMounted(() => {
   // 初次渲染
   // 等 DOM 就绪后加载
   setTimeout(() => loadAndRenderHallPGM(), 0)
+})
+
+// 页面激活时重新渲染栅格图（用于处理页面切换后的空白问题）
+onActivated(() => {
+  console.log('Mission page activated, reloading hall grid...')
+  // 延迟一点时间确保 DOM 完全渲染
+  setTimeout(() => {
+    loadAndRenderHallPGM()
+  }, 50)
 })
 
 // 直接编辑栅格图像素数据
@@ -1755,17 +2167,35 @@ const handleAddArea = () => {
 }
 
 // 删除展区
-const handleDeleteArea = () => {
+const handleDeleteArea = async () => {
   if (!selectedAreaId.value) return
   
   const area = areaList.value.find(a => a.id === selectedAreaId.value)
   if (!area) return
   
   if (confirm(`确定要删除展区"${area.name}"吗？删除后该展区下的所有任务点也将被删除。`)) {
-    // TODO: 实现删除展区的API调用
-    // 现在暂时只是提示，因为没有提供删除展区的接口
-    alert('删除展区功能暂未实现，需要对接删除API')
+    try {
+      const zoneId = parseInt(selectedAreaId.value)
+      console.log('删除展区:', area.name, 'ID:', zoneId)
+      
+      await zoneStore.deleteZone(zoneId)
+      
+      // 删除成功后，重新获取当前展厅的展区列表
+      await fetchCurrentHallZones()
+      
+      // 重置选中的展区
+      if (areaList.value.length > 0) {
+        selectedAreaId.value = areaList.value[0].id
+        console.log('删除展区后，重新选择展区:', selectedAreaId.value)
+      } else {
     selectedAreaId.value = ''
+      }
+      
+      alert(`展区"${area.name}"删除成功`)
+    } catch (error) {
+      console.error('删除展区失败:', error)
+      alert(error instanceof Error ? error.message : '删除展区失败')
+    }
   }
 }
 
@@ -1813,7 +2243,10 @@ const handleConfirmAddArea = async () => {
       console.log('创建展区:', addAreaForm.value.name.trim(), '展厅ID:', hallId)
       const newZone = await zoneStore.createZone(addAreaForm.value.name.trim(), hallId)
       
-      // 创建成功后，自动选中新创建的展区
+      // 创建成功后，重新获取当前展厅的展区列表
+      await fetchCurrentHallZones()
+      
+      // 自动选中新创建的展区
       selectedAreaId.value = newZone.id.toString()
       
       alert(`展区添加成功：${newZone.name}`)
@@ -1841,7 +2274,8 @@ const handleConfirmAddTaskPoint = async () => {
     return
   }
   
-  if (!addTaskPointForm.value.pointNameId) {
+  // 只有选择讲解点时才需要验证讲解点位
+  if (addTaskPointForm.value.pointType === '讲解点' && !addTaskPointForm.value.pointNameId) {
     alert('请选择讲解点位')
     return
   }
@@ -1861,7 +2295,10 @@ const handleConfirmAddTaskPoint = async () => {
     try {
       const pointData = {
         type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
-        point_name_id: parseInt(addTaskPointForm.value.pointNameId),
+        point_name_id: addTaskPointForm.value.pointType === '讲解点' && addTaskPointForm.value.pointNameId 
+          ? parseInt(addTaskPointForm.value.pointNameId) 
+          : (guideStore.pointNames.length > 0 ? guideStore.pointNames[0].id : 1), // 辅助点使用第一个点位ID作为默认值
+        custom_name: addTaskPointForm.value.name, // 添加custom_name字段
         pose_x: addTaskPointForm.value.x,
         pose_y: addTaskPointForm.value.y,
         pose_theta: addTaskPointForm.value.angle * Math.PI / 180, // 角度转弧度
@@ -1885,7 +2322,10 @@ const handleConfirmAddTaskPoint = async () => {
       const pointData = {
         zone_id: parseInt(selectedAreaId.value),
         type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
-        point_name_id: parseInt(addTaskPointForm.value.pointNameId),
+        point_name_id: addTaskPointForm.value.pointType === '讲解点' && addTaskPointForm.value.pointNameId 
+          ? parseInt(addTaskPointForm.value.pointNameId) 
+          : (guideStore.pointNames.length > 0 ? guideStore.pointNames[0].id : 1), // 辅助点使用第一个点位ID作为默认值
+        custom_name: addTaskPointForm.value.name, // 添加custom_name字段
         pose_x: addTaskPointForm.value.x,
         pose_y: addTaskPointForm.value.y,
         pose_theta: addTaskPointForm.value.angle * Math.PI / 180, // 角度转弧度
@@ -1917,11 +2357,11 @@ const handleCancelAddTaskPoint = () => {
 // 编辑任务点
 const onClickEditTaskPoint = (point: TaskPoint) => {
   editingTaskPoint.value = point
-  // 从point的实际数据中获取point_name_id（需要查找原始Point数据）
+  // 从point的实际数据中获取原始Point数据
   const originalPoint = pointStore.getPointById(parseInt(point.id))
   
   addTaskPointForm.value = {
-    name: point.name,
+    name: originalPoint?.custom_name || point.name, // 优先使用custom_name
     pointNameId: originalPoint?.point_name_id?.toString() || '',
     x: point.x,
     y: point.y,
@@ -1953,6 +2393,49 @@ const formatTime = (time: string) => {
   return time
 }
 
+// 获取任务点的显示名称
+const getPointDisplayName = (point: any) => {
+  if (point.custom_name) {
+    return point.custom_name
+  }
+  
+  // 如果有point_name_id，尝试从guideStore获取点位名称
+  if (point.point_name_id) {
+    const pointName = guideStore.getPointNameById(point.point_name_id)
+    if (pointName) {
+      return pointName.name
+    }
+  }
+  
+  // 默认显示类型
+  return point.type === 'explain' ? '讲解点' : '辅助点'
+}
+
+// 获取任务点类型的CSS类名
+const getPointTypeClass = (point: any) => {
+  const baseClass = point.type === 'explain' ? 'point-explain' : 'point-action'
+  const statusClass = point.is_enabled ? 'point-enabled' : 'point-disabled'
+  return `${baseClass} ${statusClass}`
+}
+
+// 格式化任务点数据为字符串显示（保留备用）
+const formatPointsData = (points: any[]) => {
+  if (!points || points.length === 0) {
+    return '暂无任务点'
+  }
+  
+  // 只取前10个点位
+  const displayPoints = points.slice(0, 10)
+  const pointNames = displayPoints.map(point => getPointDisplayName(point))
+  
+  // 如果超过10个，添加加号提示
+  if (points.length > 10) {
+    pointNames.push('+')
+  }
+  
+  return pointNames.join(' | ')
+}
+
 // 根据任务点ID获取对应的讲解点位名称
 const getPointNameByPointId = (taskPointId: string) => {
   const originalPoint = pointStore.getPointById(parseInt(taskPointId))
@@ -1974,7 +2457,9 @@ const getTaskStatusText = (status: string) => {
 }
 
 const handleAddHallTask = () => {
-  hallTaskName.value = ''
+  addHallTaskForm.value = {
+    name: ''
+  }
   showAddHallTaskDialog.value = true
 }
 
@@ -1991,8 +2476,12 @@ const handleDeleteHallTask = () => {
 }
 
 const handleAddAreaTask = () => {
-  selectedHallForAreaTask.value = ''
+  // 默认选择第一个展区
+  if (currentHallZones.value.length > 0) {
+    selectedAreaForTask.value = currentHallZones.value[0].id.toString()
+  } else {
   selectedAreaForTask.value = ''
+  }
   showAddAreaTaskDialog.value = true
 }
 
@@ -2035,54 +2524,90 @@ const handleConfirmStartTask = () => {
 // 新增展厅任务相关方法
 const handleCancelAddHallTask = () => {
   showAddHallTaskDialog.value = false
-  hallTaskName.value = ''
+  addHallTaskForm.value = {
+    name: ''
+  }
 }
 
-const handleConfirmAddHallTask = () => {
-  if (!hallTaskName.value.trim()) {
+const handleConfirmAddHallTask = async () => {
+  if (!addHallTaskForm.value.name.trim()) {
     alert('请输入展厅任务名称')
     return
   }
   
-  // 这里可以添加创建展厅任务的逻辑
-  // 例如：添加到任务列表选项中
-  alert(`展厅任务"${hallTaskName.value}"创建成功`)
-  
-  showAddHallTaskDialog.value = false
-  hallTaskName.value = ''
-}
-
-// 添加展区任务相关方法
-const onHallChange = () => {
-  // 当展厅选择改变时，清空展区选择
-  selectedAreaForTask.value = ''
-}
-
-const handleCancelAddAreaTask = () => {
-  showAddAreaTaskDialog.value = false
-  selectedHallForAreaTask.value = ''
-  selectedAreaForTask.value = ''
-}
-
-const handleConfirmAddAreaTask = () => {
-  if (!selectedHallForAreaTask.value) {
-    alert('请选择展厅')
+  // 获取当前选中的展厅ID
+  if (!selectedHall.value) {
+    alert('未选择有效的展厅')
     return
   }
   
+  // 将selectedHall转换为数字格式
+  const hallId = typeof selectedHall.value === 'string' ? parseInt(selectedHall.value) : selectedHall.value
+  
+  try {
+    console.log('创建展厅任务:', addHallTaskForm.value.name.trim(), '展厅ID:', hallId)
+    const newTourPreset = await tourStore.createTourPreset(
+      addHallTaskForm.value.name.trim(),
+      null, // 不再传递描述
+      hallId
+    )
+    
+    // 创建成功后，重新获取展厅任务预设数据
+    await tourStore.fetchTourPresets(true) // 强制刷新
+    
+    // 自动选中新创建的任务预设
+    selectedHallTaskList.value = newTourPreset.id.toString()
+    
+    alert(`展厅任务创建成功：${newTourPreset.name}`)
+  } catch (error) {
+    console.error('创建展厅任务失败:', error)
+    alert(error instanceof Error ? error.message : '创建展厅任务失败')
+    return
+  }
+  
+  showAddHallTaskDialog.value = false
+  addHallTaskForm.value = {
+    name: ''
+  }
+}
+
+// 添加展区任务相关方法
+const handleCancelAddAreaTask = () => {
+  showAddAreaTaskDialog.value = false
+  selectedAreaForTask.value = ''
+}
+
+const handleConfirmAddAreaTask = async () => {
   if (!selectedAreaForTask.value) {
     alert('请选择展区')
     return
   }
   
-  const hallName = selectedHallForAreaTask.value.toUpperCase()
-  const areaName = allAreas.value.find(area => area.id === selectedAreaForTask.value)?.name || ''
+  if (!selectedHallTaskList.value) {
+    alert('请先选择展厅任务')
+    return
+  }
   
-  alert(`展区任务创建成功\n展厅：展厅${hallName}\n展区：${areaName}`)
+  try {
+    const presetId = parseInt(selectedHallTaskList.value)
+    const zoneId = parseInt(selectedAreaForTask.value)
+    
+    console.log('添加展区任务 - 预设ID:', presetId, '展区ID:', zoneId)
+    
+    // 调用API添加任务预设项
+    await tourStore.addTourPresetItem(presetId, zoneId)
+    
+    const hallName = getCurrentHallName()
+    const areaName = currentHallZones.value.find(area => area.id.toString() === selectedAreaForTask.value)?.name || ''
+    
+    alert(`展区任务添加成功\n展厅：${hallName}\n展区：${areaName}`)
   
   showAddAreaTaskDialog.value = false
-  selectedHallForAreaTask.value = ''
   selectedAreaForTask.value = ''
+  } catch (error) {
+    console.error('添加展区任务失败:', error)
+    alert(error instanceof Error ? error.message : '添加展区任务失败')
+  }
 }
 
 const onClickExecuteTask = (task: MultiTask) => {
@@ -2093,8 +2618,25 @@ const onClickExecuteTask = (task: MultiTask) => {
   }
 }
 
-const onClickEditMultiTask = (task: MultiTask) => {
-  alert('编辑任务功能待开发')
+const onClickViewTaskDetails = (task: TaskPresetDisplay) => {
+  // 显示任务详情，可以在这里打开一个详情弹窗
+  const pointDetails = task.points.map((point: any) => {
+    return `${getPointDisplayName(point)} (${point.type === 'explain' ? '讲解点' : '辅助点'})`
+  }).join(', ')
+  
+  alert(`展区：${task.zoneName}\n任务点总数：${task.pointsCount}\n启用点数：${task.enabledPointsCount}\n任务点详情：${pointDetails}`)
+}
+
+const onClickEditMultiTask = (task: TaskPresetDisplay) => {
+  // 这里可以实现编辑功能，目前显示详情
+  onClickViewTaskDetails(task)
+}
+
+const onClickDeleteTaskPreset = (task: TaskPresetDisplay) => {
+  if (confirm(`确定要删除展区"${task.zoneName}"的任务吗？`)) {
+    // 这里可以调用API来删除任务预设项
+    alert(`删除任务：${task.zoneName}`)
+  }
 }
 
 const onClickDeleteMultiTask = (task: MultiTask) => {
@@ -2108,22 +2650,14 @@ const onClickDeleteMultiTask = (task: MultiTask) => {
 }
 
 // 上移和下移方法
-const onClickMoveUp = (task: MultiTask, index: number) => {
-  if (index > 0) {
-    // 交换当前项和上一项的位置
-    const temp = multiTaskList.value[index]
-    multiTaskList.value[index] = multiTaskList.value[index - 1]
-    multiTaskList.value[index - 1] = temp
-  }
+const onClickMoveUp = (task: TaskPresetDisplay, index: number) => {
+  // 任务排序功能，这里可以调用API来更新任务顺序
+  alert(`上移任务：${task.zoneName}`)
 }
 
-const onClickMoveDown = (task: MultiTask, index: number) => {
-  if (index < multiTaskList.value.length - 1) {
-    // 交换当前项和下一项的位置
-    const temp = multiTaskList.value[index]
-    multiTaskList.value[index] = multiTaskList.value[index + 1]
-    multiTaskList.value[index + 1] = temp
-  }
+const onClickMoveDown = (task: TaskPresetDisplay, index: number) => {
+  // 任务排序功能，这里可以调用API来更新任务顺序
+  alert(`下移任务：${task.zoneName}`)
 }
 
 // 错误消息提示
@@ -3151,6 +3685,21 @@ const showErrorMessage = (message: string) => {
   min-width: 180px;
 }
 
+.add-area-task-dialog .current-hall-display {
+  flex: 1;
+  background: #0c3c56;
+  border: 1px solid rgba(38, 131, 182, 0.6);
+  border-radius: 4px;
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 14px;
+  min-height: 36px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  opacity: 0.8;
+}
+
 .add-area-task-dialog .user-select {
   width: 100%;
   padding: 8px 36px 8px 12px;
@@ -3334,6 +3883,26 @@ const showErrorMessage = (message: string) => {
 
 .add-user-form .user-input::placeholder {
   color: rgba(255, 255, 255, 0.5);
+}
+
+/* 隐藏数字输入框的上下按钮 */
+.add-user-form .user-input.no-spinners {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.add-user-form .user-input.no-spinners::-webkit-outer-spin-button,
+.add-user-form .user-input.no-spinners::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* textarea样式 */
+.add-user-form textarea.user-input {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  line-height: 1.4;
 }
 
 /* 展区名称输入组合样式 */
@@ -3565,6 +4134,92 @@ const showErrorMessage = (message: string) => {
   padding: 6px 12px;
   font-size: 13px;
   white-space: nowrap;
+}
+
+/* 任务点详情显示样式 */
+.points-detail-cell {
+  text-align: center;
+}
+
+.points-visual-display {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+.point-name-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+/* 讲解点样式 */
+.point-name-tag.point-explain.point-enabled {
+  background: linear-gradient(135deg, rgba(103, 213, 253, 0.15), rgba(103, 213, 253, 0.25));
+  color: #67d5fd;
+  border-color: rgba(103, 213, 253, 0.4);
+  box-shadow: 0 1px 3px rgba(103, 213, 253, 0.1);
+}
+
+.point-name-tag.point-explain.point-disabled {
+  background: rgba(103, 213, 253, 0.08);
+  color: rgba(103, 213, 253, 0.6);
+  border-color: rgba(103, 213, 253, 0.2);
+}
+
+/* 辅助点样式 */
+.point-name-tag.point-action.point-enabled {
+  background: linear-gradient(135deg, rgba(255, 165, 0, 0.15), rgba(255, 165, 0, 0.25));
+  color: #ffa500;
+  border-color: rgba(255, 165, 0, 0.4);
+  box-shadow: 0 1px 3px rgba(255, 165, 0, 0.1);
+}
+
+.point-name-tag.point-action.point-disabled {
+  background: rgba(255, 165, 0, 0.08);
+  color: rgba(255, 165, 0, 0.6);
+  border-color: rgba(255, 165, 0, 0.2);
+}
+
+/* hover效果 */
+.point-name-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* 更多点位指示器 */
+.more-points-indicator {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(182, 182, 182, 0.15);
+  color: #b6b6b6;
+  border: 1px solid rgba(182, 182, 182, 0.3);
+  font-style: italic;
+}
+
+/* 状态样式 */
+.status-enabled {
+  color: #52c41a;
+  font-weight: 500;
+}
+
+.status-disabled {
+  color: #ff4d4f;
+  font-weight: 500;
 }
 
 </style>

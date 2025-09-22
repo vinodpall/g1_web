@@ -24,7 +24,7 @@ export const useZoneStore = defineStore('zone', () => {
   )
 
   // 获取展区数据
-  const fetchZones = async (forceRefresh = false) => {
+  const fetchZones = async (forceRefresh = false, hallId?: number) => {
     const userStore = useUserStore()
     const token = userStore.token
 
@@ -33,8 +33,9 @@ export const useZoneStore = defineStore('zone', () => {
       return
     }
 
-    // 如果已经加载过且不强制刷新，直接返回缓存数据
-    if (!forceRefresh && isLoaded.value && zones.value.length > 0) {
+    // 如果指定了展厅ID，总是重新获取数据（因为筛选条件不同）
+    // 如果没有指定展厅ID且已经加载过且不强制刷新，直接返回缓存数据
+    if (!hallId && !forceRefresh && isLoaded.value && zones.value.length > 0) {
       console.log('使用已缓存的展区数据')
       return zones.value
     }
@@ -43,14 +44,18 @@ export const useZoneStore = defineStore('zone', () => {
       isLoading.value = true
       error.value = null
       
-      console.log('从API获取展区数据')
-      const response = await zoneApi.getZones(token)
+      console.log('从API获取展区数据', hallId ? `(展厅ID: ${hallId})` : '(全部)')
+      const response = await zoneApi.getZones(token, hallId)
       
-      // 更新数据和加载状态
-      zones.value = response
-      isLoaded.value = true
+      // 如果没有指定展厅ID，更新全局缓存
+      if (!hallId) {
+        zones.value = response
+        isLoaded.value = true
+        console.log('展区数据已加载并缓存:', zones.value)
+      } else {
+        console.log('获取指定展厅的展区数据:', response)
+      }
       
-      console.log('展区数据已加载并缓存:', zones.value)
       return response
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取展区失败'
@@ -127,6 +132,39 @@ export const useZoneStore = defineStore('zone', () => {
     }
   }
 
+  // 删除展区
+  const deleteZone = async (zoneId: number) => {
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+
+      console.log('删除展区:', zoneId)
+      await zoneApi.deleteZone(token, zoneId)
+
+      // 从本地缓存中移除已删除的展区
+      const index = zones.value.findIndex(zone => zone.id === zoneId)
+      if (index !== -1) {
+        zones.value.splice(index, 1)
+      }
+      
+      console.log('展区删除成功:', zoneId)
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '删除展区失败'
+      console.error('删除展区失败:', err)
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     zones,
     isLoading,
@@ -136,6 +174,7 @@ export const useZoneStore = defineStore('zone', () => {
     getZonesByHallId,
     fetchZones,
     createZone,
+    deleteZone,
     clearCache,
     getZoneById,
     getZoneByHallAndName
