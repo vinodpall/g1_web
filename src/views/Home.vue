@@ -117,7 +117,9 @@
             <span class="bottom-title-text">机器人控制</span>
             <span class="remote-switch-wrap" style="font-size:13px;font-weight:400;">
               导航开关
-              <span class="switch-container" :class="{ active: navEnabled }" @click="navEnabled = !navEnabled"><span class="switch-toggle"></span></span>
+              <span class="switch-container" :class="{ active: navEnabled }" @click="handleNavigationToggle">
+                <span class="switch-toggle"></span>
+              </span>
             </span>
           </div>
           <div class="bottom-card-row">
@@ -132,13 +134,20 @@
               <img class="mini-card-icon" src="@/assets/source_data/robot_source/location.svg" alt="speed" />
               <div class="mini-card-content">
                 <div class="mini-card-title">W: 0.0 rad/s · V: 0.0 m/s</div>
-                <div class="mini-card-sub">X: 0.512 · Y: 0.421 · 角度: -0.123</div>
+                <div class="mini-card-sub">
+                  <template v-if="robotPose">
+                    X: {{ robotPose.x.toFixed(3) }} · Y: {{ robotPose.y.toFixed(3) }} · 角度: {{ robotPose.theta.toFixed(3) }}
+                  </template>
+                  <template v-else>
+                    X: -- · Y: -- · 角度: --
+                  </template>
+                </div>
               </div>
             </div>
-            <div class="mini-card">
+            <div class="mini-card clickable-hall" @click="handleHallClick">
               <img class="mini-card-icon" src="@/assets/source_data/robot_source/hall.svg" alt="hall" />
               <div class="mini-card-content">
-                <div class="mini-card-title">a展厅</div>
+                <div class="mini-card-title">{{ currentHallName }}</div>
                 <div class="mini-card-sub">当前展厅</div>
               </div>
             </div>
@@ -149,7 +158,7 @@
                 <div class="mini-card-sub">当前任务展区</div>
               </div>
             </div>
-            <button class="start-task-btn">开始执行任务</button>
+            <button class="start-task-btn" @click="handleStartTaskClick">开始执行任务</button>
           </div>
           
         </div>
@@ -252,6 +261,9 @@
         <div class="cardTitle">
           <img src="@/assets/source_data/bg_data/card_logo.png" alt="card logo" />
           机场状态
+          <!-- WebSocket连接状态指示器 -->
+          <div class="ws-status-indicators">
+          </div>
         </div>
         <div class="on2-bottom">
           <div class="b-top">
@@ -634,6 +646,7 @@
       </div>
     </div>
 
+
     <!-- 右侧区域 -->
     <div class="right-column" v-if="false">
       <!-- 告警趋势卡片 -->
@@ -755,6 +768,31 @@
             </svg>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 展厅选择弹窗 -->
+  <div v-if="showHallSelectDialog" class="custom-dialog-mask">
+    <div class="custom-dialog">
+      <div class="custom-dialog-title">选择展厅</div>
+      <div class="custom-dialog-content">
+        <div class="hall-list">
+          <div 
+            v-for="hall in hallOptions" 
+            :key="hall.id" 
+            class="hall-item"
+            :class="{ 'selected': hall.id === selectedHallId }"
+            @click="handleHallSelect(hall.id)"
+          >
+            <img class="hall-icon" src="@/assets/source_data/robot_source/hall.svg" alt="hall" />
+            <span class="hall-name">{{ hall.name }}</span>
+            <span v-if="hall.id === selectedHallId" class="selected-indicator">✓</span>
+          </div>
+        </div>
+      </div>
+      <div class="custom-dialog-actions">
+        <button class="mission-btn mission-btn-cancel" @click="handleCancelHallSelect">取消</button>
       </div>
     </div>
   </div>
@@ -890,10 +928,72 @@
           </div>
     </div>
     
+    <!-- 任务选择弹窗 -->
+    <div v-if="showTaskSelectionDialog" class="custom-dialog-mask">
+      <div class="custom-dialog" data-dialog="task-selection">
+        <div class="custom-dialog-title">开始执行任务</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>展厅任务：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="selectedTaskPresetId" class="user-select">
+                  <option 
+                    v-for="preset in currentHallTourPresets" 
+                    :key="preset.id" 
+                    :value="preset.id.toString()"
+                  >
+                    {{ preset.name }}
+                  </option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>讲解对象：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="selectedAudienceId" class="user-select">
+                  <option 
+                    v-for="audience in availableAudiences" 
+                    :key="audience.id" 
+                    :value="audience.id.toString()"
+                  >
+                    {{ audience.name }}
+                  </option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="handleCancelTaskSelection">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="handleConfirmStartTask">开始任务</button>
+        </div>
+      </div>
+    </div>
+    
     <!-- 大图显示模态框 -->
     <div v-if="showBigImage" class="big-image-mask" @click="closeBigImage">
       <img :src="bigImageUrl" class="big-image" @click.stop />
     </div>
+    
+    <!-- 导航开关loading遮罩 -->
+    <div v-if="navSwitchLoading" class="nav-loading-overlay">
+      <div class="nav-loading-content">
+        <div class="nav-loading-spinner"></div>
+        <div class="nav-loading-text">{{ navLoadingText }}</div>
+      </div>
+    </div>
+    
   </template>
 
 <script setup lang="ts">
@@ -901,15 +1001,45 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 // import { useHmsAlerts, useDevices, useWaylineJobs } from '../composables/useApi' // API已移除，等待重新对接
 // import { controlApi, waylineApi, livestreamApi } from '../api/services' // API已移除
+import { navigationApi } from '../api/services'
 // import { useDeviceStatus } from '../composables/useDeviceStatus' // API已移除
 import { config } from '../config/environment'
+import { useSimpleWebSocket } from '../utils/simpleWebSocket'
 import { getVideoStreams, getVideoStream, getDefaultVideoType } from '../utils/videoCache'
 import * as echarts from 'echarts'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import flvjs from 'flv.js'
 import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
 // 首页底部卡片：导航开关状态
-const navEnabled = ref(false)
+const navSwitchLoading = ref(false)
+const navLoadingText = ref('')
+
+// 导航开关状态从WebSocket数据同步
+const navEnabled = computed(() => {
+  const cmdStatus = robotCmdStatus.value
+  if (cmdStatus?.nav !== undefined) {
+    return Boolean(cmdStatus.nav)
+  }
+  return false
+})
+
+// 建图状态从WebSocket数据同步
+const slamEnabled = computed(() => {
+  const cmdStatus = robotCmdStatus.value
+  if (cmdStatus?.slam !== undefined) {
+    return Boolean(cmdStatus.slam)
+  }
+  return false
+})
+
+// 录包状态从WebSocket数据同步
+const dataRecordEnabled = computed(() => {
+  const cmdStatus = robotCmdStatus.value
+  if (cmdStatus?.data_record !== undefined) {
+    return Boolean(cmdStatus.data_record)
+  }
+  return false
+})
 import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
 import droneArrowIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_arrow.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
@@ -929,7 +1059,77 @@ const setAllAlerts = () => {}
 const getCachedDeviceSns = () => ({ dockSns: [], droneSns: [] })
 const getCachedWorkspaceId = () => localStorage.getItem('workspace_id')
 
+// WebSocket数据获取（需要等userStore初始化后）
+const deviceSn = ref('default') // 默认设备SN，可以根据实际情况修改
+// WebSocket实例将在userStore初始化后创建
 
+
+// 从WebSocket获取的实时数据（保留以避免模板错误）
+const realtimeDeviceData = computed(() => {
+  return {
+    position: { longitude: 0, latitude: 0, height: 0 },
+    attitude: { pitch: 0, roll: 0, yaw: 0 },
+    gimbal: { pitch: 0, roll: 0, yaw: 0 },
+    battery: 0,
+    velocity: { x: 0, y: 0, z: 0 }
+  }
+})
+
+// 算法检测结果（保留以避免模板错误）
+const visionDetections = computed(() => {
+  return {}
+})
+
+const activeDetections = computed(() => {
+  return Object.entries(visionDetections.value)
+    .filter(([_, result]) => (result as any).active)
+    .map(([id, result]) => ({ id, ...result as any }))
+})
+
+const totalDetectionCount = computed(() => {
+  return Object.values(visionDetections.value)
+    .reduce((total, result: any) => total + (result.detections?.length || 0), 0)
+})
+
+// 简化的告警数据（从单一WebSocket获取）
+const visionAlerts = ref<any[]>([])
+const latestAlert = ref<any>(null)
+
+
+// 数据格式化方法
+const formatPosition = (pos: any) => {
+  if (!pos || (pos.longitude === 0 && pos.latitude === 0 && pos.height === 0)) {
+    return '无数据'
+  }
+  return `${pos.longitude.toFixed(6)}, ${pos.latitude.toFixed(6)}, ${pos.height.toFixed(1)}m`
+}
+
+const formatAttitude = (att: any) => {
+  if (!att || (att.pitch === 0 && att.roll === 0 && att.yaw === 0)) {
+    return '无数据'
+  }
+  return `P:${att.pitch.toFixed(1)}° R:${att.roll.toFixed(1)}° Y:${att.yaw.toFixed(1)}°`
+}
+
+const formatVelocity = (vel: any) => {
+  if (!vel || (vel.x === 0 && vel.y === 0 && vel.z === 0)) {
+    return '无数据'
+  }
+  return `X:${vel.x.toFixed(2)} Y:${vel.y.toFixed(2)} Z:${vel.z.toFixed(2)} m/s`
+}
+
+const formatFrameTime = (frameTime: number) => {
+  if (!frameTime) return '无数据'
+  return new Date(frameTime * 1000).toLocaleString()
+}
+
+const formatLastUpdate = (updateTime: Date | null) => {
+  if (!updateTime) return '无数据'
+  return updateTime.toLocaleString()
+}
+
+
+// WebSocket监听器将在visionWs和controlWs初始化后定义
 
 // 使用航线任务API
 // const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineDetail, cancelReturnHome, stopJob, pauseJob, resumeJob, executeJob } = useWaylineJobs() // API已移除
@@ -996,9 +1196,135 @@ const taskProgressStore = useTaskProgressStore()
 import { useRobotStore } from '../stores/robot'
 const robotStore = useRobotStore()
 
+// 使用展厅store
+import { useHallStore } from '../stores/hall'
+const hallStore = useHallStore()
+
+// 使用展厅任务store
+import { useTourStore } from '../stores/tour'
+const tourStore = useTourStore()
+
+// 使用讲解对象store
+import { useGuideStore } from '../stores/guide'
+const guideStore = useGuideStore()
+
+// 使用用户store
+import { useUserStore } from '../stores/user'
+const userStore = useUserStore()
+
+// 先从缓存恢复机器人数据，确保WebSocket连接使用正确的SN
+robotStore.hydrateFromCache()
+robotStore.initSelectedRobot()
+
+// 动态获取WebSocket使用的sn
+const getWebSocketSn = () => {
+  const selectedRobot = robotStore.selectedRobot
+  if (selectedRobot && selectedRobot.sn && selectedRobot.sn.trim()) {
+    // console.log('使用选中机器人的SN:', selectedRobot.sn)
+    return selectedRobot.sn
+  }
+  console.log('使用broadcast SN')
+  return 'broadcast'
+}
+
+// 使用新的WebSocket数据管理
+import { useWebSocketData } from '@/composables/useWebSocketData'
+const {
+  // 连接状态
+  isConnected: wsConnected,
+  isConnecting: wsConnecting,
+  error: wsError,
+  
+  // 机器人数据
+  getRobotPose,
+  getRobotCmdStatus,
+  getRobotCurrentMap,
+  isRobotOnline,
+  robotSNs,
+  
+  // 方法
+  connectWebSocket,
+  disconnectWebSocket,
+  resetAllData,
+  updateWebSocketConfig
+} = useWebSocketData(
+  {
+    sn: getWebSocketSn(), // 现在会使用正确的SN
+    kinds: ['pose', 'cmd_status', 'current_map', 'tour']
+  },
+  true, // 自动连接
+  userStore.token || ''
+)
+
+
+
 // 当前选中的机器人信息
 const currentRobot = computed(() => {
   return robotStore.selectedRobot
+})
+
+// 从WebSocket获取的实时位姿数据
+const robotPose = computed(() => {
+  const currentSn = getWebSocketSn()
+  let result = getRobotPose(currentSn)
+  
+  // 如果当前sn没有数据且不是broadcast，尝试使用broadcast
+  if (!result && currentSn !== 'broadcast') {
+    result = getRobotPose('broadcast')
+  }
+  
+  return result
+})
+
+// 从WebSocket获取的实时命令状态
+const robotCmdStatus = computed(() => {
+  const currentSn = getWebSocketSn()
+  let result = getRobotCmdStatus(currentSn)
+  
+  // 如果当前sn没有数据且不是broadcast，尝试使用broadcast
+  if (!result && currentSn !== 'broadcast') {
+    result = getRobotCmdStatus('broadcast')
+  }
+  
+  // 如果还是没有数据，尝试使用其他可用的SN
+  const availableSNs = robotSNs || []
+  if (!result && availableSNs.length > 0) {
+    for (const sn of availableSNs) {
+      const altResult = getRobotCmdStatus(sn)
+      if (altResult) {
+        result = altResult
+        break
+      }
+    }
+  }
+  
+  return result
+})
+
+// 从WebSocket获取的当前地图信息
+const robotCurrentMap = computed(() => {
+  const currentSn = getWebSocketSn()
+  let result = getRobotCurrentMap(currentSn)
+  
+  // 如果当前sn没有数据且不是broadcast，尝试使用broadcast
+  if (!result && currentSn !== 'broadcast') {
+    result = getRobotCurrentMap('broadcast')
+  }
+  
+  return result
+})
+
+// 机器人在线状态
+const robotOnlineStatus = computed(() => {
+  const currentSn = getWebSocketSn()
+  let result = isRobotOnline(currentSn)
+  
+  // 如果当前sn没有数据且不是broadcast，尝试使用broadcast
+  if (!result && currentSn !== 'broadcast') {
+    result = isRobotOnline('broadcast')
+  }
+  
+  return result
 })
 
 // 机器人显示信息的计算属性
@@ -1031,6 +1357,264 @@ const robotDisplayInfo = computed(() => {
 
 // 当前标签页
 const currentTab = ref('device')
+
+// 展厅选择相关状态
+const showHallSelectDialog = ref(false)
+const selectedHallId = ref<string>('')
+
+// 从Mission.vue复用的展厅缓存逻辑
+const HALL_CACHE_KEY = 'selected_hall_cache'
+
+const saveHallToCache = (hallId: string) => {
+  try {
+    localStorage.setItem(HALL_CACHE_KEY, hallId)
+  } catch (error) {
+    console.warn('Failed to save hall to cache:', error)
+  }
+}
+
+const getHallFromCache = (): string => {
+  try {
+    const cached = localStorage.getItem(HALL_CACHE_KEY)
+    // 验证缓存的展厅ID是否有效
+    if (cached && hallStore.halls.some(h => h.id.toString() === cached)) {
+      return cached
+    }
+  } catch (error) {
+    console.warn('Failed to get hall from cache:', error)
+  }
+  // 默认返回第一个展厅的ID，如果没有展厅则返回空字符串
+  return hallStore.halls.length > 0 ? hallStore.halls[0].id.toString() : ''
+}
+
+// 获取展厅列表
+const hallOptions = computed(() => 
+  hallStore.halls.map(hall => ({
+    id: hall.id.toString(),
+    name: hall.nav_name
+  }))
+)
+
+// 当前选中的展厅名称
+const currentHallName = computed(() => {
+  const hall = hallStore.halls.find(h => h.id.toString() === selectedHallId.value)
+  return hall ? hall.nav_name : 'a展厅'
+})
+
+// 展厅选择相关方法
+const handleHallClick = async () => {
+  // 确保展厅数据已加载
+  if (!hallStore.isLoaded || hallStore.halls.length === 0) {
+    try {
+      await hallStore.fetchHalls()
+    } catch (error) {
+      console.error('获取展厅列表失败:', error)
+      alert('获取展厅列表失败，请稍后重试')
+      return
+    }
+  }
+  
+  // 打开展厅选择弹窗
+  showHallSelectDialog.value = true
+}
+
+const handleHallSelect = (hallId: string) => {
+  selectedHallId.value = hallId
+  saveHallToCache(hallId)
+  showHallSelectDialog.value = false
+  console.log('展厅已切换到:', currentHallName.value)
+}
+
+const handleCancelHallSelect = () => {
+  showHallSelectDialog.value = false
+}
+
+// 处理开始执行任务按钮点击
+const handleStartTaskClick = async () => {
+  console.log('=== 开始执行任务按钮被点击 ===')
+  try {
+    // 先确保数据已加载
+    if (!tourStore.tourPresets.length) {
+      await tourStore.fetchTourPresets()
+    }
+    if (!guideStore.audiences.length) {
+      await guideStore.fetchAudiences()
+    }
+    
+    // 检查是否有任务预设
+    const presets = currentHallTourPresets.value
+    if (!presets.length) {
+      alert('当前展厅暂无可用的任务预设')
+      return
+    }
+    
+    // 检查是否有讲解对象
+    if (!availableAudiences.value.length) {
+      alert('暂无可用的讲解对象')
+      return
+    }
+    
+    // 默认选择第一个任务预设和讲解对象
+    selectedTaskPresetId.value = presets[0].id.toString()
+    selectedAudienceId.value = availableAudiences.value[0].id.toString()
+    
+    // 显示弹窗
+    showTaskSelectionDialog.value = true
+  } catch (error) {
+    console.error('加载任务数据失败:', error)
+    alert('加载任务数据失败，请重试')
+  }
+}
+
+// 确认开始任务
+const handleConfirmStartTask = async () => {
+  if (!selectedTaskPresetId.value) {
+    alert('请选择任务预设')
+    return
+  }
+  
+  if (!selectedAudienceId.value) {
+    alert('请选择讲解对象')
+    return
+  }
+  
+  try {
+    const presetId = parseInt(selectedTaskPresetId.value)
+    const audienceId = parseInt(selectedAudienceId.value)
+    
+    // 获取当前机器人的SN
+    const currentSn = getWebSocketSn()
+    
+    // 调用开始任务接口
+    await tourStore.startTourPreset(presetId, {
+      audience_id: audienceId,
+      robot_sn: currentSn,
+      prefer_current_pose: true
+    })
+    
+    alert('任务已成功开始')
+    showTaskSelectionDialog.value = false
+  } catch (error) {
+    console.error('开始任务失败:', error)
+    alert('开始任务失败，请重试')
+  }
+}
+
+// 取消任务选择
+const handleCancelTaskSelection = () => {
+  showTaskSelectionDialog.value = false
+}
+
+// 处理导航开关切换
+const handleNavigationToggle = async () => {
+  // 如果正在加载中，阻止重复点击
+  if (navSwitchLoading.value) {
+    return
+  }
+  
+  try {
+    // 获取当前展厅名称
+    const currentHall = hallStore.halls.find(h => h.id.toString() === selectedHallId.value)
+    if (!currentHall) {
+      alert('请先选择展厅')
+      return
+    }
+    
+    // 切换导航状态
+    const newNavState = !navEnabled.value
+    const action = newNavState ? 1 : 0
+    
+    // 设置加载状态和对应的文本
+    navLoadingText.value = newNavState ? '导航启动中...' : '导航关闭中...'
+    navSwitchLoading.value = true
+    
+    console.log('导航开关切换:', { 
+      action, 
+      mapName: currentHall.nav_name,
+      currentState: navEnabled.value,
+      newState: newNavState 
+    })
+    
+    // 获取当前选中的机器人sn或使用默认值
+    const currentSn = getWebSocketSn()
+    
+    // 调用导航开关API，添加timeout参数（默认15秒）
+    await navigationApi.navigationSwitch(userStore.token, {
+      sn: currentSn,
+      map_name: currentHall.nav_name,
+      action: action,
+      data_name: "default",
+      timeout: 15
+    })
+    
+    // API调用成功，状态将通过WebSocket数据自动更新
+    
+    const statusText = newNavState ? '已开启' : '已关闭'
+    alert(`导航开关${statusText}`)
+    
+  } catch (error) {
+    console.error('导航开关切换失败:', error)
+    alert('导航开关切换失败，请重试')
+  } finally {
+    // 确保加载状态被清除
+    navSwitchLoading.value = false
+  }
+}
+
+// 监听localStorage的变化，实现跨页面同步
+const handleStorageChange = (event: StorageEvent) => {
+  if (event.key === HALL_CACHE_KEY && event.newValue) {
+    const newHallId = event.newValue
+    // 验证新的展厅ID是否有效
+    if (hallStore.halls.some(h => h.id.toString() === newHallId)) {
+      selectedHallId.value = newHallId
+      console.log('展厅选择已同步:', currentHallName.value)
+    }
+  }
+}
+
+// 监听其他页面的展厅选择变化
+window.addEventListener('storage', handleStorageChange)
+
+// 监听选中机器人的变化，动态更新WebSocket配置
+watch(() => robotStore.selectedRobot, async (newRobot, oldRobot) => {
+  const oldSn = oldRobot?.sn && oldRobot.sn.trim() ? oldRobot.sn : 'broadcast'
+  const newSn = newRobot?.sn && newRobot.sn.trim() ? newRobot.sn : 'broadcast'
+  
+  // 如果sn发生了变化，更新WebSocket配置
+  if (oldSn !== newSn) {
+    console.log(`机器人选择变化，WebSocket SN从 ${oldSn} 更新为 ${newSn}`)
+    
+    try {
+      await updateWebSocketConfig({
+        sn: newSn,
+        kinds: ['pose', 'cmd_status', 'current_map', 'tour']
+      })
+    } catch (error) {
+      console.error('更新WebSocket配置失败:', error)
+    }
+  }
+}, { immediate: false })
+
+// 任务选择弹窗相关状态
+const showTaskSelectionDialog = ref(false)
+const selectedTaskPresetId = ref<string>('')
+const selectedAudienceId = ref<string>('')
+
+// 获取当前展厅的任务预设列表
+const currentHallTourPresets = computed(() => {
+  if (!selectedHallId.value) return []
+  const hallId = parseInt(selectedHallId.value)
+  return tourStore.getTourPresetsByHallId(hallId)
+})
+
+// 获取讲解对象列表
+const availableAudiences = computed(() => 
+  guideStore.audiences.map(audience => ({
+    id: audience.id,
+    name: audience.name
+  }))
+)
 
 // 设备告警数据
 const deviceAlarmData = ref<any[]>([])
@@ -3436,6 +4020,17 @@ watch(() => videoStreamUrl.value, (newUrl) => {
 onMounted(async () => {
   // 初始化首页
   
+  // 初始化展厅数据
+  try {
+    await hallStore.fetchHalls()
+    // 从缓存中恢复展厅选择
+    selectedHallId.value = getHallFromCache()
+    console.log('展厅数据初始化完成，当前选中:', currentHallName.value)
+  } catch (error) {
+    console.warn('获取展厅数据失败:', error)
+  }
+  
+  
   // 初始化警报声（使用Web Audio API生成）
   
   // 获取最新报警数据
@@ -3555,6 +4150,7 @@ onUnmounted(() => {
   // 移除全局点击事件监听器
   document.removeEventListener('click', handleGlobalClick)
   
+  
   // 轮询定时器已移除，无需清理
   // 清理图表动画定时器
   if (chartAnimationTimer) {
@@ -3608,6 +4204,9 @@ onUnmounted(() => {
     stopAlarmSound = null
   }
   isAlarmPlaying.value = false
+  
+  // 清理展厅同步事件监听器
+  window.removeEventListener('storage', handleStorageChange)
 })
 
 // 舱盖状态监听
@@ -4558,7 +5157,7 @@ const centerToDroneMarker = () => {
 .progress-bar {
   width: 100%;
   height: 16px;
-  background: rgba(255, 255, 255, 0.1);
+  background: transparent;
   border-radius: 8px;
   overflow: hidden;
   position: relative;
@@ -7227,6 +7826,91 @@ const centerToDroneMarker = () => {
   left: 21px;
 }
 
+/* 导航开关loading遮罩样式 */
+.nav-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.nav-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  background: rgba(22, 34, 51, 0.95);
+  border-radius: 12px;
+  border: 1px solid #164159;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.nav-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid transparent;
+  border-top: 3px solid #67D5FD;
+  border-radius: 50%;
+  animation: nav-spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.nav-loading-text {
+  color: #67D5FD;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+}
+
+@keyframes nav-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* WebSocket状态指示器样式 */
+.ws-status-indicators {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.ws-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #666;
+  font-size: 10px;
+  font-weight: bold;
+  border: 1px solid #444;
+  transition: all 0.3s ease;
+  cursor: help;
+}
+
+.ws-indicator.connected {
+  background: rgba(103, 213, 253, 0.2);
+  color: #67D5FD;
+  border-color: #67D5FD;
+  box-shadow: 0 0 4px rgba(103, 213, 253, 0.4);
+}
+
+.ws-indicator:hover {
+  transform: scale(1.1);
+}
+
+
+
+
+
 .drone-track-btn {
   position: absolute;
   top: 20px;
@@ -7335,6 +8019,259 @@ const centerToDroneMarker = () => {
 .tableOne th,
 .tableOne td {
   position: relative;
+}
+
+/* 可点击展厅样式 */
+.clickable-hall {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clickable-hall:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(103, 213, 253, 0.2);
+  border-color: rgba(103, 213, 253, 0.3);
+}
+
+/* 展厅选择弹窗样式 */
+.custom-dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-dialog {
+  background: #162333;
+  border: 1px solid #2a3b52;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.custom-dialog-title {
+  color: #67d5fd;
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.custom-dialog-content {
+  margin-bottom: 20px;
+}
+
+.hall-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+/* 自定义滚动条样式 - 参考点位名称管理弹窗 */
+.hall-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.hall-list::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.hall-list::-webkit-scrollbar-thumb {
+  background: rgba(103, 213, 253, 0.6);
+  border-radius: 3px;
+}
+
+.hall-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(103, 213, 253, 0.8);
+}
+
+.hall-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  background: #0c3c56;
+  border: 1px solid rgba(38, 131, 182, 0.6);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.hall-item:hover {
+  background: #164159;
+  border-color: #67d5fd;
+}
+
+.hall-item.selected {
+  background: rgba(103, 213, 253, 0.1);
+  border-color: #67d5fd;
+}
+
+.hall-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 12px;
+  filter: brightness(0) saturate(100%) invert(84%) sepia(42%) saturate(729%) hue-rotate(164deg) brightness(95%) contrast(96%);
+}
+
+.hall-name {
+  color: #fff;
+  font-size: 14px;
+  flex: 1;
+}
+
+.selected-indicator {
+  color: #67d5fd;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.custom-dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.mission-btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mission-btn-cancel {
+  background: #4a5568;
+  color: #fff;
+}
+
+.mission-btn-cancel:hover {
+  background: #5a6578;
+}
+
+/* 首页任务选择弹窗使用标准的add-user-form样式 */
+.add-user-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.add-user-form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.add-user-form label {
+  min-width: 90px;
+  color: #67d5fd;
+  font-size: 14px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.add-user-form .user-select {
+  flex: 1;
+  background: #0c3c56;
+  border: 1px solid rgba(38, 131, 182, 0.6);
+  border-radius: 4px;
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 14px;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+.add-user-form .user-select:focus {
+  outline: none;
+  border-color: #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.add-user-form .custom-select-wrapper {
+  position: relative;
+  flex: 1;
+  width: 100%;
+}
+
+.add-user-form .custom-select-wrapper .user-select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: none;
+  padding-right: 32px;
+}
+
+.add-user-form .custom-select-arrow {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #67d5fd;
+}
+
+.add-user-form .custom-select-arrow svg {
+  width: 12px;
+  height: 12px;
+}
+
+.add-user-form .custom-select-arrow svg polygon {
+  fill: #67d5fd;
+}
+
+/* 任务选择弹窗按钮样式 */
+.custom-dialog[data-dialog="task-selection"] .custom-dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.custom-dialog[data-dialog="task-selection"] .mission-btn {
+  min-width: 100px;
+  height: 36px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.custom-dialog[data-dialog="task-selection"] .mission-btn-cancel {
+  background: rgba(103, 213, 253, 0.1);
+  color: #b8c7d9;
+  border: 1px solid rgba(103, 213, 253, 0.2);
+}
+
+.custom-dialog[data-dialog="task-selection"] .mission-btn-cancel:hover {
+  background: rgba(103, 213, 253, 0.2);
+  color: #67d5fd;
+}
+
+.custom-dialog[data-dialog="task-selection"] .mission-btn-pause {
+  background: #67d5fd;
+  color: #fff;
+}
+
+.custom-dialog[data-dialog="task-selection"] .mission-btn-pause:hover {
+  background: #50c7f7;
+  box-shadow: 0 2px 8px rgba(103, 213, 253, 0.3);
 }
 
 </style>

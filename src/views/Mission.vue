@@ -35,10 +35,10 @@
                   </button>
                   <button
                     class="mission-btn mission-btn-pause hall-btn"
-                    :disabled="isRecording"
-                    @click="isGeneratingMap ? generateHallMap() : startGenerateHallMap()"
+                    :disabled="isGenerateMapDisabled"
+                    @click="handleGenerateMapClick()"
                   >
-                    {{ isGeneratingMap ? '停止生成地图' : '生成展厅地图' }}
+                    {{ generateMapButtonText }}
                   </button>
                 </div>
                 <div class="map-progress">
@@ -55,9 +55,23 @@
               <div class="grid-toolbar-compact">
                 <div class="toolbar-left">
                   <span class="toolbar-label">展厅列表</span>
-                  <select v-model="selectedHall" class="toolbar-select">
-                    <option v-for="h in hallOptions" :key="h.id" :value="h.id">{{ h.name }}</option>
-                  </select>
+                  <div class="hall-select-container">
+                    <select 
+                      v-model="selectedHall" 
+                      class="toolbar-select"
+                      :disabled="isNavEnabled"
+                    >
+                      <option v-for="h in hallOptions" :key="h.id" :value="h.id">{{ h.name }}</option>
+                    </select>
+                    <button 
+                      class="hall-delete-btn-inline"
+                      :disabled="isNavEnabled || !selectedHall"
+                      @click="deleteSelectedHall"
+                      title="删除选中的展厅"
+                    >
+                      删除
+                    </button>
+                  </div>
                 </div>
                 <div class="toolbar-right">
                   <button class="toolbar-btn" :class="{ active: isEditMode }" @click="toggleEditMode">
@@ -181,9 +195,9 @@
                   <div class="mission-td">{{ idx + 1 }}</div>
                   <div class="mission-td">{{ point.name }}</div>
                   <div class="mission-td">{{ getPointNameByPointId(point.id) }}</div>
-                  <div class="mission-td">{{ point.x.toFixed(2) }}</div>
-                  <div class="mission-td">{{ point.y.toFixed(2) }}</div>
-                  <div class="mission-td">{{ point.angle }}°</div>
+                  <div class="mission-td">{{ point.x }}</div>
+                  <div class="mission-td">{{ point.y }}</div>
+                  <div class="mission-td">{{ point.angle }}</div>
                   <div class="mission-td">{{ point.pointType }}</div>
                   <div class="mission-td">{{ point.robotAction }}</div>
                   <div class="mission-td">{{ point.robotDirection }}</div>
@@ -381,7 +395,7 @@
             </div>
             <div class="add-user-form-row">
               <label>角度：</label>
-              <input v-model.number="addTaskPointForm.angle" type="number" min="0" max="360" class="user-input no-spinners" placeholder="请输入角度(0-360)" />
+              <input v-model.number="addTaskPointForm.angle" type="number" step="0.001" class="user-input no-spinners" placeholder="请输入角度(弧度值)" />
             </div>
             <div class="add-user-form-row">
               <label>机器人动作：</label>
@@ -425,21 +439,17 @@
 
     <!-- 访客类型选择弹窗 -->
     <div v-if="showVisitorTypeDialog" class="custom-dialog-mask">
-      <div class="custom-dialog">
+      <div class="custom-dialog" data-dialog="start-task">
         <div class="custom-dialog-title">开始任务</div>
         <div class="custom-dialog-content">
           <div class="add-user-form">
             <div class="add-user-form-row">
-              <label>访客类型：</label>
+              <label>讲解对象：</label>
               <div class="custom-select-wrapper">
                 <select v-model="selectedVisitorType" class="user-select">
-                  <option value="">请选择访客类型</option>
-                  <option value="企业">企业</option>
-                  <option value="学生">学生</option>
-                  <option value="政府单位">政府单位</option>
-                  <option value="社会人员">社会人员</option>
-                  <option value="国家政要">国家政要</option>
-                  <option value="外籍人员">外籍人员</option>
+                  <option v-for="audience in availableAudiences" :key="audience.id" :value="audience.id.toString()">
+                    {{ audience.name }}
+                  </option>
                 </select>
                 <span class="custom-select-arrow">
                   <svg width="12" height="12" viewBox="0 0 12 12">
@@ -576,11 +586,27 @@
         </div>
       </div>
     </div>
+
+    <!-- 地图录制loading遮罩 -->
+    <div v-if="recordingLoading" class="recording-loading-overlay">
+      <div class="recording-loading-content">
+        <div class="recording-loading-spinner"></div>
+        <div class="recording-loading-text">{{ recordingLoadingText }}</div>
+      </div>
+    </div>
+
+    <!-- 地图生成loading遮罩 -->
+    <div v-if="generateMapLoading" class="generate-map-loading-overlay">
+      <div class="generate-map-loading-content">
+        <div class="generate-map-loading-spinner"></div>
+        <div class="generate-map-loading-text">{{ generateMapLoadingText }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useHallStore } from '../stores/hall'
 import { useZoneStore } from '../stores/zone'
@@ -588,7 +614,9 @@ import { usePointStore } from '../stores/point'
 import { useGuideStore } from '../stores/guide'
 import { useTourStore } from '../stores/tour'
 import { useUserStore } from '../stores/user'
-import { navigationApi } from '@/api/services'
+import { useRobotStore } from '../stores/robot'
+import { useWebSocketData } from '@/composables/useWebSocketData'
+import { navigationApi, tourApi } from '@/api/services'
 import type { Zone, TourPreset } from '@/types'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
@@ -634,19 +662,93 @@ const pointStore = usePointStore()
 const guideStore = useGuideStore()
 const tourStore = useTourStore()
 const userStore = useUserStore()
+const robotStore = useRobotStore()
+
+// 先从缓存恢复机器人数据，确保WebSocket连接使用正确的SN
+robotStore.hydrateFromCache()
+robotStore.initSelectedRobot()
+
+// WebSocket数据获取
+const getWebSocketSn = () => {
+  const selectedRobot = robotStore.selectedRobot
+  if (selectedRobot && selectedRobot.sn && selectedRobot.sn.trim()) {
+    console.log('Mission页面使用选中机器人的SN:', selectedRobot.sn)
+    return selectedRobot.sn
+  }
+  console.log('Mission页面使用broadcast SN')
+  return 'broadcast'
+}
+
+const { getRobotCmdStatus, getRobotSlamProgress, getRobotPose, getRobotCurrentMap, getTourRunEvents, getRobotTourEvents, activeTourRuns } = useWebSocketData(
+  {
+    sn: getWebSocketSn(),
+    kinds: ['cmd_status', 'pose', 'current_map', 'tour']
+  },
+  true,
+  userStore.token || ''
+)
 
 // 当前选中的标签页
 const currentTab = ref('hall')
 
 // 展厅管理相关状态
 const isRecording = ref(false)
-const mapGenProgress = ref(65)
+
+// 计算属性：从WebSocket获取实时的slam进度
+const mapGenProgress = computed(() => {
+  const currentSn = getWebSocketSn()
+  let progress = getRobotSlamProgress(currentSn)
+  
+  // 如果当前SN没有数据，尝试使用broadcast
+  if (progress === undefined && currentSn !== 'broadcast') {
+    progress = getRobotSlamProgress('broadcast')
+  }
+  
+  // 返回进度值，如果没有数据则返回0
+  return progress || 0
+})
+
+// 计算属性：检查导航状态是否启用
+const isNavEnabled = computed(() => {
+  const currentSn = getWebSocketSn()
+  let cmdStatus = getRobotCmdStatus(currentSn)
+  
+  // 如果当前SN没有数据，尝试使用broadcast
+  if (!cmdStatus && currentSn !== 'broadcast') {
+    cmdStatus = getRobotCmdStatus('broadcast')
+  }
+  
+  return cmdStatus?.nav === 1
+})
+
+// 计算属性：获取当前地图名称
+const currentMapName = computed(() => {
+  const currentSn = getWebSocketSn()
+  let currentMap = getRobotCurrentMap(currentSn)
+  
+  // 如果当前SN没有数据，尝试使用broadcast
+  if (!currentMap && currentSn !== 'broadcast') {
+    currentMap = getRobotCurrentMap('broadcast')
+  }
+  
+  return currentMap?.map_name || ''
+})
+
+// 地图录制加载状态
+const recordingLoading = ref(false)
+const recordingLoadingText = ref('')
+
+// 地图生成加载状态
+const generateMapLoading = ref(false)
+const generateMapLoadingText = ref('')
 
 // 地图录制弹窗相关状态
 const showRecordingDialog = ref(false)
 const recordingForm = ref({
   dataName: ''
 })
+// 保存当前录制的数据包名称（用于停止录制时传递）
+const currentRecordingDataName = ref('')
 
 // 生成地图弹窗相关状态
 const showGenerateMapDialog = ref(false)
@@ -656,14 +758,102 @@ const generateMapForm = ref({
   mapName: ''
 })
 
+// 用户是否已提交生成请求（用于区分用户操作和系统状态）
+const hasSubmittedGeneration = ref(false)
+
+// 计算属性：按钮文字显示逻辑
+const generateMapButtonText = computed(() => {
+  const currentSn = getWebSocketSn()
+  let cmdStatus = getRobotCmdStatus(currentSn)
+  
+  // 如果当前SN没有数据，尝试使用broadcast
+  if (!cmdStatus && currentSn !== 'broadcast') {
+    cmdStatus = getRobotCmdStatus('broadcast')
+  }
+  
+  const slam = cmdStatus?.slam
+  
+  // 当slam=1时，显示"停止生成地图"
+  if (slam === 1) {
+    return '停止生成地图'
+  }
+  
+  // 当slam=0或未定义时，显示"生成展厅地图"
+  return '生成展厅地图'
+})
+
+// 计算属性：根据change_pcd状态决定生成地图按钮是否可用
+const isGenerateMapDisabled = computed(() => {
+  const currentSn = getWebSocketSn()
+  let cmdStatus = getRobotCmdStatus(currentSn)
+  
+  // 如果当前SN没有数据，尝试使用broadcast
+  if (!cmdStatus && currentSn !== 'broadcast') {
+    cmdStatus = getRobotCmdStatus('broadcast')
+  }
+  
+  const changePcd = cmdStatus?.change_pcd
+  
+  // console.log(`生成地图按钮状态 [${currentSn}]: change_pcd=${changePcd}, isRecording=${isRecording.value}`)
+  
+  // 如果change_pcd是1，按钮禁用（置灰）
+  // 如果正在录制，按钮也禁用
+  // change_pcd=0时按钮高亮（可用）
+  return changePcd === 1 || isRecording.value
+})
+
+// 监听change_pcd状态变化
+watch(() => {
+  const currentSn = getWebSocketSn()
+  let cmdStatus = getRobotCmdStatus(currentSn)
+  if (!cmdStatus && currentSn !== 'broadcast') {
+    cmdStatus = getRobotCmdStatus('broadcast')
+  }
+  return cmdStatus?.change_pcd
+}, (newValue, oldValue) => {
+  console.log(`change_pcd状态变化: ${oldValue} -> ${newValue}`)
+  // 当change_pcd从0变成1时，重置提交状态
+  if (oldValue === 0 && newValue === 1) {
+    hasSubmittedGeneration.value = false
+    console.log('检测到change_pcd变为1，重置hasSubmittedGeneration为false')
+  }
+})
+
+// 监听slam状态变化
+watch(() => {
+  const currentSn = getWebSocketSn()
+  let cmdStatus = getRobotCmdStatus(currentSn)
+  if (!cmdStatus && currentSn !== 'broadcast') {
+    cmdStatus = getRobotCmdStatus('broadcast')
+  }
+  return cmdStatus?.slam
+}, (newValue, oldValue) => {
+  console.log(`slam状态变化: ${oldValue} -> ${newValue}`)
+  // 当slam状态变化时，可以在这里添加额外的逻辑
+  if (newValue === 0 && oldValue === 1) {
+    console.log('地图生成已停止')
+  } else if (newValue === 1 && oldValue === 0) {
+    console.log('地图生成已开始')
+  }
+})
+
+
 // 可用的数据包列表（从API获取）
 const availableDataPackages = ref<string[]>([])
 const rawDataPackages = ref<string[]>([])
 
-// 处理数据包名称，去掉@符号后面的时间戳
+// 处理数据包名称，去掉@符号后面的时间戳和.bag后缀
 const processDataPackageName = (packageName: string): string => {
+  // 先去掉@符号后面的时间戳
   const atIndex = packageName.indexOf('@')
-  return atIndex !== -1 ? packageName.substring(0, atIndex) : packageName
+  let name = atIndex !== -1 ? packageName.substring(0, atIndex) : packageName
+  
+  // 再去掉.bag后缀
+  if (name.endsWith('.bag')) {
+    name = name.substring(0, name.length - 4)
+  }
+  
+  return name
 }
 
 // 格式化后的数据包选项
@@ -679,6 +869,7 @@ const hallOptions = computed(() =>
     gridUrl: undefined // 可以后续添加网格图URL
   }))
 )
+
 
 // 缓存相关常量
 const HALL_CACHE_KEY = 'selected_hall_cache'
@@ -709,6 +900,20 @@ const getHallFromCache = (): string => {
 // 初始化时从缓存获取展厅选择
 const selectedHall = ref(getHallFromCache())
 const currentGridUrl = computed(() => hallOptions.value.find(h => h.id === selectedHall.value)?.gridUrl || '')
+
+// 监听nav状态和当前地图变化，自动选择对应的展厅
+watch([isNavEnabled, currentMapName, hallOptions], ([navEnabled, mapName, halls]) => {
+  console.log(`nav状态变化: navEnabled=${navEnabled}, currentMapName=${mapName}`)
+  
+  if (navEnabled && mapName) {
+    // 当导航启用且有当前地图时，查找对应的展厅
+    const matchingHall = halls.find(hall => hall.name === mapName)
+    if (matchingHall && selectedHall.value !== matchingHall.id) {
+      console.log(`自动选择展厅: ${matchingHall.name} (${matchingHall.id})`)
+      selectedHall.value = matchingHall.id
+    }
+  }
+}, { immediate: true })
 
 // 获取当前选中的展厅名称
 const currentSelectedHallName = computed(() => {
@@ -750,6 +955,21 @@ watch(selectedHall, async (newHallId) => {
     selectedHallTaskList.value = ''
   }
 }, { immediate: false })
+
+// 监听localStorage的变化，实现跨页面同步
+const handleStorageChange = (event: StorageEvent) => {
+  if (event.key === HALL_CACHE_KEY && event.newValue) {
+    const newHallId = event.newValue
+    // 验证新的展厅ID是否有效，且不是当前选中的展厅
+    if (hallOptions.value.some(h => h.id === newHallId) && newHallId !== selectedHall.value) {
+      selectedHall.value = newHallId
+      console.log('展厅选择已从其他页面同步:', currentSelectedHallName.value)
+    }
+  }
+}
+
+// 监听其他页面的展厅选择变化
+window.addEventListener('storage', handleStorageChange)
 
 // 栅格编辑相关
 const isEditMode = ref(false)
@@ -868,7 +1088,7 @@ const currentTaskPoints = computed(() => {
       name: point.custom_name || pointName?.name || '未知点位', // 优先显示custom_name
       x: point.pose_x,
       y: point.pose_y,
-      angle: Math.round(point.pose_theta * 180 / Math.PI), // 将弧度转换为角度
+      angle: point.pose_theta, // 直接使用theta原始值
       pointType: point.type === 'explain' ? '讲解点' : '辅助点',
       robotAction: point.action_code || '默认动作', // API中可能为null
       robotDirection: '前进', // API中没有此字段，使用默认值
@@ -974,6 +1194,14 @@ const taskRunning = ref<boolean>(false)
 const showVisitorTypeDialog = ref<boolean>(false)
 const selectedVisitorType = ref<string>('')
 
+// 使用computed从guideStore获取讲解对象列表
+const availableAudiences = computed(() => 
+  guideStore.audiences.map(audience => ({
+    id: audience.id,
+    name: audience.name
+  }))
+)
+
 // 新增展厅任务相关数据
 const showAddHallTaskDialog = ref<boolean>(false)
 const addHallTaskForm = ref({
@@ -987,6 +1215,98 @@ const selectedAreaForTask = ref<string>('')
 const toggleEditMode = () => { 
   isEditMode.value = !isEditMode.value
   setupCanvasEditEvents()
+}
+
+// 展厅选择处理函数
+const selectHall = (hallId: string) => {
+  selectedHall.value = hallId
+}
+
+// 删除选中的展厅处理函数
+const deleteSelectedHall = async () => {
+  if (!selectedHall.value) {
+    alert('请先选择要删除的展厅')
+    return
+  }
+  
+  const selectedHallInfo = hallOptions.value.find(h => h.id === selectedHall.value)
+  if (!selectedHallInfo) {
+    alert('未找到选中的展厅信息')
+    return
+  }
+  
+  if (!confirm(`确定要删除展厅"${selectedHallInfo.name}"吗？此操作将删除该展厅的地图数据，无法恢复。`)) {
+    return
+  }
+  
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('未找到认证token')
+      return
+    }
+    
+    // 获取当前机器人SN
+    const currentSn = getWebSocketSn()
+    
+    // 调用删除地图API
+    await navigationApi.deleteMap(token, {
+      sn: currentSn,
+      map_name: selectedHallInfo.name,
+      timeout: 10
+    })
+    
+    // 删除成功后，重新加载展厅列表
+    await hallStore.fetchHalls()
+    
+    // 重新选择第一个展厅
+    selectedHall.value = hallOptions.value.length > 0 ? hallOptions.value[0].id : ''
+    
+    alert(`展厅"${selectedHallInfo.name}"删除成功`)
+    console.log('展厅删除成功:', selectedHallInfo.name)
+  } catch (error) {
+    console.error('删除展厅失败:', error)
+    alert(error instanceof Error ? error.message : '删除展厅失败')
+  }
+}
+
+// 删除展厅处理函数（保留用于向后兼容）
+const deleteHall = async (hall: { id: string, name: string }) => {
+  if (!confirm(`确定要删除展厅"${hall.name}"吗？此操作将删除该展厅的地图数据，无法恢复。`)) {
+    return
+  }
+  
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('未找到认证token')
+      return
+    }
+    
+    // 获取当前机器人SN
+    const currentSn = getWebSocketSn()
+    
+    // 调用删除地图API
+    await navigationApi.deleteMap(token, {
+      sn: currentSn,
+      map_name: hall.name,
+      timeout: 10
+    })
+    
+    // 删除成功后，重新加载展厅列表
+    await hallStore.fetchHalls()
+    
+    // 如果删除的是当前选中的展厅，重新选择第一个展厅
+    if (selectedHall.value === hall.id) {
+      selectedHall.value = hallOptions.value.length > 0 ? hallOptions.value[0].id : ''
+    }
+    
+    alert(`展厅"${hall.name}"删除成功`)
+    console.log('展厅删除成功:', hall.name)
+  } catch (error) {
+    console.error('删除展厅失败:', error)
+    alert(error instanceof Error ? error.message : '删除展厅失败')
+  }
 }
 const setTool = (tool: 'pen' | 'eraser') => { 
   activeTool.value = tool
@@ -1209,34 +1529,8 @@ const startHallRecording = () => {
 }
 
 const stopHallRecording = async () => {
-  try {
-    const token = userStore.token
-    if (!token) {
-      alert('未找到认证token')
-      return
-    }
-
-    // 停止录包
-    const slamData = {
-      sn: '',
-      map_name: '',
-      action: 0,
-      data_name: ''
-    }
-
-    await navigationApi.slamControl(token, slamData)
-    isRecording.value = false
-    alert('地图录制已停止')
-  } catch (error) {
-    console.error('停止地图录制失败:', error)
-    alert(error instanceof Error ? error.message : '停止地图录制失败')
-  }
-}
-
-// 确认开始录制
-const handleConfirmStartRecording = async () => {
-  if (!recordingForm.value.dataName.trim()) {
-    alert('请输入展厅数据包名称')
+  // 如果正在加载中，阻止重复点击
+  if (recordingLoading.value) {
     return
   }
 
@@ -1247,21 +1541,77 @@ const handleConfirmStartRecording = async () => {
       return
     }
 
+    // 设置加载状态
+    recordingLoadingText.value = '地图录制停止中...'
+    recordingLoading.value = true
+
+    // 停止录包
+    const slamData = {
+      sn: '',
+      map_name: '',
+      action: 0,
+      data_name: currentRecordingDataName.value,
+      timeout: 10  // 添加timeout参数，默认10秒
+    }
+
+    await navigationApi.slamControl(token, slamData)
+    isRecording.value = false
+    // 清空保存的数据包名称
+    currentRecordingDataName.value = ''
+    alert('地图录制已停止')
+  } catch (error) {
+    console.error('停止地图录制失败:', error)
+    alert(error instanceof Error ? error.message : '停止地图录制失败')
+  } finally {
+    // 确保加载状态被清除
+    recordingLoading.value = false
+  }
+}
+
+// 确认开始录制
+const handleConfirmStartRecording = async () => {
+  if (!recordingForm.value.dataName.trim()) {
+    alert('请输入展厅数据包名称')
+    return
+  }
+
+  // 如果正在加载中，阻止重复点击
+  if (recordingLoading.value) {
+    return
+  }
+
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('未找到认证token')
+      return
+    }
+
+    // 设置加载状态
+    recordingLoadingText.value = '地图录制启动中...'
+    recordingLoading.value = true
+
     // 开始录包
     const slamData = {
       sn: '',
       map_name: '',
       action: 1,
-      data_name: recordingForm.value.dataName.trim()
+      data_name: recordingForm.value.dataName.trim(),
+      timeout: 10  // 添加timeout参数，默认10秒
     }
 
     await navigationApi.slamControl(token, slamData)
     isRecording.value = true
+    // 保存当前录制的数据包名称
+    currentRecordingDataName.value = recordingForm.value.dataName.trim()
     showRecordingDialog.value = false
     alert(`地图录制已开始\n数据包名称：${recordingForm.value.dataName}`)
   } catch (error) {
     console.error('开始地图录制失败:', error)
     alert(error instanceof Error ? error.message : '开始地图录制失败')
+  } finally {
+    // 确保加载状态被清除
+    recordingLoading.value = false
   }
 }
 
@@ -1271,6 +1621,27 @@ const handleCancelRecording = () => {
   recordingForm.value.dataName = ''
 }
 // 生成地图相关函数
+// 处理生成地图按钮点击
+const handleGenerateMapClick = async () => {
+  const currentSn = getWebSocketSn()
+  let cmdStatus = getRobotCmdStatus(currentSn)
+  
+  // 如果当前SN没有数据，尝试使用broadcast
+  if (!cmdStatus && currentSn !== 'broadcast') {
+    cmdStatus = getRobotCmdStatus('broadcast')
+  }
+  
+  const slam = cmdStatus?.slam
+  
+  if (slam === 1) {
+    // 如果slam=1，表示正在生成地图，执行停止操作
+    await stopGenerateHallMap()
+  } else {
+    // 如果slam=0或未定义，启动生成流程
+    await startGenerateHallMap()
+  }
+}
+
 const startGenerateHallMap = async () => {
   // 先加载数据包列表
   await loadDataPackages()
@@ -1281,13 +1652,22 @@ const startGenerateHallMap = async () => {
   showGenerateMapDialog.value = true
 }
 
-const generateHallMap = async () => {
+const stopGenerateHallMap = async () => {
+  // 如果正在加载中，阻止重复点击
+  if (generateMapLoading.value) {
+    return
+  }
+
   try {
     const token = userStore.token
     if (!token) {
       alert('未找到认证token')
       return
     }
+
+    // 设置加载状态
+    generateMapLoadingText.value = '地图生成停止中...'
+    generateMapLoading.value = true
 
     // 停止生成地图
     const mapData = {
@@ -1298,11 +1678,15 @@ const generateHallMap = async () => {
     }
 
     await navigationApi.generateMap(token, mapData)
-    isGeneratingMap.value = false
+    hasSubmittedGeneration.value = false
     alert('地图生成已停止')
+    console.log('手动停止地图生成，重置hasSubmittedGeneration为false')
   } catch (error) {
     console.error('停止地图生成失败:', error)
     alert(error instanceof Error ? error.message : '停止地图生成失败')
+  } finally {
+    // 确保加载状态被清除
+    generateMapLoading.value = false
   }
 }
 
@@ -1318,6 +1702,11 @@ const handleConfirmGenerateMap = async () => {
     return
   }
 
+  // 如果正在加载中，阻止重复点击
+  if (generateMapLoading.value) {
+    return
+  }
+
   try {
     const token = userStore.token
     if (!token) {
@@ -1325,21 +1714,29 @@ const handleConfirmGenerateMap = async () => {
       return
     }
 
+    // 设置加载状态
+    generateMapLoadingText.value = '地图生成启动中...'
+    generateMapLoading.value = true
+
     // 开始生成地图
     const mapData = {
       sn: '',
       map_name: generateMapForm.value.mapName.trim(),
       action: 1,
-      data_name: generateMapForm.value.dataName.trim()
+      data_name: processDataPackageName(generateMapForm.value.dataName.trim())
     }
 
     await navigationApi.generateMap(token, mapData)
-    isGeneratingMap.value = true
+    hasSubmittedGeneration.value = true
     showGenerateMapDialog.value = false
     alert(`地图生成已开始\n数据包：${processDataPackageName(generateMapForm.value.dataName)}\n地图名称：${generateMapForm.value.mapName}`)
+    console.log('生成地图请求已提交，设置hasSubmittedGeneration为true')
   } catch (error) {
     console.error('开始地图生成失败:', error)
     alert(error instanceof Error ? error.message : '开始地图生成失败')
+  } finally {
+    // 确保加载状态被清除
+    generateMapLoading.value = false
   }
 }
 
@@ -2009,6 +2406,17 @@ onActivated(() => {
   }, 50)
 })
 
+// 组件卸载时清理事件监听器
+onUnmounted(() => {
+  // 清理展厅同步事件监听器
+  window.removeEventListener('storage', handleStorageChange)
+  
+  // 清理栅格图相关资源
+  if (hallGridCleanup) {
+    hallGridCleanup()
+  }
+})
+
 // 直接编辑栅格图像素数据
 let drawing = false
 let editLastX = 0, editLastY = 0
@@ -2203,13 +2611,35 @@ const handleDeleteArea = async () => {
 const handleAddTaskPoint = () => {
   if (!selectedAreaId.value) return
   
+  // 获取当前机器人的位置数据
+  const currentSn = getWebSocketSn()
+  let robotPose = getRobotPose(currentSn)
+  
+  // 如果当前SN没有数据，尝试使用broadcast
+  if (!robotPose && currentSn !== 'broadcast') {
+    robotPose = getRobotPose('broadcast')
+  }
+  
+  // 从机器人位置数据中提取xytheta，如果没有数据则使用默认值
+  const defaultX = robotPose?.x || 0
+  const defaultY = robotPose?.y || 0
+  const defaultAngle = robotPose?.theta || 0 // 直接使用theta原始值
+  
+  console.log('新增任务点使用机器人当前位置:', { 
+    sn: currentSn, 
+    x: defaultX, 
+    y: defaultY, 
+    angle: defaultAngle,
+    rawPose: robotPose 
+  })
+  
   editingTaskPoint.value = null
   addTaskPointForm.value = { 
     name: '',
     pointNameId: guideStore.pointNames.length > 0 ? guideStore.pointNames[0].id.toString() : '',
-    x: 0, 
-    y: 0, 
-    angle: 0, 
+    x: defaultX, 
+    y: defaultY, 
+    angle: defaultAngle, 
     pointType: '讲解点', 
     robotAction: '抬左手',
     robotDirection: '前进'
@@ -2280,10 +2710,11 @@ const handleConfirmAddTaskPoint = async () => {
     return
   }
   
-  if (addTaskPointForm.value.angle < 0 || addTaskPointForm.value.angle > 360) {
-    alert('角度必须在0-360之间')
-    return
-  }
+  // 移除角度范围限制，因为现在使用弧度值
+  // if (addTaskPointForm.value.angle < 0 || addTaskPointForm.value.angle > 360) {
+  //   alert('角度必须在0-360之间')
+  //   return
+  // }
   
   if (!selectedAreaId.value) {
     alert('未选择展区')
@@ -2293,6 +2724,9 @@ const handleConfirmAddTaskPoint = async () => {
   if (editingTaskPoint.value) {
     // 编辑模式 - 调用API更新任务点
     try {
+      // 获取当前机器人的SN
+      const currentSn = getWebSocketSn()
+      
       const pointData = {
         type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
         point_name_id: addTaskPointForm.value.pointType === '讲解点' && addTaskPointForm.value.pointNameId 
@@ -2301,10 +2735,10 @@ const handleConfirmAddTaskPoint = async () => {
         custom_name: addTaskPointForm.value.name, // 添加custom_name字段
         pose_x: addTaskPointForm.value.x,
         pose_y: addTaskPointForm.value.y,
-        pose_theta: addTaskPointForm.value.angle * Math.PI / 180, // 角度转弧度
+        pose_theta: addTaskPointForm.value.angle, // 直接使用原始值
         action_code: addTaskPointForm.value.robotAction,
         action_params: '', // 暂时为空
-        robot_sn: 'DEFAULT_ROBOT' // 使用默认值
+        robot_sn: currentSn // 使用当前机器人的SN
       }
       
       console.log('更新任务点:', editingTaskPoint.value.id, pointData)
@@ -2319,6 +2753,9 @@ const handleConfirmAddTaskPoint = async () => {
   } else {
     // 新增模式 - 调用API创建任务点
     try {
+      // 获取当前机器人的SN
+      const currentSn = getWebSocketSn()
+      
       const pointData = {
         zone_id: parseInt(selectedAreaId.value),
         type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
@@ -2328,10 +2765,10 @@ const handleConfirmAddTaskPoint = async () => {
         custom_name: addTaskPointForm.value.name, // 添加custom_name字段
         pose_x: addTaskPointForm.value.x,
         pose_y: addTaskPointForm.value.y,
-        pose_theta: addTaskPointForm.value.angle * Math.PI / 180, // 角度转弧度
+        pose_theta: addTaskPointForm.value.angle, // 直接使用原始值
         action_code: addTaskPointForm.value.robotAction,
         action_params: '', // 暂时为空
-        robot_sn: 'DEFAULT_ROBOT' // 使用默认值，因为表单中移除了此字段
+        robot_sn: currentSn // 使用当前机器人的SN
       }
       
       console.log('创建任务点:', pointData)
@@ -2486,13 +2923,30 @@ const handleAddAreaTask = () => {
 }
 
 // 任务控制相关方法
-const handleStartTask = () => {
+const handleStartTask = async () => {
   if (!selectedHallTaskList.value) {
     return
   }
   
-  // 显示访客类型选择弹窗
-  selectedVisitorType.value = ''
+  // 先获取讲解对象数据
+  try {
+    console.log('获取讲解对象数据...')
+    await guideStore.fetchAudiences()
+    console.log('讲解对象数据加载完成')
+  } catch (error) {
+    console.error('获取讲解对象数据失败:', error)
+    alert('获取讲解对象数据失败，请稍后重试')
+    return
+  }
+  
+  // 默认选择第一个讲解对象
+  if (availableAudiences.value.length > 0) {
+    selectedVisitorType.value = availableAudiences.value[0].id.toString()
+  } else {
+    selectedVisitorType.value = ''
+  }
+  
+  // 显示讲解对象选择弹窗
   showVisitorTypeDialog.value = true
 }
 
@@ -2508,17 +2962,50 @@ const handleCancelStartTask = () => {
   selectedVisitorType.value = ''
 }
 
-const handleConfirmStartTask = () => {
+const handleConfirmStartTask = async () => {
   if (!selectedVisitorType.value) {
-    alert('请选择访客类型')
+    alert('暂无可用的讲解对象')
     return
   }
   
-  // 开始任务
-  taskRunning.value = true
-  showVisitorTypeDialog.value = false
+  if (!selectedHallTaskList.value) {
+    alert('请选择展厅任务')
+    return
+  }
   
-  alert(`任务已开始，访客类型：${selectedVisitorType.value}`)
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('未找到认证token')
+      return
+    }
+    
+    const presetId = parseInt(selectedHallTaskList.value)
+    const audienceId = parseInt(selectedVisitorType.value)
+    
+    // 获取选中的讲解对象名称
+    const selectedAudience = availableAudiences.value.find(audience => audience.id === audienceId)
+    const audienceName = selectedAudience ? selectedAudience.name : '未知'
+    
+    // 调用开始任务API
+    const startData = {
+      audience_id: audienceId,
+      robot_sn: "default_robot", // 默认值，后续可根据需要修改
+      prefer_current_pose: true
+    }
+    
+    console.log('开始展厅任务, preset_id:', presetId, 'start_data:', startData)
+    await tourApi.startTourPreset(token, presetId, startData)
+    
+    // 开始任务成功
+    taskRunning.value = true
+    showVisitorTypeDialog.value = false
+    
+    alert(`任务已开始\n讲解对象：${audienceName}\n任务ID：${presetId}`)
+  } catch (error) {
+    console.error('开始展厅任务失败:', error)
+    alert(error instanceof Error ? error.message : '开始展厅任务失败')
+  }
 }
 
 // 新增展厅任务相关方法
@@ -3208,6 +3695,43 @@ const showErrorMessage = (message: string) => {
   border-bottom: 1px solid #164159;
   padding: 0;
   backdrop-filter: blur(4px);
+}
+
+/* 展厅选择容器 */
+.hall-select-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+}
+
+/* 内联删除按钮 */
+.hall-delete-btn-inline {
+  padding: 6px 12px;
+  border: none;
+  background: #dc3545;
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.hall-delete-btn-inline:hover:not(:disabled) {
+  background: #c82333;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+.hall-delete-btn-inline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #6c757d;
+  transform: none;
+  box-shadow: none;
 }
 
 /* 主要内容区域 */
@@ -3981,6 +4505,15 @@ const showErrorMessage = (message: string) => {
   height: 12px;
 }
 
+/* 讲解对象选择弹窗的特殊样式 */
+.custom-dialog[data-dialog="start-task"] .add-user-form .custom-select-wrapper {
+  min-width: 210px;
+}
+
+.custom-dialog[data-dialog="start-task"] .add-user-form .user-select {
+  min-width: 210px;
+}
+
 .add-user-form .custom-select-arrow svg polygon {
   fill: #67d5fd;
 }
@@ -4220,6 +4753,100 @@ const showErrorMessage = (message: string) => {
 .status-disabled {
   color: #ff4d4f;
   font-weight: 500;
+}
+
+/* 地图录制loading遮罩样式 */
+.recording-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.recording-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  background: rgba(22, 34, 51, 0.95);
+  border-radius: 12px;
+  border: 1px solid #164159;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.recording-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid transparent;
+  border-top: 3px solid #67D5FD;
+  border-radius: 50%;
+  animation: recording-spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.recording-loading-text {
+  color: #67D5FD;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+}
+
+@keyframes recording-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 地图生成loading遮罩样式 */
+.generate-map-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.generate-map-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  background: rgba(22, 34, 51, 0.95);
+  border-radius: 12px;
+  border: 1px solid #164159;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.generate-map-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid transparent;
+  border-top: 3px solid #67D5FD;
+  border-radius: 50%;
+  animation: generate-map-spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.generate-map-loading-text {
+  color: #67D5FD;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+}
+
+@keyframes generate-map-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 </style>

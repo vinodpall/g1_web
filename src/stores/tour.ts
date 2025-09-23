@@ -209,6 +209,40 @@ export const useTourStore = defineStore('tour', () => {
     }
   }
 
+  // 开始展厅任务预设
+  const startTourPreset = async (presetId: number, startData: { audience_id: number, robot_sn: string, prefer_current_pose: boolean }) => {
+    console.log('=== tourStore.startTourPreset 被调用 ===')
+    console.log('presetId:', presetId)
+    console.log('startData:', startData)
+    
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      console.error('未找到认证token')
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      console.log('=== 准备调用tourApi.startTourPreset ===')
+      const response = await tourApi.startTourPreset(token, presetId, startData)
+      
+      console.log('展厅任务预设启动成功:', response)
+      return response
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '启动展厅任务预设失败'
+      console.error('=== 启动展厅任务预设失败 ===', err)
+      throw err
+    } finally {
+      isLoading.value = false
+      console.log('=== tourStore.startTourPreset 执行完成 ===')
+    }
+  }
+
   return {
     tourPresets,
     isLoading,
@@ -226,6 +260,7 @@ export const useTourStore = defineStore('tour', () => {
     itemsError,
     fetchTourPresetItems,
     clearPresetItems,
-    addTourPresetItem
+    addTourPresetItem,
+    startTourPreset
   }
 })

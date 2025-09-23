@@ -188,11 +188,9 @@ const toggleStop = async () => {
 
 // 页面加载时初始化
 onMounted(async () => {
-  // 先从缓存恢复机器人数据
-  robotStore.hydrateFromCache()
-  
-  // 初始化选中的机器人（从localStorage恢复）
-  robotStore.initSelectedRobot()
+  // 机器人数据已在各个页面组件中初始化，这里不需要重复初始化
+  // robotStore.hydrateFromCache()
+  // robotStore.initSelectedRobot()
 })
 </script>
 

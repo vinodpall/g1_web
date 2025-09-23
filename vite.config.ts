@@ -48,8 +48,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const localEnv = loadEnvConfig()
   
-  // 合并环境变量，本地配置优先
-  const mergedEnv = { ...env, ...localEnv }
+  // 合并环境变量，命令行环境变量优先
+  const mergedEnv = { ...localEnv, ...env }
   
   // 根据环境变量动态配置代理
   const getProxyTarget = () => {
@@ -59,8 +59,8 @@ export default defineConfig(({ mode }) => {
       console.log('🔧 Vite配置 - 使用外网代理:', 'http://10.10.1.3:8000')
       return 'http://10.10.1.3:8000'
     } else {
-      console.log('🔧 Vite配置 - 使用内网代理:', 'http://172.16.100.100:8000')
-      return 'http://172.16.100.100:8000'
+      console.log('🔧 Vite配置 - 使用内网代理:', 'http://192.168.0.202:8000')
+      return 'http://192.168.0.202:8000'
     }
   }
 

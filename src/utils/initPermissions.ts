@@ -13,9 +13,14 @@ export async function initUserPermissions() {
     }
     
     const user = JSON.parse(userStr)
-    if (!user.id) {
-      console.warn('用户ID不存在，跳过权限初始化')
-      return
+    console.log('读取到的用户信息:', user)
+    
+    if (!user.id && !user.user_id && !user.username) {
+      console.warn('用户ID不存在，跳过权限初始化。用户对象结构:', user)
+      // 如果没有ID但有其他标识，仍然可以继续
+      if (!user.username) {
+        return
+      }
     }
     
     // 从用户信息中提取权限

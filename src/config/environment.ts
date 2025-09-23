@@ -44,17 +44,17 @@ const intranetConfig: EnvironmentConfig = {
     domain: '/api/v1' // 同域部署，使用相对路径
   },
   websocket: {
-    host: '172.16.100.100',
+    host: '192.168.0.202',
     port: 8000,
-    fullUrl: 'ws://172.16.100.100:8000'
+    fullUrl: 'ws://192.168.0.202:8000'
   },
   video: {
-    webrtcDomain: 'webrtc://172.16.100.100:8000',
-    rtmpDomain: 'rtmp://172.16.100.100:8000'
+    webrtcDomain: 'webrtc://192.168.0.202:8000',
+    rtmpDomain: 'rtmp://192.168.0.202:8000'
   },
   services: {
-    vision: 'http://172.16.100.100:8000',
-    livestream: 'http://172.16.100.100:8000'
+    vision: 'http://192.168.0.202:8000',
+    livestream: 'http://192.168.0.202:8000'
   }
 }
 

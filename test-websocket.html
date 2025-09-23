@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #162233;
+            color: white;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .status {
+            display: flex;
+            gap: 20px;
+            margin: 10px 0;
+        }
+        .connected {
+            color: #4ecdc4;
+            font-weight: bold;
+        }
+        .disconnected {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+        button {
+            background: #67D5FD;
+            color: #162233;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #5bc3f0;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #000;
+            padding: 15px;
+            border-radius: 6px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 0;
+        }
+        .log-time {
+            color: #999;
+        }
+        .log-type {
+            color: #67D5FD;
+            font-weight: bold;
+        }
+        .log-message {
+            color: #fff;
+        }
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .data-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .data-label {
+            color: #67D5FD;
+            font-weight: bold;
+        }
+        .data-value {
+            color: #fff;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket数据测试页面</h1>
+        
+        <div class="section">
+            <h2>连接配置</h2>
+            <div>
+                <label>设备SN: <input type="text" id="deviceSn" value="default" /></label>
+            </div>
+            <div>
+                <label>Token: <input type="text" id="token" value="test-token" /></label>
+            </div>
+            <div>
+                <label>WebSocket服务器: <input type="text" id="wsServer" value="ws://10.10.1.3:8000" /></label>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>连接控制</h2>
+            <div class="status">
+                <div>视觉WebSocket: <span id="visionStatus" class="disconnected">未连接</span></div>
+                <div>控制WebSocket: <span id="controlStatus" class="disconnected">未连接</span></div>
+            </div>
+            <div>
+                <button onclick="connectVision()">连接视觉WebSocket</button>
+                <button onclick="connectControl()">连接控制WebSocket</button>
+                <button onclick="disconnectAll()">断开所有连接</button>
+                <button onclick="clearLog()">清空日志</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>实时数据</h2>
+            <div id="realtimeData" class="data-grid">
+                <div class="data-item">
+                    <div class="data-label">数据计数:</div>
+                    <div class="data-value" id="dataCount">0</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">告警计数:</div>
+                    <div class="data-value" id="alertCount">0</div>
+                </div>
+                <div class="data-item">
+                    <div class="data-label">最后更新:</div>
+                    <div class="data-value" id="lastUpdate">无</div>
+                </div>
+            </div>
+            
+            <h3>设备属性</h3>
+            <div id="deviceProperties" class="data-grid">
+                <!-- 设备属性将动态显示 -->
+            </div>
+            
+            <h3>算法检测结果</h3>
+            <div id="algorithmResults">
+                <!-- 算法结果将动态显示 -->
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>调试日志</h2>
+            <div id="debugLog" class="log">
+                <!-- 日志将在这里显示 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let visionWs = null;
+        let controlWs = null;
+        let dataCount = 0;
+        let alertCount = 0;
+
+        function log(type, message) {
+            const logElement = document.getElementById('debugLog');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="log-time">${time}</span> 
+                <span class="log-type">[${type.toUpperCase()}]</span> 
+                <span class="log-message">${message}</span>
+            `;
+            logElement.insertBefore(entry, logElement.firstChild);
+            
+            // 保持最多100条日志
+            while (logElement.children.length > 100) {
+                logElement.removeChild(logElement.lastChild);
+            }
+        }
+
+        function updateStatus(type, connected) {
+            const statusElement = document.getElementById(type + 'Status');
+            statusElement.textContent = connected ? '已连接' : '未连接';
+            statusElement.className = connected ? 'connected' : 'disconnected';
+        }
+
+        function connectVision() {
+            const deviceSn = document.getElementById('deviceSn').value;
+            const token = document.getElementById('token').value;
+            const server = document.getElementById('wsServer').value;
+            
+            if (visionWs) {
+                visionWs.close();
+            }
+            
+            const wsUrl = `${server}/api/v1/vision-stream/devices/${deviceSn}/vision/stream`;
+            log('info', `连接视觉WebSocket: ${wsUrl}`);
+            
+            visionWs = new WebSocket(wsUrl);
+            
+            visionWs.onopen = function() {
+                log('success', '视觉WebSocket连接成功');
+                updateStatus('vision', true);
+                
+                // 发送认证
+                visionWs.send(JSON.stringify({
+                    type: 'auth',
+                    token: token
+                }));
+            };
+            
+            visionWs.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+                log('data', `收到视觉数据: ${message.type}`);
+                
+                if (message.type === 'connected') {
+                    log('success', '视觉WebSocket认证成功');
+                    
+                    // 配置推送间隔
+                    visionWs.send(JSON.stringify({
+                        type: 'config',
+                        data: { push_interval: 0 }
+                    }));
+                    
+                    // 订阅算法
+                    visionWs.send(JSON.stringify({
+                        type: 'subscribe',
+                        algorithms: [49, 50, 51]
+                    }));
+                } else if (message.type === 'vision_data') {
+                    dataCount++;
+                    document.getElementById('dataCount').textContent = dataCount;
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                    
+                    // 显示设备属性
+                    if (message.data && message.data.device_properties) {
+                        displayDeviceProperties(message.data.device_properties);
+                    }
+                    
+                    // 显示算法结果
+                    if (message.data && message.data.results) {
+                        displayAlgorithmResults(message.data.results);
+                    }
+                    
+                    log('vision', `帧号: ${message.data.frame_number}, 时间: ${message.data.frame_time}`);
+                }
+            };
+            
+            visionWs.onerror = function(error) {
+                log('error', '视觉WebSocket错误: ' + error);
+                updateStatus('vision', false);
+            };
+            
+            visionWs.onclose = function() {
+                log('info', '视觉WebSocket连接关闭');
+                updateStatus('vision', false);
+            };
+        }
+
+        function connectControl() {
+            const deviceSn = document.getElementById('deviceSn').value;
+            const token = document.getElementById('token').value;
+            const server = document.getElementById('wsServer').value;
+            
+            if (controlWs) {
+                controlWs.close();
+            }
+            
+            const wsUrl = `${server}/api/v1/control/devices/${deviceSn}/control/ws`;
+            log('info', `连接控制WebSocket: ${wsUrl}`);
+            
+            controlWs = new WebSocket(wsUrl);
+            
+            controlWs.onopen = function() {
+                log('success', '控制WebSocket连接成功');
+                updateStatus('control', true);
+                
+                // 发送认证
+                controlWs.send(JSON.stringify({
+                    type: 'auth',
+                    token: token
+                }));
+            };
+            
+            controlWs.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+                log('data', `收到控制数据: ${message.type}`);
+                
+                if (message.type === 'connected') {
+                    log('success', '控制WebSocket认证成功');
+                } else if (message.type === 'vision_alert') {
+                    alertCount++;
+                    document.getElementById('alertCount').textContent = alertCount;
+                    log('alert', `收到告警: ${message.alert_type}, 检测数: ${message.detections.length}`);
+                }
+            };
+            
+            controlWs.onerror = function(error) {
+                log('error', '控制WebSocket错误: ' + error);
+                updateStatus('control', false);
+            };
+            
+            controlWs.onclose = function() {
+                log('info', '控制WebSocket连接关闭');
+                updateStatus('control', false);
+            };
+        }
+
+        function disconnectAll() {
+            if (visionWs) {
+                visionWs.close();
+                visionWs = null;
+            }
+            if (controlWs) {
+                controlWs.close();
+                controlWs = null;
+            }
+            updateStatus('vision', false);
+            updateStatus('control', false);
+            log('info', '所有WebSocket连接已断开');
+        }
+
+        function clearLog() {
+            document.getElementById('debugLog').innerHTML = '';
+            log('info', '日志已清空');
+        }
+
+        function displayDeviceProperties(properties) {
+            const container = document.getElementById('deviceProperties');
+            container.innerHTML = '';
+            
+            if (properties.position) {
+                const posItem = document.createElement('div');
+                posItem.className = 'data-item';
+                posItem.innerHTML = `
+                    <div class="data-label">位置:</div>
+                    <div class="data-value">${properties.position.longitude.toFixed(6)}, ${properties.position.latitude.toFixed(6)}, ${properties.position.height.toFixed(1)}m</div>
+                `;
+                container.appendChild(posItem);
+            }
+            
+            if (properties.attitude) {
+                const attItem = document.createElement('div');
+                attItem.className = 'data-item';
+                attItem.innerHTML = `
+                    <div class="data-label">姿态:</div>
+                    <div class="data-value">P:${properties.attitude.pitch.toFixed(1)}° R:${properties.attitude.roll.toFixed(1)}° Y:${properties.attitude.yaw.toFixed(1)}°</div>
+                `;
+                container.appendChild(attItem);
+            }
+            
+            if (properties.battery !== undefined) {
+                const batItem = document.createElement('div');
+                batItem.className = 'data-item';
+                batItem.innerHTML = `
+                    <div class="data-label">电池:</div>
+                    <div class="data-value">${properties.battery}%</div>
+                `;
+                container.appendChild(batItem);
+            }
+        }
+
+        function displayAlgorithmResults(results) {
+            const container = document.getElementById('algorithmResults');
+            container.innerHTML = '';
+            
+            for (const [algId, result] of Object.entries(results)) {
+                const algItem = document.createElement('div');
+                algItem.className = 'data-item';
+                algItem.style.borderLeft = result.active ? '3px solid #4ecdc4' : '3px solid #666';
+                
+                let detectionsHtml = '';
+                if (result.detections && result.detections.length > 0) {
+                    detectionsHtml = result.detections.map(det => 
+                        `<div style="font-size: 11px; color: #ccc;">${det.label}: ${(det.confidence * 100).toFixed(1)}%</div>`
+                    ).join('');
+                }
+                
+                algItem.innerHTML = `
+                    <div class="data-label">算法${algId} (${result.active ? '激活' : '未激活'}):</div>
+                    <div class="data-value">检测数: ${result.detections ? result.detections.length : 0}</div>
+                    ${detectionsHtml}
+                `;
+                container.appendChild(algItem);
+            }
+        }
+
+        // 页面加载时初始化
+        window.onload = function() {
+            log('info', 'WebSocket测试页面已加载');
+        };
+    </script>
+</body>
+</html>

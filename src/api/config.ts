@@ -122,18 +122,46 @@ export class ApiClient {
   // POST请求
   async post<T>(endpoint: string, data?: any, options?: RequestInit & { responseType?: 'blob' }): Promise<T> {
     let body: string | undefined
-    
-    // 如果data是字符串且options中指定了Content-Type为form-urlencoded，直接使用
-    if (typeof data === 'string' && options?.headers && 
-        'content-type' in options.headers && 
-        options.headers['content-type']?.includes('application/x-www-form-urlencoded')) {
-      body = data
-    } else {
-      // 否则按JSON格式处理
-      body = data ? JSON.stringify(data) : undefined
+    let modifiedEndpoint = endpoint
+    let modifiedData = data
+
+    // 处理SN参数从body移到URL的逻辑
+    if (data && typeof data === 'object') {
+      // 检查body中是否有sn或robot_sn参数
+      const hasSn = 'sn' in data
+      const hasRobotSn = 'robot_sn' in data
+      
+      if (hasSn || hasRobotSn) {
+        // 从缓存获取SN值
+        const cachedSn = this.getCachedSn()
+        
+        if (cachedSn) {
+          // 复制数据对象以避免修改原始数据
+          modifiedData = { ...data }
+          
+          // 从body中移除sn参数并添加到URL
+          if (hasSn) {
+            delete modifiedData.sn
+            modifiedEndpoint = this.appendSnToUrl(endpoint, cachedSn)
+          } else if (hasRobotSn) {
+            delete modifiedData.robot_sn
+            modifiedEndpoint = this.appendSnToUrl(endpoint, cachedSn)
+          }
+        }
+      }
     }
     
-    return this.request<T>(endpoint, {
+    // 如果data是字符串且options中指定了Content-Type为form-urlencoded，直接使用
+    if (typeof modifiedData === 'string' && options?.headers && 
+        'content-type' in options.headers && 
+        options.headers['content-type']?.includes('application/x-www-form-urlencoded')) {
+      body = modifiedData
+    } else {
+      // 否则按JSON格式处理
+      body = modifiedData ? JSON.stringify(modifiedData) : undefined
+    }
+    
+    return this.request<T>(modifiedEndpoint, {
       method: 'POST',
       body,
       ...options
@@ -171,6 +199,46 @@ export class ApiClient {
       }
     })
     return url.pathname + url.search
+  }
+
+  // 从缓存获取SN
+  private getCachedSn(): string | null {
+    try {
+      // 优先从设备store获取选中的dock SN
+      const selectedDockSn = localStorage.getItem('selected_dock_sn')
+      if (selectedDockSn) {
+        return selectedDockSn
+      }
+      
+      // 如果没有选中的dock，尝试从机器人store获取
+      const selectedRobotId = localStorage.getItem('selectedRobotId')
+      if (selectedRobotId) {
+        const robots = JSON.parse(localStorage.getItem('robots') || '[]')
+        const robot = robots.find((r: any) => r.id === parseInt(selectedRobotId))
+        if (robot && robot.sn) {
+          return robot.sn
+        }
+      }
+      
+      // 最后尝试从设备列表获取第一个可用的SN
+      const devices = JSON.parse(localStorage.getItem('cached_devices') || '[]')
+      if (devices.length > 0 && devices[0].device_sn) {
+        return devices[0].device_sn
+      }
+      
+      return null
+    } catch (error) {
+      console.warn('获取缓存SN失败:', error)
+      return null
+    }
+  }
+
+  // 将SN参数添加到URL中
+  private appendSnToUrl(endpoint: string, sn: string): string {
+    // 如果URL已经包含查询参数，添加&sn=xxx
+    // 如果没有查询参数，添加?sn=xxx
+    const separator = endpoint.includes('?') ? '&' : '?'
+    return `${endpoint}${separator}sn=${encodeURIComponent(sn)}`
   }
 }
 

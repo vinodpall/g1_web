@@ -1,5 +1,85 @@
 import { API_BASE_URL } from './config'
 
+// 辅助函数：构建完整的API URL
+function buildApiUrl(path: string): string {
+  const baseUrl = API_BASE_URL.startsWith('http') ? API_BASE_URL : `${window.location.origin}${API_BASE_URL}`
+  return `${baseUrl}${path}`
+}
+
+// 辅助函数：从缓存获取SN
+function getCachedSn(): string | null {
+  try {
+    // 优先从设备store获取选中的dock SN
+    const selectedDockSn = localStorage.getItem('selected_dock_sn')
+    if (selectedDockSn) {
+      return selectedDockSn
+    }
+    
+    // 如果没有选中的dock，尝试从机器人store获取
+    const selectedRobotId = localStorage.getItem('selectedRobotId')
+    if (selectedRobotId) {
+      const robots = JSON.parse(localStorage.getItem('robots') || '[]')
+      const robot = robots.find((r: any) => r.id === parseInt(selectedRobotId))
+      if (robot && robot.sn) {
+        return robot.sn
+      }
+    }
+    
+    // 最后尝试从设备列表获取第一个可用的SN
+    const devices = JSON.parse(localStorage.getItem('cached_devices') || '[]')
+    if (devices.length > 0 && devices[0].device_sn) {
+      return devices[0].device_sn
+    }
+    
+    return null
+  } catch (error) {
+    console.warn('获取缓存SN失败:', error)
+    return null
+  }
+}
+
+// 辅助函数：处理SN参数从body移到URL
+function processSnParams(url: string, data: any): { url: string, data: any } {
+  if (!data || typeof data !== 'object') {
+    return { url, data }
+  }
+
+  const hasSn = 'sn' in data
+  const hasRobotSn = 'robot_sn' in data
+  
+  if (hasSn || hasRobotSn) {
+    // 优先使用传入数据中的sn参数，如果没有则从缓存获取
+    let targetSn = null
+    if (hasSn && data.sn) {
+      targetSn = data.sn
+    } else if (hasRobotSn && data.robot_sn) {
+      targetSn = data.robot_sn
+    } else {
+      targetSn = getCachedSn()
+    }
+    
+    if (targetSn) {
+      // 复制数据对象以避免修改原始数据
+      const modifiedData = { ...data }
+      
+      // 从body中移除sn参数并添加到URL
+      if (hasSn) {
+        delete modifiedData.sn
+      } else if (hasRobotSn) {
+        delete modifiedData.robot_sn
+      }
+      
+      // 将SN添加到URL
+      const separator = url.includes('?') ? '&' : '?'
+      const modifiedUrl = `${url}${separator}sn=${encodeURIComponent(targetSn)}`
+      
+      return { url: modifiedUrl, data: modifiedData }
+    }
+  }
+  
+  return { url, data }
+}
+
 // 认证相关接口 - 只保留登录接口
 export const authApi = {
   // 用户登录 - 适配后端API
@@ -31,7 +111,7 @@ export const authApi = {
 export const robotApi = {
   // 获取所有机器人列表
   getRobots: (token: string, searchQuery?: string, skip: number = 0, limit: number = 50) => {
-    const url = new URL(`${API_BASE_URL}/robots/`)
+    const url = new URL(buildApiUrl('/robots/'))
     
     // 添加分页参数
     url.searchParams.append('skip', skip.toString())
@@ -174,7 +254,7 @@ export const robotApi = {
 export const userApi = {
   // 获取所有用户列表
   getUsers: (token: string, searchQuery?: string, skip: number = 0, limit: number = 50) => {
-    const url = new URL(`${API_BASE_URL}/users/`)
+    const url = new URL(buildApiUrl('/users/'))
     
     // 添加分页参数
     url.searchParams.append('skip', skip.toString())
@@ -881,19 +961,20 @@ export const tourApi = {
       console.error('添加任务预设项API请求失败:', error)
       throw error
     })
-  }
-}
+  },
 
-// 导航SLAM相关接口
-export const navigationApi = {
-  // 展厅地图录制接口
-  slamControl: (token: string, slamData: { sn: string, map_name: string, action: number, data_name: string }) => {
-    const url = `${API_BASE_URL}/navigation/recording`
+  // 开始展厅任务
+  startTourPreset: (token: string, presetId: number, startData: { audience_id: number, robot_sn: string, prefer_current_pose: boolean }) => {
+    const baseUrl = `${API_BASE_URL}/tours/presets/${presetId}/start`
     
-    console.log('navigationApi.slamControl 被调用')
+    // 同时在URL和body中包含SN信息
+    const url = `${baseUrl}?sn=${encodeURIComponent(startData.robot_sn)}`
+    
+    console.log('tourApi.startTourPreset 被调用')
     console.log('请求URL:', url)
     console.log('请求token:', token ? '存在' : '不存在')
-    console.log('SLAM数据:', slamData)
+    console.log('预设ID:', presetId)
+    console.log('任务数据:', startData)
     
     return fetch(url, {
       method: 'POST',
@@ -901,7 +982,58 @@ export const navigationApi = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(slamData)
+      body: JSON.stringify(startData)
+    }).then(response => {
+      console.log('开始展厅任务API响应状态:', response.status)
+      console.log('开始展厅任务API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('开始展厅任务API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('开始展厅任务API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('开始展厅任务API请求失败:', error)
+      throw error
+    })
+  }
+}
+
+// 导航SLAM相关接口
+export const navigationApi = {
+  // 展厅地图录制接口
+  slamControl: (token: string, slamData: { sn: string, map_name: string, action: number, data_name: string, timeout?: number }) => {
+    const originalUrl = `${API_BASE_URL}/navigation/recording`
+    
+    // 构建URL并添加timeout参数
+    const fullUrl = new URL(buildApiUrl('/navigation/recording'))
+    
+    // 添加timeout参数到URL，默认值为10
+    const timeoutValue = slamData.timeout || 10
+    fullUrl.searchParams.append('timeout', timeoutValue.toString())
+    
+    // 处理SN参数从body移到URL
+    const { url, data } = processSnParams(fullUrl.toString(), slamData)
+    
+    console.log('navigationApi.slamControl 被调用')
+    console.log('原始URL:', originalUrl)
+    console.log('修改后URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('原始SLAM数据:', slamData)
+    console.log('修改后SLAM数据:', data)
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
     }).then(response => {
       console.log('SLAM控制API响应状态:', response.status)
       console.log('SLAM控制API响应OK:', response.ok)
@@ -924,12 +1056,17 @@ export const navigationApi = {
 
   // 生成地图接口
   generateMap: (token: string, mapData: { sn: string, map_name: string, action: number, data_name: string }) => {
-    const url = `${API_BASE_URL}/navigation/slam`
+    const originalUrl = `${API_BASE_URL}/navigation/slam`
+    
+    // 处理SN参数从body移到URL
+    const { url, data } = processSnParams(originalUrl, mapData)
     
     console.log('navigationApi.generateMap 被调用')
-    console.log('请求URL:', url)
+    console.log('原始URL:', originalUrl)
+    console.log('修改后URL:', url)
     console.log('请求token:', token ? '存在' : '不存在')
-    console.log('地图生成数据:', mapData)
+    console.log('原始地图生成数据:', mapData)
+    console.log('修改后地图生成数据:', data)
     
     return fetch(url, {
       method: 'POST',
@@ -937,7 +1074,7 @@ export const navigationApi = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(mapData)
+      body: JSON.stringify(data)
     }).then(response => {
       console.log('生成地图API响应状态:', response.status)
       console.log('生成地图API响应OK:', response.ok)
@@ -960,13 +1097,21 @@ export const navigationApi = {
 
   // 获取数据包列表接口
   getDataPackages: (token: string) => {
-    const url = `${API_BASE_URL}/v1/navigation/data/list`
+    const baseUrl = buildApiUrl('/navigation/data/list')
+    const url = new URL(baseUrl)
+    
+    // 从缓存获取sn并添加到URL
+    const cachedSn = getCachedSn()
+    if (cachedSn) {
+      url.searchParams.append('sn', cachedSn)
+    }
     
     console.log('navigationApi.getDataPackages 被调用')
-    console.log('请求URL:', url)
+    console.log('请求URL:', url.toString())
     console.log('请求token:', token ? '存在' : '不存在')
+    console.log('使用的SN:', cachedSn || '无')
     
-    return fetch(url, {
+    return fetch(url.toString(), {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -988,6 +1133,93 @@ export const navigationApi = {
       return data
     }).catch(error => {
       console.error('获取数据包列表API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 删除地图接口
+  deleteMap: (token: string, params: { sn: string, map_name: string, timeout?: number }) => {
+    const baseUrl = buildApiUrl('/navigation/maps/delete')
+    const url = new URL(baseUrl)
+    
+    // 添加参数到URL
+    url.searchParams.append('sn', params.sn)
+    url.searchParams.append('map_name', params.map_name)
+    url.searchParams.append('timeout', (params.timeout || 10).toString())
+    
+    console.log('navigationApi.deleteMap 被调用')
+    console.log('请求URL:', url.toString())
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('删除地图参数:', params)
+    
+    return fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('删除地图API响应状态:', response.status)
+      console.log('删除地图API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('删除地图API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('删除地图API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('删除地图API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 导航开关接口
+  navigationSwitch: (token: string, navData: { sn: string, map_name: string, action: number, data_name: string, timeout?: number }) => {
+    const baseUrl = buildApiUrl('/navigation/nav')
+    const url = new URL(baseUrl)
+    
+    // 添加timeout参数到URL，默认值为15
+    const timeoutValue = navData.timeout || 15
+    url.searchParams.append('timeout', timeoutValue.toString())
+    
+    // 处理SN参数从body移到URL
+    const { url: finalUrl, data } = processSnParams(url.toString(), navData)
+    
+    console.log('navigationApi.navigationSwitch 被调用')
+    console.log('原始URL:', baseUrl)
+    console.log('修改后URL:', finalUrl)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('原始导航开关数据:', navData)
+    console.log('修改后导航开关数据:', data)
+    
+    return fetch(finalUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    }).then(response => {
+      console.log('导航开关API响应状态:', response.status)
+      console.log('导航开关API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('导航开关API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('导航开关API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('导航开关API请求失败:', error)
       throw error
     })
   }
