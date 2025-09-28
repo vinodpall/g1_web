@@ -2,7 +2,7 @@ import type { DirectiveBinding } from 'vue'
 import { usePermissionStore } from '../stores/permission'
 
 // 权限检查函数 - 已禁用权限验证，始终返回true
-function checkPermission(permissions: string | string[]): boolean {
+export function checkPermission(permissions?: string | string[], _desc?: string): boolean {
   // 权限指令检查已禁用
   return true
 }

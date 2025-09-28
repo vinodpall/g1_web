@@ -18,6 +18,17 @@ export interface CurrentMap extends TimestampData {
   [key: string]: any // 设备侧上报的其他字段透传
 }
 
+// 机器人速度信息 - robot:{sn}:speed
+export interface RobotSpeed extends TimestampData {
+  v: number   // 线速度 (m/s)
+  w: number   // 角速度 (rad/s)
+  // 为了向后兼容，保留原有字段
+  linear_x?: number   // 线速度 X (m/s) - 向后兼容
+  linear_y?: number   // 线速度 Y (m/s) - 向后兼容  
+  angular_z?: number  // 角速度 Z (rad/s) - 向后兼容
+  [key: string]: any // 设备侧上报的其他字段透传
+}
+
 // 自动收尾流程状态
 export interface SlamAutoStatus {
   sn: string           // SN 或 broadcast
@@ -45,6 +56,9 @@ export interface CmdStatus extends TimestampData {
   data_record?: boolean | number  // 展厅录包状态
   nav?: boolean | number         // 导航开启状态
   slam?: boolean | number        // 建图状态
+  
+  // 电量百分比（0-100），设备上报字段
+  battery_soc?: number
   
   // 其他设备态透传字段（字段名依设备而定）
   [key: string]: any
@@ -91,6 +105,7 @@ export type ChannelType =
   | `robot:${string}:pose`
   | `robot:${string}:cmd_status`  
   | `robot:${string}:current_map`
+  | `robot:${string}:speed`
   | `tours:run:${number}`
   | `tours:robot:${string}`
 
@@ -106,6 +121,7 @@ export interface ChannelDataMap {
   pose: RobotPose
   cmd_status: CmdStatus
   current_map: CurrentMap
+  speed: RobotSpeed
   tour: TourEvent
 }
 
@@ -121,7 +137,7 @@ export interface WebSocketConfig {
 export interface ParsedChannel {
   type: 'robot' | 'tours'
   sn?: string
-  dataType?: 'pose' | 'cmd_status' | 'current_map'
+  dataType?: 'pose' | 'cmd_status' | 'current_map' | 'speed'
   runId?: number
   category?: 'run' | 'robot'
   isValid: boolean
@@ -144,6 +160,7 @@ export interface RealtimeData {
     pose?: RobotPose
     cmdStatus?: CmdStatus
     currentMap?: CurrentMap
+    speed?: RobotSpeed
     lastUpdate: Date
   }>
   

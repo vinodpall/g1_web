@@ -41,9 +41,9 @@
                   <div class="status-indicators-row">
                     <div class="status-indicator-item">
                       <div class="status-icon battery-icon">
-                        <div class="battery-level" :style="{ width: robotDisplayInfo.batteryLevel + '%' }"></div>
+                        <div class="battery-level" :style="{ width: uiBatteryPercent + '%' }"></div>
                       </div>
-                      <span class="status-percentage">{{ robotDisplayInfo.batteryLevel }}%</span>
+                      <span class="status-percentage">{{ uiBatteryPercent }}%</span>
                     </div>
                     <div class="status-indicator-item">
                       <div class="status-icon wifi-icon">
@@ -70,17 +70,25 @@
             <div class="task-dynamic-container">
               <!-- 任务点列表 -->
               <div class="task-points-list">
-                <div class="task-point-item" v-for="(point, index) in taskPoints" :key="index">
+                <div class="task-point-item" v-for="(point, index) in displayTaskPoints" :key="index">
                   <div class="task-point-info">
-                  <div class="task-point-name">{{ point.name }}</div>
-                    <div class="task-point-coords">
-                      <span>X: {{ point.x }}</span>
-                      <span>Y: {{ point.y }}</span>
-                      <span>角度: {{ point.angle }}</span>
+                    <div class="task-point-details">
+                      <span class="task-detail-item">
+                        <span class="detail-label">展区：</span>
+                        <span class="detail-value">{{ point.zone_name || '--' }}</span>
+                      </span>
+                      <span class="task-detail-item">
+                        <span class="detail-label">点位：</span>
+                        <span class="detail-value">{{ point.custom_name || point.name || '--' }}</span>
+                      </span>
+                      <span class="task-detail-item">
+                        <span class="detail-label">类型：</span>
+                        <span class="detail-value">{{ getPointTypeText(point.type) }}</span>
+                      </span>
                     </div>
                   </div>
-                  <div class="task-point-refresh" v-if="index === 0">
-                    <img src="@/assets/source_data/robot_source/current.svg" alt="当前任务" class="current-icon" />
+                  <div class="task-point-location" v-if="isCurrentTaskPoint(index)">
+                    <img src="@/assets/source_data/robot_source/current_task.svg" alt="执行中任务" class="location-icon" />
                   </div>
                 </div>
               </div>
@@ -89,8 +97,13 @@
               <div class="task-progress-section">
                 <div class="progress-info">
                   <span class="progress-label">任务执行进度: {{ taskProgress }}%</span>
-                  <button class="pause-resume-btn" @click="toggleTaskExecution">
-                    {{ isTaskPaused ? '恢复' : '暂停' }}
+                  <button 
+                    class="pause-resume-btn" 
+                    :class="{ 'disabled': !navEnabled }" 
+                    :disabled="!navEnabled"
+                    @click="toggleTaskExecution"
+                  >
+                    {{ isTaskExecuting ? '暂停任务' : '暂停' }}
                   </button>
                 </div>
                 <div class="progress-bar-container">
@@ -126,14 +139,21 @@
             <div class="mini-card">
               <img class="mini-card-icon" src="@/assets/source_data/robot_source/position.svg" alt="pos" />
               <div class="mini-card-content">
-                <div class="mini-card-title">定位正常</div>
+                <div class="mini-card-title" :class="{ 'status-error': !localizationStatus }">{{ localizationStatusText }}</div>
                 <div class="mini-card-sub">机器人定位状态</div>
               </div>
             </div>
             <div class="mini-card">
               <img class="mini-card-icon" src="@/assets/source_data/robot_source/location.svg" alt="speed" />
               <div class="mini-card-content">
-                <div class="mini-card-title">W: 0.0 rad/s · V: 0.0 m/s</div>
+                <div class="mini-card-title">
+                  <template v-if="robotSpeed">
+                    W: {{ (robotSpeed.w !== undefined ? robotSpeed.w : robotSpeed.angular_z || 0).toFixed(2) }} rad/s · V: {{ (robotSpeed.v !== undefined ? robotSpeed.v : Math.sqrt((robotSpeed.linear_x||0)**2 + (robotSpeed.linear_y||0)**2)).toFixed(2) }} m/s
+                  </template>
+                  <template v-else>
+                    W: 0.0 rad/s · V: 0.0 m/s
+                  </template>
+                </div>
                 <div class="mini-card-sub">
                   <template v-if="robotPose">
                     X: {{ robotPose.x.toFixed(3) }} · Y: {{ robotPose.y.toFixed(3) }} · 角度: {{ robotPose.theta.toFixed(3) }}
@@ -158,7 +178,9 @@
                 <div class="mini-card-sub">当前任务展区</div>
               </div>
             </div>
-            <button class="start-task-btn" @click="handleStartTaskClick">开始执行任务</button>
+            <button class="start-task-btn" @click="handleTaskControlClick" :class="{ 'stop-task': isTaskExecuting }">
+              {{ isTaskExecuting ? '停止执行任务' : '开始执行任务' }}
+            </button>
           </div>
           
         </div>
@@ -237,7 +259,7 @@
               <div class="status-item">
                 <div class="top-row">
                   <img 
-                    :src="droneStatus?.chargeState === 1 ? droneBatteryChargeIcon : droneBatteryIcon" 
+                    :src="!!(droneStatus as any)?.chargeState ? droneBatteryChargeIcon : droneBatteryIcon" 
                     alt="电量" 
                   />
                   <span class="label">电量</span>
@@ -771,7 +793,6 @@
       </div>
     </div>
   </div>
-  
   <!-- 展厅选择弹窗 -->
   <div v-if="showHallSelectDialog" class="custom-dialog-mask">
     <div class="custom-dialog">
@@ -997,12 +1018,15 @@
   </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 // import { useHmsAlerts, useDevices, useWaylineJobs } from '../composables/useApi' // API已移除，等待重新对接
 // import { controlApi, waylineApi, livestreamApi } from '../api/services' // API已移除
 import { navigationApi } from '../api/services'
-// import { useDeviceStatus } from '../composables/useDeviceStatus' // API已移除
+// 兼容性占位，避免构建错误，后续将替换为新接口
+const waylineApi: any = { getFlightStatistics: async (_workspaceId: any, _days: number) => ({ code: 0, data: {} }) }
+const livestreamApi: any = { setQuality: async (_dockSn: string, _payload: any) => ({}) }
+const controlApi: any = { returnHome: async (_sn: string) => ({}) }
 import { config } from '../config/environment'
 import { useSimpleWebSocket } from '../utils/simpleWebSocket'
 import { getVideoStreams, getVideoStream, getDefaultVideoType } from '../utils/videoCache'
@@ -1040,6 +1064,21 @@ const dataRecordEnabled = computed(() => {
   }
   return false
 })
+
+// 定位状态从WebSocket数据同步 - 根据cmd_status中的loc_ok字段
+const localizationStatus = computed(() => {
+  const cmdStatus = robotCmdStatus.value
+  if (cmdStatus?.loc_ok !== undefined) {
+    return Boolean(cmdStatus.loc_ok)
+  }
+  // 如果没有loc_ok字段，默认显示正常状态（保持向后兼容）
+  return true
+})
+
+// 定位状态文本显示
+const localizationStatusText = computed(() => {
+  return localizationStatus.value ? '定位正常' : '定位异常'
+})
 import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
 import droneArrowIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_arrow.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
@@ -1053,10 +1092,12 @@ const router = useRouter()
 const hmsAlerts = ref([])
 const loading = ref(false)
 const error = ref(null)
-const fetchDeviceHms = () => {}
-const setAllAlerts = () => {}
+const fetchDeviceHms = async (_sn?: string): Promise<any[]> => {
+  return []
+}
+const setAllAlerts = (_alerts: any[]) => {}
 // const { getCachedDeviceSns, getCachedWorkspaceId } = useDevices() // API已移除
-const getCachedDeviceSns = () => ({ dockSns: [], droneSns: [] })
+const getCachedDeviceSns = (): { dockSns: string[]; droneSns: string[] } => ({ dockSns: [], droneSns: [] })
 const getCachedWorkspaceId = () => localStorage.getItem('workspace_id')
 
 // WebSocket数据获取（需要等userStore初始化后）
@@ -1133,15 +1174,15 @@ const formatLastUpdate = (updateTime: Date | null) => {
 
 // 使用航线任务API
 // const { waylineFiles, fetchWaylineFiles, createJob, fetchWaylineDetail, cancelReturnHome, stopJob, pauseJob, resumeJob, executeJob } = useWaylineJobs() // API已移除
-const waylineFiles = ref([])
-const fetchWaylineFiles = () => {}
-const createJob = () => {}
-const fetchWaylineDetail = () => {}
-const cancelReturnHome = () => {}
-const stopJob = () => {}
-const pauseJob = () => {}
-const resumeJob = () => {}
-const executeJob = () => {}
+const waylineFiles = ref<{ wayline_id: string; name: string }[]>([])
+const fetchWaylineFiles = async (_workspaceId?: any, _params?: { page?: number; page_size?: number }) => {}
+const createJob = async (_workspaceId?: any, _taskData?: any) => { return undefined as unknown as { job_id: string } }
+const fetchWaylineDetail = async (_workspaceId?: any, _fileId?: string) => { return { waylines: [] } as any }
+const cancelReturnHome = async (_workspaceId?: any, _dockSn?: string) => {}
+const stopJob = async (_workspaceId?: any, _jobId?: any) => {}
+const pauseJob = async (_workspaceId?: any, _jobId?: any) => {}
+const resumeJob = async (_workspaceId?: any, _jobId?: any) => {}
+const executeJob = async (_workspaceId?: any, _jobId?: any, _payload?: any) => {}
 
 // 使用设备状态API - 已移除，临时模拟
 // const { 
@@ -1173,8 +1214,8 @@ const fetchDroneStatus = () => {}
 const position = ref({ longitude: 0, latitude: 0, height: 0 })
 const environment = ref({ environmentTemperature: 0, humidity: 0, windSpeed: 0, rainfall: 0 })
 const dockStatus = ref({ isOnline: false, coverState: 0, chargeState: 0, batteryPercent: 0, networkRate: 0, jobNumber: 0, accTime: 0, coverText: '' })
-const droneStatus = ref({ isOnline: false, inDock: false, batteryPercent: 0, horizontalSpeed: 0, totalFlightTime: 0, totalFlightDistance: 0, rtkNumber: 0, gimbalYaw: 0, attitude: { pitch: 0, roll: 0, yaw: 0 } })
-const gpsStatus = ref({ signal: 0 })
+const droneStatus = ref<{ isOnline: boolean; inDock: boolean | number; batteryPercent: number; horizontalSpeed: number; totalFlightTime: number; totalFlightDistance: number; rtkNumber: number; gimbalYaw: number; attitude: { pitch: number; roll: number; yaw: number; head?: number }; longitude?: number; latitude?: number; height?: number }>({ isOnline: false, inDock: false, batteryPercent: 0, horizontalSpeed: 0, totalFlightTime: 0, totalFlightDistance: 0, rtkNumber: 0, gimbalYaw: 0, attitude: { pitch: 0, roll: 0, yaw: 0 } })
+const gpsStatus = ref<{ signal: number; rtkNumber?: number }>({ signal: 0 })
 const formatCoordinate = (val: any, precision?: any) => val || '--'
 const formatHeight = (val: any, unit?: any) => val || '--'
 const formatSpeed = (val: any, unit?: any) => val || '--'
@@ -1212,6 +1253,10 @@ const guideStore = useGuideStore()
 import { useUserStore } from '../stores/user'
 const userStore = useUserStore()
 
+// 使用WebSocket数据store
+import { useWebSocketDataStore } from '../stores/websocketData'
+const websocketDataStore = useWebSocketDataStore()
+
 // 先从缓存恢复机器人数据，确保WebSocket连接使用正确的SN
 robotStore.hydrateFromCache()
 robotStore.initSelectedRobot()
@@ -1229,6 +1274,9 @@ const getWebSocketSn = () => {
 
 // 使用新的WebSocket数据管理
 import { useWebSocketData } from '@/composables/useWebSocketData'
+
+// 导入地图缓存工具
+import { downloadAndCacheMap, mapCache, getMapOriginInfo, worldToPixel, type MapOriginInfo } from '@/utils/mapCache'
 const {
   // 连接状态
   isConnected: wsConnected,
@@ -1239,6 +1287,7 @@ const {
   getRobotPose,
   getRobotCmdStatus,
   getRobotCurrentMap,
+  getRobotSpeed,
   isRobotOnline,
   robotSNs,
   
@@ -1250,12 +1299,30 @@ const {
 } = useWebSocketData(
   {
     sn: getWebSocketSn(), // 现在会使用正确的SN
-    kinds: ['pose', 'cmd_status', 'current_map', 'tour']
+    kinds: ['pose', 'cmd_status', 'current_map', 'tour'],
+    channels: [`robot:${getWebSocketSn()}:speed`]
   },
   true, // 自动连接
   userStore.token || ''
 )
 
+
+
+// 电量百分比：优先 cmd_status.battery_soc，回退 droneStatus.batteryPercent
+const uiBatteryPercent = computed(() => {
+  const currentSn = getWebSocketSn()
+  // 优先从实时数据中读取 cmd_status 的 battery_soc
+  const cmdStatus = getRobotCmdStatus(currentSn)
+  const soc = (cmdStatus as any)?.battery_soc
+  const clamp = (n: any) => {
+    const v = typeof n === 'number' ? n : Number(n)
+    if (Number.isFinite(v)) return Math.min(100, Math.max(0, Math.round(v)))
+    return 0
+  }
+  if (typeof soc === 'number') return clamp(soc)
+  // 回退：使用飞行器/设备状态中的电量百分比
+  return clamp((droneStatus as any)?.value?.batteryPercent)
+})
 
 
 // 当前选中的机器人信息
@@ -1314,6 +1381,49 @@ const robotCurrentMap = computed(() => {
   return result
 })
 
+// 从WebSocket获取的机器人速度信息，过滤微小误差值
+const robotSpeed = computed(() => {
+  const currentSn = getWebSocketSn()
+  let result = getRobotSpeed(currentSn)
+  
+  // 如果当前sn没有数据且不是broadcast，尝试使用broadcast
+  if (!result && currentSn !== 'broadcast') {
+    result = getRobotSpeed('broadcast')
+  }
+  
+  if (!result) return null
+  
+  // 定义阈值：线速度小于0.01 m/s，角速度小于0.01 rad/s 视为静止
+  const LINEAR_THRESHOLD = 0.01  // m/s
+  const ANGULAR_THRESHOLD = 0.01 // rad/s
+  
+  // 过滤后的速度数据
+  const filteredSpeed = { ...result }
+  
+  // 过滤线速度
+  if (filteredSpeed.v !== undefined) {
+    filteredSpeed.v = Math.abs(filteredSpeed.v) < LINEAR_THRESHOLD ? 0 : filteredSpeed.v
+  }
+  
+  // 过滤角速度
+  if (filteredSpeed.w !== undefined) {
+    filteredSpeed.w = Math.abs(filteredSpeed.w) < ANGULAR_THRESHOLD ? 0 : filteredSpeed.w
+  }
+  
+  // 为了向后兼容，也处理旧格式的速度字段
+  if (filteredSpeed.linear_x !== undefined) {
+    filteredSpeed.linear_x = Math.abs(filteredSpeed.linear_x) < LINEAR_THRESHOLD ? 0 : filteredSpeed.linear_x
+  }
+  if (filteredSpeed.linear_y !== undefined) {
+    filteredSpeed.linear_y = Math.abs(filteredSpeed.linear_y) < LINEAR_THRESHOLD ? 0 : filteredSpeed.linear_y
+  }
+  if (filteredSpeed.angular_z !== undefined) {
+    filteredSpeed.angular_z = Math.abs(filteredSpeed.angular_z) < ANGULAR_THRESHOLD ? 0 : filteredSpeed.angular_z
+  }
+  
+  return filteredSpeed
+})
+
 // 机器人在线状态
 const robotOnlineStatus = computed(() => {
   const currentSn = getWebSocketSn()
@@ -1337,7 +1447,7 @@ const robotDisplayInfo = computed(() => {
       status: 'offline',
       statusText: '离线',
       sn: 'SN-20231108',
-      batteryLevel: 30,
+      batteryLevel: uiBatteryPercent.value,
       signalStrength: 'weak',
       isOnline: false
     }
@@ -1349,7 +1459,7 @@ const robotDisplayInfo = computed(() => {
     status: robot.online ? 'online' : 'offline',
     statusText: robot.online ? '在线' : '离线',
     sn: robot.sn,
-    batteryLevel: 30, // 暂时固定，后续可从robot数据中获取
+    batteryLevel: uiBatteryPercent.value,
     signalStrength: 'weak', // 暂时固定，后续可从robot数据中获取
     isOnline: robot.online
   }
@@ -1360,32 +1470,12 @@ const currentTab = ref('device')
 
 // 展厅选择相关状态
 const showHallSelectDialog = ref(false)
-const selectedHallId = ref<string>('')
 
-// 从Mission.vue复用的展厅缓存逻辑
-const HALL_CACHE_KEY = 'selected_hall_cache'
-
-const saveHallToCache = (hallId: string) => {
-  try {
-    localStorage.setItem(HALL_CACHE_KEY, hallId)
-  } catch (error) {
-    console.warn('Failed to save hall to cache:', error)
-  }
-}
-
-const getHallFromCache = (): string => {
-  try {
-    const cached = localStorage.getItem(HALL_CACHE_KEY)
-    // 验证缓存的展厅ID是否有效
-    if (cached && hallStore.halls.some(h => h.id.toString() === cached)) {
-      return cached
-    }
-  } catch (error) {
-    console.warn('Failed to get hall from cache:', error)
-  }
-  // 默认返回第一个展厅的ID，如果没有展厅则返回空字符串
-  return hallStore.halls.length > 0 ? hallStore.halls[0].id.toString() : ''
-}
+// 使用全局展厅选择状态
+const selectedHallId = computed({
+  get: () => hallStore.selectedHallId,
+  set: (value) => hallStore.setSelectedHall(value)
+})
 
 // 获取展厅列表
 const hallOptions = computed(() => 
@@ -1419,16 +1509,74 @@ const handleHallClick = async () => {
 }
 
 const handleHallSelect = (hallId: string) => {
-  selectedHallId.value = hallId
-  saveHallToCache(hallId)
+  hallStore.setSelectedHall(hallId)
   showHallSelectDialog.value = false
   console.log('展厅已切换到:', currentHallName.value)
+  
+  // 下载并更新栅格地图
+  downloadAndUpdateHomeGridMap()
 }
 
 const handleCancelHallSelect = () => {
   showHallSelectDialog.value = false
 }
 
+// 获取首页当前地图名称（用于下载地图）
+const getCurrentHomeMapName = () => {
+  const hall = hallStore.halls.find(h => h.id.toString() === selectedHallId.value)
+  return hall ? hall.nav_name : ''
+}
+
+// 下载并更新首页栅格地图
+const downloadAndUpdateHomeGridMap = async () => {
+  const mapName = getCurrentHomeMapName()
+  if (!mapName) {
+    console.warn('首页未找到当前展厅地图名称')
+    return
+  }
+
+  try {
+    console.log(`首页展厅切换，准备更新地图: ${mapName}`)
+    
+    // 检查缓存
+    if (mapCache.isMapCached(mapName)) {
+      console.log(`首页地图 ${mapName} 已在缓存中，直接渲染`)
+    } else {
+      console.log(`首页地图 ${mapName} 不在缓存中，将下载`)
+    }
+    
+    // 重新渲染栅格图（会自动处理下载和缓存）
+    await loadAndRenderPGM()
+  } catch (error) {
+    console.error('首页更新栅格地图失败:', error)
+  }
+}
+
+// 处理任务控制按钮点击（开始/停止）
+const handleTaskControlClick = async () => {
+  if (isTaskExecuting.value) {
+    // 如果正在执行任务，则停止任务
+    try {
+      const token = userStore.token || localStorage.getItem('token') || ''
+      await websocketDataStore.stopCurrentTourRun(token)
+      console.log('✅ 任务已停止')
+      
+      // 任务停止成功后，刷新任务运行列表状态
+      try {
+        await websocketDataStore.fetchTourRuns(token)
+        console.log('✅ 任务停止后刷新任务列表成功')
+      } catch (error) {
+        console.warn('❌ 刷新任务列表失败:', error)
+      }
+    } catch (error) {
+      console.error('❌ 停止任务失败:', error)
+      alert('停止任务失败，请重试')
+    }
+  } else {
+    // 如果没有执行任务，则开始任务
+    await handleStartTaskClick()
+  }
+}
 // 处理开始执行任务按钮点击
 const handleStartTaskClick = async () => {
   console.log('=== 开始执行任务按钮被点击 ===')
@@ -1465,7 +1613,6 @@ const handleStartTaskClick = async () => {
     alert('加载任务数据失败，请重试')
   }
 }
-
 // 确认开始任务
 const handleConfirmStartTask = async () => {
   if (!selectedTaskPresetId.value) {
@@ -1491,6 +1638,17 @@ const handleConfirmStartTask = async () => {
       robot_sn: currentSn,
       prefer_current_pose: true
     })
+    
+    // 任务开始成功后，刷新任务运行列表状态
+    const token = userStore.token || localStorage.getItem('token') || ''
+    if (token) {
+      try {
+        await websocketDataStore.fetchTourRuns(token)
+        console.log('✅ 任务开始后刷新任务列表成功')
+      } catch (error) {
+        console.warn('❌ 刷新任务列表失败:', error)
+      }
+    }
     
     alert('任务已成功开始')
     showTaskSelectionDialog.value = false
@@ -1561,20 +1719,89 @@ const handleNavigationToggle = async () => {
   }
 }
 
-// 监听localStorage的变化，实现跨页面同步
-const handleStorageChange = (event: StorageEvent) => {
-  if (event.key === HALL_CACHE_KEY && event.newValue) {
-    const newHallId = event.newValue
-    // 验证新的展厅ID是否有效
-    if (hallStore.halls.some(h => h.id.toString() === newHallId)) {
-      selectedHallId.value = newHallId
-      console.log('展厅选择已同步:', currentHallName.value)
+// 监听展厅选择变化，更新地图
+watch(() => hallStore.selectedHallId, (newHallId) => {
+  if (newHallId) {
+    console.log('首页展厅选择已同步:', currentHallName.value)
+    // 立即重新渲染栅格图
+    setTimeout(() => {
+      loadAndRenderPGM()
+    }, 50)
+  }
+}, { immediate: false })
+
+// 监听机器人位置变化，实时更新显示
+watch(() => getRobotPose(getWebSocketSn()), (newPose) => {
+  if (newPose && gridImageData && currentMapOriginInfo) {
+    // 当机器人位置更新时，重新绘制
+    drawRobotPosition().catch(err => console.warn('绘制机器人位置失败:', err))
+  }
+}, { immediate: false, deep: true })
+
+// 定期更新机器人位置显示
+let robotPositionUpdateTimer: number | null = null
+
+const startRobotPositionUpdate = () => {
+  if (robotPositionUpdateTimer) {
+    clearInterval(robotPositionUpdateTimer)
+  }
+  
+  robotPositionUpdateTimer = setInterval(() => {
+    if (gridImageData && currentMapOriginInfo) {
+      drawRobotPosition().catch(err => console.warn('绘制机器人位置失败:', err))
     }
+  }, 500) // 每500ms更新一次
+}
+
+const stopRobotPositionUpdate = () => {
+  if (robotPositionUpdateTimer) {
+    clearInterval(robotPositionUpdateTimer)
+    robotPositionUpdateTimer = null
   }
 }
 
-// 监听其他页面的展厅选择变化
-window.addEventListener('storage', handleStorageChange)
+// 检查任务执行状态并加载任务数据
+const checkAndLoadTaskData = async () => {
+  try {
+    console.log('🔍 检查任务执行状态...')
+    
+    // 检查按钮是否显示"停止执行任务"（即任务正在执行中）
+    if (isTaskExecuting.value) {
+      console.log('✅ 检测到任务正在执行，开始加载任务点位数据...')
+      
+      // 获取当前的token
+      const token = userStore.token || localStorage.getItem('token') || ''
+      if (!token) {
+        console.warn('⚠️ 缺少认证token，无法加载任务数据')
+        return
+      }
+
+      // 获取当前预设ID（如果有的话）
+      const currentPresetId = websocketDataStore.currentTourPresetId
+      if (currentPresetId) {
+        console.log(`🚀 开始获取任务预设数据 [presetId: ${currentPresetId}]`)
+        
+        // 调用fetchTourPresetItems获取任务点位数据
+        await websocketDataStore.fetchTourPresetItems(currentPresetId, token)
+        
+        console.log('✅ 任务点位数据加载完成，栅格图将显示任务点位')
+        
+        // 强制重新渲染栅格图以显示任务点位
+        nextTick(() => {
+          setTimeout(() => {
+            loadAndRenderPGM()
+          }, 100)
+        })
+      } else {
+        console.log('ℹ️ 任务正在执行但未找到当前预设ID')
+      }
+    } else {
+      console.log('ℹ️ 当前没有执行中的任务')
+    }
+  } catch (error) {
+    console.error('❌ 检查任务状态失败:', error)
+  }
+}
 
 // 监听选中机器人的变化，动态更新WebSocket配置
 watch(() => robotStore.selectedRobot, async (newRobot, oldRobot) => {
@@ -1588,7 +1815,8 @@ watch(() => robotStore.selectedRobot, async (newRobot, oldRobot) => {
     try {
       await updateWebSocketConfig({
         sn: newSn,
-        kinds: ['pose', 'cmd_status', 'current_map', 'tour']
+        kinds: ['pose', 'cmd_status', 'current_map', 'tour'],
+        channels: [`robot:${newSn}:speed`]
       })
     } catch (error) {
       console.error('更新WebSocket配置失败:', error)
@@ -1636,15 +1864,14 @@ const loadLatestInspectionAlerts = async () => {
     //   limit: 3,
     //   offset: 0
     // })
-    const response = null // 临时模拟
-    
-    if (response && response.alerts) {
-      inspectionAlarmData.value = response.alerts.slice(0, 3)
+    const response: any = null // 临时模拟
+    const alerts = response?.alerts as any[] | undefined
+    if (alerts && alerts.length) {
+      inspectionAlarmData.value = alerts.slice(0, 3)
       // 批量下载缩略图
-      downloadThumbnails(response.alerts.slice(0, 3))
+      downloadThumbnails(alerts.slice(0, 3))
     }
   } catch (err) {
-    // 静默处理错误
     // 静默处理错误
   }
 }
@@ -1745,30 +1972,150 @@ const closeBigImage = () => {
 const waylineProgress = computed(() => taskProgressStore.waylineProgress)
 const waylineJobDetail = computed(() => taskProgressStore.waylineJobDetail)
 
+// 监听任务状态变化，确保UI同步更新
+watch(() => websocketDataStore.currentTourRun, (newTourRun) => {
+  console.log('🔄 任务状态变化:', {
+    newTourRun,
+    status: newTourRun?.status,
+    isTaskExecuting: isTaskExecuting.value,
+    presetItemsCount: websocketDataStore.tourPresetItems.length
+  })
+}, { deep: true })
+
+
 // 飞行统计数据
 const flightStatistics = ref<any>(null)
 const loadingFlightStats = ref(false)
 const flightStatsError = ref('')
 
+// 任务完成回调函数
+let handleTaskCompletion: (() => void) | null = null
+
 // 设备状态刷新定时器
 // 轮询定时器已移除
 
-// 任务动态相关数据
-const taskPoints = ref([
-  { name: 'a任务点', x: 234, y: 876, angle: -123 },
-  { name: 'b任务点', x: 456, y: 789, angle: 45 },
-  { name: 'c任务点', x: 678, y: 543, angle: 90 }
-])
+// 任务动态相关数据 - 从 websocketData store 获取
+const taskPoints = computed(() => {
+  // 只有当前任务存在且状态为running时，才显示任务点数据
+  if (websocketDataStore.currentTourRun && websocketDataStore.currentTourRun.status === 'running') {
+    // 优先使用 tourPresetItems（从preset获取的任务点）
+    const presetItems = websocketDataStore.tourPresetItems
+    if (presetItems && presetItems.length > 0) {
+      // 数据已经在 fetchTourPresetItems 中转换为UI需要的格式
+      return presetItems
+    }
+    
+    // 向后兼容：如果没有preset数据，尝试使用 tourRunPoints
+    const runPoints = websocketDataStore.tourRunPoints
+    if (runPoints && runPoints.length > 0) {
+      return runPoints
+    }
+  }
+  
+  // 如果没有执行中的任务，显示默认提示
+  return [{ name: '暂无执行任务', custom_name: '暂无执行任务', zone_name: '--', type: '', status: 'pending' }]
+})
 
-const taskProgress = ref(80)
+// 限制显示的任务点数量（最多3个）
+const displayTaskPoints = computed(() => {
+  const points = taskPoints.value
+  return points.slice(0, 3)
+})
+
+// 将类型转换为中文显示
+const getPointTypeText = (type: string): string => {
+  switch (type) {
+    case 'explain':
+      return '讲解点'
+    case 'action':
+      return '辅助点'
+    default:
+      return type || '未知类型'
+  }
+}
+
+// 任务进度计算
+const taskProgress = computed(() => {
+  // 优先使用 WebSocket 实时进度
+  if (websocketDataStore.currentTaskProgress) {
+    const { current, total } = websocketDataStore.currentTaskProgress
+    return Math.round((current / total) * 100)
+  }
+  
+  // 回退到从 API 获取的任务点计算进度
+  const points = websocketDataStore.tourRunPoints
+  if (!points || points.length === 0) return 0
+  
+  const completedPoints = points.filter(p => p.status === 'done').length
+  return Math.round((completedPoints / points.length) * 100)
+})
+
+// 判断是否为当前执行的任务点
+const isCurrentTaskPoint = (displayIndex: number): boolean => {
+  // 如果有实时任务进度数据，根据当前进度判断高亮哪个点位
+  if (websocketDataStore.currentTaskProgress) {
+    const { current } = websocketDataStore.currentTaskProgress
+    // current 表示当前正在执行的点位序号（从1开始），转换为数组索引（从0开始）
+    const actualIndex = current - 1
+    // 检查当前执行的点位是否在显示的前3个中
+    return displayIndex === actualIndex && actualIndex < 3
+  }
+  
+  // 如果没有实时进度数据，回退到根据status判断
+  const points = websocketDataStore.tourRunPoints
+  if (!points || points.length === 0) return false
+  
+  // 找到第一个状态为'arriving'的点位
+  const arrivingIndex = points.findIndex(p => p.status === 'arriving')
+  // 检查arriving点位是否在显示的前3个中
+  return displayIndex === arrivingIndex && arrivingIndex < 3
+}
+
+// 任务执行状态 - 基于第一条数据的状态
+const isTaskExecuting = computed(() => {
+  // 直接基于当前任务的状态，只有running才算执行中
+  return websocketDataStore.currentTourRun?.status === 'running'
+})
 const isTaskPaused = ref(false)
 
-// 切换任务执行状态
-const toggleTaskExecution = () => {
-  isTaskPaused.value = !isTaskPaused.value
-  // 这里可以添加实际的暂停/恢复逻辑
-    // 任务状态切换
+// 暂停任务执行
+const toggleTaskExecution = async () => {
+  // 检查导航是否启动
+  if (!navEnabled.value) {
+    console.warn('⚠️ 导航未启动，无法操作任务')
+    return
+  }
+  
+  // 只支持暂停功能
+  if (isTaskExecuting.value) {
+    try {
+      await websocketDataStore.stopCurrentTourRun()
+      console.log('⏸️ 任务已暂停')
+    } catch (error) {
+      console.error('❌ 暂停任务失败:', error)
+      // 可以在这里显示错误提示
+    }
+  } else {
+    console.log('ℹ️ 当前没有正在执行的任务')
+  }
 }
+
+// 启动任务并设置预设ID的方法
+const startTourWithPreset = async (presetId: number) => {
+  try {
+    console.log(`🎯 启动任务并设置预设ID: ${presetId}`)
+    await websocketDataStore.startTourWithPreset(presetId)
+    console.log('✅ 预设点位数据加载完成')
+  } catch (error) {
+    console.error('❌ 启动任务预设失败:', error)
+  }
+}
+
+// 暴露方法供外部调用
+defineExpose({
+  startTourWithPreset
+})
+
 
 // 舱盖状态警报声相关
 // const previousCoverState = ref<number | undefined>(undefined)
@@ -1891,7 +2238,7 @@ const loadFlightStatistics = async (days = 7) => {
 // 无人机显示位置计算属性
 const droneDisplayPosition = computed(() => {
   // 检查无人机是否在仓
-  const isInDock = droneStatus.value?.inDock === 1
+  const isInDock = !!droneStatus.value?.inDock
   
   if (isInDock) {
     // 无人机在仓，显示机场坐标
@@ -1926,8 +2273,9 @@ const loadLatestAlarmData = async () => {
     for (const sn of allSns) {
       try {
         const response = await fetchDeviceHms(sn)
-        if (response && response.length > 0) {
-          allAlerts.push(...response)
+        const alertsList = response as any[]
+        if (alertsList && alertsList.length > 0) {
+          allAlerts.push(...alertsList)
         }
       } catch (err) {
         // 静默处理错误
@@ -2029,7 +2377,6 @@ const formatTimestamp = (timestamp: number) => {
     second: '2-digit'
   })
 }
-
 // 设置任务状态（正常/异常）
 const taskStatus = ref('normal') // 'normal' 或 'error'
 
@@ -2064,7 +2411,6 @@ const waylineTaskStatus = computed(() => {
 const waylineProgressPercent = computed(() => {
   return taskProgressStore.taskProgressPercent
 })
-
 const waylineTaskStatusText = computed(() => {
   const status = waylineProgress.value?.status
   if (!status) return '未知'
@@ -2111,7 +2457,7 @@ const canReturnHome = computed(() => {
   // 当无人机在线且不在仓时可以执行返航
   // 这里可以根据实际业务逻辑调整条件
   const isDroneOnline = droneStatus.value?.isOnline
-  const isInDock = droneStatus.value?.inDock === 1
+  const isInDock = !!droneStatus.value?.inDock
   return isDroneOnline && !isInDock
 })
 
@@ -2733,15 +3079,83 @@ const initVideoPlayer = () => {
   
   // 由watch(videoStreamUrl)统一触发播放，避免重复拉流
 }
-
 // 栅格图渲染：读取 assets/source_data/pgm_data/gridMap.pgm 并绘制到 canvas
 const gridCanvas = ref<HTMLCanvasElement | null>(null)
+let currentMapOriginInfo: MapOriginInfo | null = null
+let gridImageData: ImageData | null = null
+// 重试与清理控制，避免断开后无限重试
+let homePgmRetryTimer: number | null = null
+let homePgmRetryCount = 0
+const HOME_PGM_MAX_RETRIES = 100
+let isHomeUnmountedFlag = false
 
 const loadAndRenderPGM = async () => {
   try {
-    const url = new URL('../assets/source_data/pgm_data/gridMap.pgm', import.meta.url).href
-    const response = await fetch(url)
-    const buffer = await response.arrayBuffer()
+    // 等待 DOM 更新完成
+    await nextTick()
+    
+    const canvas = gridCanvas.value
+    if (!canvas) {
+      console.warn('首页Canvas element not found, retrying...')
+      if (isHomeUnmountedFlag) return
+      if (homePgmRetryCount >= HOME_PGM_MAX_RETRIES) {
+        console.warn('首页Canvas 重试次数达到上限，停止重试')
+        return
+      }
+      if (homePgmRetryTimer != null) return
+      homePgmRetryTimer = window.setTimeout(() => {
+        homePgmRetryTimer = null
+        homePgmRetryCount++
+        loadAndRenderPGM()
+      }, 100)
+      return
+    }
+    
+    // 检查 canvas 是否在 DOM 中且可见
+    if (!canvas.isConnected || !canvas.offsetParent) {
+      console.warn('首页Canvas not visible, retrying...')
+      if (isHomeUnmountedFlag) return
+      if (homePgmRetryCount >= HOME_PGM_MAX_RETRIES) {
+        console.warn('首页Canvas 可见性重试达到上限，停止重试')
+        return
+      }
+      if (homePgmRetryTimer != null) return
+      homePgmRetryTimer = window.setTimeout(() => {
+        homePgmRetryTimer = null
+        homePgmRetryCount++
+        loadAndRenderPGM()
+      }, 100)
+      return
+    }
+
+    // 一旦可见，重置计数器
+    homePgmRetryCount = 0
+
+    // 获取当前选中展厅的地图名称
+    const currentMapName = getCurrentHomeMapName()
+    let buffer: ArrayBuffer
+
+    if (currentMapName) {
+      // 尝试从缓存获取或下载地图
+      try {
+        const currentSn = getWebSocketSn()
+        buffer = await downloadAndCacheMap(currentSn, currentMapName, 'gridMap.pgm')
+        console.log(`首页使用展厅地图: ${currentMapName}`)
+      } catch (error) {
+        console.warn(`首页下载展厅地图失败，使用默认地图:`, error)
+        // 回退到默认地图
+        const url = new URL('../assets/source_data/pgm_data/gridMap.pgm', import.meta.url).href
+        const response = await fetch(url)
+        buffer = await response.arrayBuffer()
+      }
+    } else {
+      console.warn('首页未找到当前展厅地图名称，使用默认地图')
+      // 使用默认地图
+      const url = new URL('../assets/source_data/pgm_data/gridMap.pgm', import.meta.url).href
+      const response = await fetch(url)
+      buffer = await response.arrayBuffer()
+    }
+
     const bytes = new Uint8Array(buffer)
     // 解析 PGM，支持 P2/P5：我们读取头部文本到第三个换行后，再按 maxVal 判断每像素1或2字节
     let header = ''
@@ -2762,13 +3176,23 @@ const loadAndRenderPGM = async () => {
     const height = parseInt(parts[2])
     const maxVal = parseInt(parts[3]) || 255
     const pixelStart = i
-    const canvas = gridCanvas.value
     if (!canvas || !width || !height) return
     canvas.width = width
     canvas.height = height
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     const imageData = ctx.createImageData(width, height)
+
+    // 同时下载YAML文件获取原点信息
+    if (currentMapName) {
+      try {
+        currentMapOriginInfo = await getMapOriginInfo(getWebSocketSn(), currentMapName)
+        console.log('首页地图原点信息:', currentMapOriginInfo)
+      } catch (error) {
+        console.warn('获取地图原点信息失败:', error)
+        currentMapOriginInfo = null
+      }
+    }
     if (magic === 'P5') {
       const bytesPerSample = maxVal > 255 ? 2 : 1
       let p = pixelStart
@@ -2875,9 +3299,195 @@ const loadAndRenderPGM = async () => {
 
     resize()
     window.addEventListener('resize', resize)
+
+    // 保存栅格图数据以便后续绘制机器人位置
+    gridImageData = ctx.getImageData(0, 0, width, height)
+    
+    // 绘制机器人位置
+    drawRobotPosition().catch(err => console.warn('绘制机器人位置失败:', err))
   } catch (e) {
     // 读取失败忽略
   }
+}
+
+
+// 绘制高清机器人图标 - 实心圆 + 外环小白点设计
+const drawRobotSVGIcon = async (ctx: CanvasRenderingContext2D, x: number, y: number, theta: number, canvas: HTMLCanvasElement) => {
+  // 获取当前缩放比例
+  const currentScale = canvas.clientWidth / canvas.width
+  
+  // 固定视觉大小（像素）
+  const visualSize = 20
+  const iconSize = visualSize / currentScale // 根据缩放调整实际绘制大小
+  
+  ctx.save()
+  
+  // 移动到机器人位置
+  ctx.translate(x, y)
+  
+  // 启用抗锯齿以获得更平滑的渲染
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  
+  // 绘制主体实心圆（带阴影效果，无边框）
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
+  ctx.shadowBlur = 3 / currentScale
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 1 / currentScale
+  
+  ctx.fillStyle = '#FF4444'
+  
+  ctx.beginPath()
+  ctx.arc(0, 0, iconSize * 0.4, 0, Math.PI * 2)
+  ctx.fill()
+  
+  // 清除阴影设置
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 0
+  
+  // 计算小白点位置（在圆内，表示机器人朝向）
+  const dotRadius = iconSize * 0.25 // 小白点距离中心的距离（在圆内）
+  const dotSize = iconSize * 0.12 // 小白点大小固定为主圆的12%
+  const dotX = Math.cos(-theta || 0) * dotRadius // 注意角度方向
+  const dotY = Math.sin(-theta || 0) * dotRadius
+  
+  // 绘制方向指示小白点
+  ctx.fillStyle = '#FFFFFF'
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)' // 更淡的边框
+  ctx.lineWidth = Math.max(0.2, 0.3 / currentScale)
+  
+  ctx.beginPath()
+  ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  
+  ctx.restore()
+}
+
+// 绘制任务点位
+const drawTaskPoints = async (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+  // 只有当前任务存在且状态为running时，才绘制任务点
+  if (!websocketDataStore.currentTourRun || websocketDataStore.currentTourRun.status !== 'running') {
+    return
+  }
+  
+  // 获取任务点数据
+  const taskPoints = websocketDataStore.tourRunPoints
+  if (!taskPoints || taskPoints.length === 0 || !currentMapOriginInfo) {
+    return
+  }
+
+  // 获取当前缩放比例
+  const currentScale = canvas.clientWidth / canvas.width
+  
+  // 固定视觉大小（像素）
+  const visualSize = 8 // 任务点比机器人图标小一些
+  const pointSize = visualSize / currentScale // 根据缩放调整实际绘制大小
+
+  ctx.save()
+  
+  // 启用抗锯齿
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
+  taskPoints.forEach((point, index) => {
+    // 检查点位是否有有效的坐标
+    if (typeof point.x !== 'number' || typeof point.y !== 'number') {
+      return
+    }
+
+    // 转换世界坐标到像素坐标
+    const pixelPos = worldToPixel(
+      point.x,
+      point.y,
+      currentMapOriginInfo!,
+      canvas.width,
+      canvas.height
+    )
+
+    // 检查是否在画布范围内
+    if (pixelPos.x < 0 || pixelPos.x >= canvas.width || pixelPos.y < 0 || pixelPos.y >= canvas.height) {
+      return
+    }
+
+    // 根据任务点状态选择颜色
+    let fillColor = '#4CAF50' // 绿色 - 待执行
+    let strokeColor = '#FFFFFF'
+    
+    if (point.status === 'done') {
+      fillColor = '#2196F3' // 蓝色 - 已完成
+    } else if (point.status === 'arriving' || isCurrentTaskPoint(index)) {
+      fillColor = '#FF9800' // 橙色 - 正在执行
+    }
+
+    // 绘制任务点（带阴影效果）
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
+    ctx.shadowBlur = 2 / currentScale
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 1 / currentScale
+
+    ctx.fillStyle = fillColor
+    ctx.strokeStyle = strokeColor
+    ctx.lineWidth = Math.max(0.5, 1 / currentScale)
+
+    ctx.beginPath()
+    ctx.arc(pixelPos.x, pixelPos.y, pointSize * 0.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+
+    // 清除阴影设置
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
+  })
+
+  ctx.restore()
+}
+
+// 绘制机器人位置
+const drawRobotPosition = async () => {
+  const canvas = gridCanvas.value
+  if (!canvas || !gridImageData || !currentMapOriginInfo) {
+    return
+  }
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  // 恢复原始栅格图
+  ctx.putImageData(gridImageData, 0, 0)
+
+  // 获取当前机器人位置
+  const robotPose = getRobotPose(getWebSocketSn())
+  if (!robotPose || typeof robotPose.x !== 'number' || typeof robotPose.y !== 'number') {
+    return
+  }
+
+  // console.log('首页绘制机器人位置:', robotPose)
+
+  // 转换世界坐标到像素坐标
+  const pixelPos = worldToPixel(
+    robotPose.x,
+    robotPose.y,
+    currentMapOriginInfo,
+    canvas.width,
+    canvas.height
+  )
+
+  // 检查是否在画布范围内
+  if (pixelPos.x < 0 || pixelPos.x >= canvas.width || pixelPos.y < 0 || pixelPos.y >= canvas.height) {
+    console.warn('机器人位置超出栅格图范围:', pixelPos)
+    return
+  }
+
+  // 绘制机器人位置 - 使用高清SVG图标
+  await drawRobotSVGIcon(ctx, pixelPos.x, pixelPos.y, robotPose.theta, canvas)
+  
+  // 绘制任务点位
+  await drawTaskPoints(ctx, canvas)
 }
 
 // 开始视频播放
@@ -3269,7 +3879,6 @@ const formatLocalDateTime = (date: Date) => {
   const ss = pad(date.getSeconds())
   return `${y}-${m}-${d}T${hh}:${mm}:${ss}`
 }
-
 // 下发任务确认
 const onDispatchTaskConfirm = async () => {
   const form = dispatchTaskDialog.value.form
@@ -4015,16 +4624,37 @@ watch(() => videoStreamUrl.value, (newUrl) => {
     })
   }
 })
-
 // 组件挂载时初始化
 onMounted(async () => {
   // 初始化首页
   
+  // 设置 WebSocket 数据存储的 token
+  const token = userStore.token || localStorage.getItem('token') || ''
+  if (token) {
+    websocketDataStore.setAuthToken(token)
+    console.log('📝 已设置 WebSocket 数据存储的 token')
+    
+    // 获取任务运行列表，检查是否有正在运行的任务
+    try {
+      await websocketDataStore.fetchTourRuns(token)
+      console.log('✅ 首页任务运行状态检查完成')
+    } catch (error) {
+      console.warn('❌ 获取任务运行状态失败:', error)
+    }
+  }
+  
+  // 注册任务完成回调，用于清空栅格图上的任务点
+  handleTaskCompletion = () => {
+    console.log('🎯 任务完成回调被触发，重新渲染栅格图清空任务点')
+    setTimeout(() => {
+      loadAndRenderPGM()
+    }, 100) // 稍微延迟以确保数据已清空
+  }
+  websocketDataStore.onTaskCompletion(handleTaskCompletion)
+  
   // 初始化展厅数据
   try {
     await hallStore.fetchHalls()
-    // 从缓存中恢复展厅选择
-    selectedHallId.value = getHallFromCache()
     console.log('展厅数据初始化完成，当前选中:', currentHallName.value)
   } catch (error) {
     console.warn('获取展厅数据失败:', error)
@@ -4055,6 +4685,10 @@ onMounted(async () => {
   // 加载飞行统计数据
   await loadFlightStatistics(7)
   
+  // 初始化展厅选择状态
+  hallStore.initSelectedHall()
+  console.log('首页加载，当前选中展厅:', hallStore.selectedHallId)
+
   // 初始化视频播放器
   initVideoPlayer()
   
@@ -4067,10 +4701,18 @@ onMounted(async () => {
     }, 100)
   })
 
-  // 渲染栅格图
+  // 渲染栅格图（延迟确保展厅状态已初始化）
   nextTick(() => {
-    loadAndRenderPGM()
+    setTimeout(() => {
+      loadAndRenderPGM()
+    }, 200)
   })
+
+  // 启动机器人位置更新
+  startRobotPositionUpdate()
+
+  // 检查任务执行状态，如果正在执行任务则显示点位和栅格图
+  await checkAndLoadTaskData()
 
   // 添加全局点击事件监听器，用于点击空白处关闭菜单
   document.addEventListener('click', handleGlobalClick)
@@ -4147,9 +4789,18 @@ onMounted(async () => {
 
 // 组件卸载时清理
 onUnmounted(() => {
+  isHomeUnmountedFlag = true
+  if (homePgmRetryTimer) {
+    clearTimeout(homePgmRetryTimer)
+    homePgmRetryTimer = null
+  }
   // 移除全局点击事件监听器
   document.removeEventListener('click', handleGlobalClick)
   
+  // 移除任务完成回调
+  if (handleTaskCompletion) {
+    websocketDataStore.offTaskCompletion(handleTaskCompletion)
+  }
   
   // 轮询定时器已移除，无需清理
   // 清理图表动画定时器
@@ -4205,8 +4856,31 @@ onUnmounted(() => {
   }
   isAlarmPlaying.value = false
   
-  // 清理展厅同步事件监听器
-  window.removeEventListener('storage', handleStorageChange)
+  // 停止机器人位置更新
+  stopRobotPositionUpdate()
+
+  // 清理工作完成
+})
+
+// 页面激活时重新渲染栅格图（用于处理页面切换后的空白问题）
+onActivated(async () => {
+  console.log('Home page activated, reloading grid...')
+  
+  // 页面激活时刷新任务状态
+  const token = userStore.token || localStorage.getItem('token') || ''
+  if (token) {
+    try {
+      await websocketDataStore.fetchTourRuns(token)
+      console.log('✅ 页面激活时刷新任务状态成功')
+    } catch (error) {
+      console.warn('❌ 页面激活时刷新任务状态失败:', error)
+    }
+  }
+  
+  // 延迟一点时间确保 DOM 完全渲染
+  setTimeout(() => {
+    loadAndRenderPGM()
+  }, 50)
 })
 
 // 舱盖状态监听
@@ -4545,11 +5219,6 @@ const centerToDroneMarker = () => {
   }
 }
 
-
-
-
-
-
 </script>
 
 <style scoped>
@@ -4639,6 +5308,92 @@ const centerToDroneMarker = () => {
   flex-direction: column;
   padding: 20px;
   height: 100%;
+  justify-content: space-between; /* 让进度条靠底部显示 */
+}
+
+/* 实时任务状态样式 */
+.real-time-status {
+  background: rgba(0, 150, 255, 0.1);
+  border: 1px solid rgba(0, 150, 255, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.real-time-status .status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.real-time-status .status-title {
+  font-weight: 600;
+  color: #0096ff;
+  font-size: 14px;
+}
+
+.real-time-status .task-counter {
+  background: rgba(0, 150, 255, 0.2);
+  color: #0096ff;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.real-time-status .current-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.real-time-status .status-label,
+.real-time-status .note-label {
+  font-size: 12px;
+  color: #666;
+  min-width: 60px;
+}
+
+.real-time-status .status-value {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.real-time-status .status-value.done {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.real-time-status .status-value.arriving {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.real-time-status .status-value.pending {
+  background: rgba(107, 114, 128, 0.2);
+  color: #6b7280;
+}
+
+.real-time-status .status-value.failed {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.real-time-status .current-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.real-time-status .note-value {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.4;
+  flex: 1;
 }
 
 /* 左右结构布局 */
@@ -4665,7 +5420,6 @@ const centerToDroneMarker = () => {
   max-height: 100%;
   object-fit: contain;
 }
-
 .robot-details-section {
   flex: 1 1 0;
   min-width: 0; /* 允许换行，避免被图片挤压 */
@@ -4819,10 +5573,10 @@ const centerToDroneMarker = () => {
   flex: 3; 
   display: flex; 
   flex-direction: column; 
-  position: relative;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
+  position: relative; 
+  background: transparent; 
+  border: 0; 
+  border-radius: 0; 
   padding: 20px; /* 与旧视频卡片一致的内边距 */
 }
 
@@ -4992,6 +5746,7 @@ const centerToDroneMarker = () => {
 }
 .mini-card-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .mini-card-title { color: #FFF; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-card-title.status-error { color: #ff5252; }
 .mini-card-sub { color: #FFF; font-size: 13px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .92; }
 .start-task-btn {
   display: flex;
@@ -5007,8 +5762,18 @@ const centerToDroneMarker = () => {
   min-width: 160px;
   height: 68px; /* 与 mini-card 视觉高度一致 */
   cursor: pointer;
+  transition: all 0.3s ease;
 }
 .start-task-btn:hover { filter: brightness(1.05); }
+
+/* 停止任务按钮样式 */
+.start-task-btn.stop-task {
+  background: #f44336;
+}
+.start-task-btn.stop-task:hover {
+  background: #d32f2f;
+  filter: brightness(1.05);
+}
 .bottom-card::before,
 .bottom-card::after {
   content: '';
@@ -5024,11 +5789,33 @@ const centerToDroneMarker = () => {
 
 /* 任务点列表样式 */
 .task-points-list {
-  flex: 0 0 auto;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
+  max-height: 150px; /* 限制最大高度，约3个条目的高度（单行显示） */
+  overflow-y: auto; /* 添加垂直滚动条 */
+  padding-right: 4px; /* 为滚动条留出空间 */
+}
+
+/* 滚动条样式 */
+.task-points-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.task-points-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.task-points-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 188, 212, 0.6);
+  border-radius: 2px;
+}
+
+.task-points-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 188, 212, 0.8);
 }
 
 .task-point-item {
@@ -5040,7 +5827,7 @@ const centerToDroneMarker = () => {
   border-radius: 4px;
   padding: 8px 12px;
   transition: all 0.3s ease;
-  min-height: 36px;
+  min-height: 40px;
 }
 
 .task-point-item:hover {
@@ -5066,13 +5853,38 @@ const centerToDroneMarker = () => {
   text-overflow: ellipsis;
 }
 
-.task-point-coords {
+.task-point-details {
   display: flex;
-  gap: 14px;
+  flex-direction: row;
+  gap: 16px;
+  color: #cfe9f3;
+  font-size: 14px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.task-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.detail-item {
+  display: flex;
   color: #cfe9f3;
   font-size: 12px;
   white-space: nowrap;
-  margin-left: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.point-type {
+  color: #ffd54f;
+  font-weight: 500;
 }
 
 .task-point-coords span {
@@ -5082,6 +5894,43 @@ const centerToDroneMarker = () => {
   content: '·';
   margin: 0 6px 0 4px;
   color: #4fa6bf;
+}
+
+/* 任务点状态样式 */
+.task-point-item.completed {
+  background: rgba(76, 175, 80, 0.1);
+  border-color: rgba(76, 175, 80, 0.3);
+}
+
+.task-point-item.current {
+  background: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.4);
+}
+
+.task-point-coords .status {
+  font-weight: 500;
+}
+
+.task-point-item.completed .status {
+  color: #4caf50;
+}
+
+.task-point-item.current .status {
+  color: #ffc107;
+}
+
+.task-point-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.done-icon {
+  color: #4caf50;
+  font-size: 14px;
+  font-weight: bold;
 }
 
 .task-point-refresh {
@@ -5103,6 +5952,33 @@ const centerToDroneMarker = () => {
   width: 12px;
   height: 12px;
   filter: brightness(0) saturate(100%) invert(69%) sepia(100%) saturate(1000%) hue-rotate(180deg) brightness(1) contrast(1);
+}
+
+/* 定位图标样式 */
+.task-point-location {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.location-icon {
+  width: 16px;
+  height: 16px;
+  filter: brightness(0) saturate(100%) invert(43%) sepia(96%) saturate(1000%) hue-rotate(180deg) brightness(1) contrast(1);
+  animation: pulse-location 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-location {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
 }
 
 /* 任务进度部分样式 */
@@ -5148,6 +6024,22 @@ const centerToDroneMarker = () => {
 .pause-resume-btn:active {
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(0, 188, 212, 0.3);
+}
+
+.pause-resume-btn.disabled,
+.pause-resume-btn:disabled {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.4);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.pause-resume-btn.disabled:hover,
+.pause-resume-btn:disabled:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: none;
+  box-shadow: none;
 }
 
 .progress-bar-container {
@@ -5328,7 +6220,6 @@ const centerToDroneMarker = () => {
   display: inline-block;
   width: 100%;
 }
-
 .mission-select {
   width: 100%;
   height: 36px;
@@ -6125,13 +7016,11 @@ const centerToDroneMarker = () => {
   align-items: flex-start;
   margin-bottom: 15px;
 }
-
 .on4-bottom-tl p {
   color: rgba(255, 255, 255, 0.8);
   font-size: 14px;
   margin: 5px 0;
 }
-
 .on4-bottom-tl span {
   color: rgba(255, 255, 255, 0.6);
   font-size: 12px;
@@ -6924,7 +7813,6 @@ const centerToDroneMarker = () => {
   gap: 15px;
   padding-bottom: 20px;
 }
-
 /* 双环进度条样式 */
 .progress-circle-container {
   position: relative;
@@ -6932,7 +7820,6 @@ const centerToDroneMarker = () => {
   height: 80px;
   overflow: visible;
 }
-
 .progress-circle {
   position: relative;
   width: 100%;
@@ -7714,7 +8601,6 @@ const centerToDroneMarker = () => {
   font-size: 14px;
   font-weight: 500;
 }
-
 .dispatch-algorithm-options {
   display: flex;
   flex-direction: column;
@@ -7732,12 +8618,6 @@ const centerToDroneMarker = () => {
 .dispatch-algorithm-options::-webkit-scrollbar {
   width: 6px;
 }
-
-.dispatch-algorithm-options::-webkit-scrollbar-track {
-  background: rgba(103, 213, 253, 0.1);
-  border-radius: 3px;
-}
-
 .dispatch-algorithm-options::-webkit-scrollbar-thumb {
   background: rgba(103, 213, 253, 0.3);
   border-radius: 3px;

@@ -400,13 +400,14 @@
             <div class="add-user-form-row">
               <label>机器人动作：</label>
               <div class="custom-select-wrapper">
-                <select v-model="addTaskPointForm.robotAction" class="user-select">
-                  <option value="抬左手">抬左手</option>
-                  <option value="抬右手">抬右手</option>
-                  <option value="挥手">挥手</option>
-                  <option value="点头">点头</option>
-                  <option value="转身">转身</option>
-                  <option value="静止">静止</option>
+                <select v-model="addTaskPointForm.robotAction" class="user-select robot-action-select" :disabled="loadingRobotActions">
+                  <option 
+                    v-for="action in robotActions" 
+                    :key="action.id" 
+                    :value="action.code"
+                  >
+                    {{ action.name }}
+                  </option>
                 </select>
                 <span class="custom-select-arrow">
                   <svg width="12" height="12" viewBox="0 0 12 12">
@@ -616,7 +617,9 @@ import { useTourStore } from '../stores/tour'
 import { useUserStore } from '../stores/user'
 import { useRobotStore } from '../stores/robot'
 import { useWebSocketData } from '@/composables/useWebSocketData'
-import { navigationApi, tourApi } from '@/api/services'
+import { useWebSocketDataStore } from '@/stores/websocketData'
+import { navigationApi, tourApi, getRobotActions } from '@/api/services'
+import { downloadAndCacheMap, mapCache, getMapOriginInfo, worldToPixel, type MapOriginInfo } from '@/utils/mapCache'
 import type { Zone, TourPreset } from '@/types'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
 import trackRecordsIcon from '@/assets/source_data/svg_data/track_records.svg'
@@ -663,6 +666,7 @@ const guideStore = useGuideStore()
 const tourStore = useTourStore()
 const userStore = useUserStore()
 const robotStore = useRobotStore()
+const websocketDataStore = useWebSocketDataStore()
 
 // 先从缓存恢复机器人数据，确保WebSocket连接使用正确的SN
 robotStore.hydrateFromCache()
@@ -672,10 +676,10 @@ robotStore.initSelectedRobot()
 const getWebSocketSn = () => {
   const selectedRobot = robotStore.selectedRobot
   if (selectedRobot && selectedRobot.sn && selectedRobot.sn.trim()) {
-    console.log('Mission页面使用选中机器人的SN:', selectedRobot.sn)
+    // console.log('Mission页面使用选中机器人的SN:', selectedRobot.sn)
     return selectedRobot.sn
   }
-  console.log('Mission页面使用broadcast SN')
+  // console.log('Mission页面使用broadcast SN')
   return 'broadcast'
 }
 
@@ -694,7 +698,11 @@ const currentTab = ref('hall')
 // 展厅管理相关状态
 const isRecording = ref(false)
 
-// 计算属性：从WebSocket获取实时的slam进度
+// 进度条状态管理：确保进度只能增长，不会因多线程数据导致回退
+const maxProgress = ref(0) // 记录已达到的最大进度
+const lastResetTime = ref(0) // 记录上次重置时间，用于检测新的生成任务
+
+// 计算属性：从WebSocket获取实时的slam进度，确保单调递增
 const mapGenProgress = computed(() => {
   const currentSn = getWebSocketSn()
   let progress = getRobotSlamProgress(currentSn)
@@ -704,8 +712,27 @@ const mapGenProgress = computed(() => {
     progress = getRobotSlamProgress('broadcast')
   }
   
-  // 返回进度值，如果没有数据则返回0
-  return progress || 0
+  const currentProgress = progress || 0
+  
+  // 检测是否是新的生成任务（进度从较高值突然变为0或很低的值）
+  if (currentProgress === 0 && maxProgress.value > 50) {
+    // 重置最大进度，开始新的生成任务
+    maxProgress.value = 0
+    lastResetTime.value = Date.now()
+    console.log('检测到新的地图生成任务，重置进度条')
+  }
+  
+  // 确保进度只能增长，不能减少（除非是新任务开始）
+  if (currentProgress > maxProgress.value) {
+    maxProgress.value = currentProgress
+  }
+  
+  // 如果进度达到100%，保持100%
+  if (maxProgress.value >= 100) {
+    maxProgress.value = 100
+  }
+  
+  return maxProgress.value
 })
 
 // 计算属性：检查导航状态是否启用
@@ -817,6 +844,12 @@ watch(() => {
     hasSubmittedGeneration.value = false
     console.log('检测到change_pcd变为1，重置hasSubmittedGeneration为false')
   }
+  
+  // 当change_pcd从1变成0时，调用同步接口
+  if (oldValue === 1 && newValue === 0) {
+    console.log('检测到change_pcd从1变为0，开始执行同步操作')
+    handleSyncAfterPcdComplete()
+  }
 })
 
 // 监听slam状态变化
@@ -834,6 +867,9 @@ watch(() => {
     console.log('地图生成已停止')
   } else if (newValue === 1 && oldValue === 0) {
     console.log('地图生成已开始')
+    // 重置进度条状态
+    maxProgress.value = 0
+    lastResetTime.value = Date.now()
   }
 })
 
@@ -871,34 +907,11 @@ const hallOptions = computed(() =>
 )
 
 
-// 缓存相关常量
-const HALL_CACHE_KEY = 'selected_hall_cache'
-
-// 缓存工具函数
-const saveHallToCache = (hallId: string) => {
-  try {
-    localStorage.setItem(HALL_CACHE_KEY, hallId)
-  } catch (error) {
-    console.warn('Failed to save hall to cache:', error)
-  }
-}
-
-const getHallFromCache = (): string => {
-  try {
-    const cached = localStorage.getItem(HALL_CACHE_KEY)
-    // 验证缓存的展厅ID是否有效
-    if (cached && hallOptions.value.some(h => h.id === cached)) {
-      return cached
-    }
-  } catch (error) {
-    console.warn('Failed to get hall from cache:', error)
-  }
-  // 默认返回第一个展厅的ID，如果没有展厅则返回空字符串
-  return hallOptions.value.length > 0 ? hallOptions.value[0].id : ''
-}
-
-// 初始化时从缓存获取展厅选择
-const selectedHall = ref(getHallFromCache())
+// 使用全局展厅选择状态
+const selectedHall = computed({
+  get: () => hallStore.selectedHallId,
+  set: (value) => hallStore.setSelectedHall(value)
+})
 const currentGridUrl = computed(() => hallOptions.value.find(h => h.id === selectedHall.value)?.gridUrl || '')
 
 // 监听nav状态和当前地图变化，自动选择对应的展厅
@@ -932,44 +945,63 @@ const currentHallPrefix = computed(() => {
   return hall ? hall.name : ''
 })
 
-// 监听展厅选择变化，实时保存到缓存
-watch(selectedHall, async (newHallId) => {
-  saveHallToCache(newHallId)
-  
-  // 当展厅切换时，重新获取展区数据
-  await fetchCurrentHallZones()
-  
-  // 重置展区选择为新展厅的第一个展区
-  if (areaList.value.length > 0) {
-    selectedAreaId.value = areaList.value[0].id
-    console.log('展厅切换，重新选择展区:', selectedAreaId.value)
-  } else {
-    selectedAreaId.value = ''
-  }
-  
-  // 重置展厅任务列表选择
-  if (hallTourPresets.value.length > 0) {
-    selectedHallTaskList.value = hallTourPresets.value[0].id.toString()
-    console.log('展厅切换，重新选择展厅任务:', selectedHallTaskList.value)
-  } else {
-    selectedHallTaskList.value = ''
-  }
-}, { immediate: false })
+// 获取当前地图名称（用于下载地图）
+const getCurrentMapName = () => {
+  const hall = hallOptions.value.find(h => h.id === selectedHall.value)
+  return hall ? hall.name : ''
+}
 
-// 监听localStorage的变化，实现跨页面同步
-const handleStorageChange = (event: StorageEvent) => {
-  if (event.key === HALL_CACHE_KEY && event.newValue) {
-    const newHallId = event.newValue
-    // 验证新的展厅ID是否有效，且不是当前选中的展厅
-    if (hallOptions.value.some(h => h.id === newHallId) && newHallId !== selectedHall.value) {
-      selectedHall.value = newHallId
-      console.log('展厅选择已从其他页面同步:', currentSelectedHallName.value)
+// 下载并更新栅格地图
+const downloadAndUpdateGridMap = async () => {
+  const mapName = getCurrentMapName()
+  if (!mapName) {
+    console.warn('未找到当前展厅地图名称')
+    return
+  }
+
+  try {
+    console.log(`展厅切换，准备更新地图: ${mapName}`)
+    
+    // 检查缓存
+    if (mapCache.isMapCached(mapName)) {
+      console.log(`地图 ${mapName} 已在缓存中，直接渲染`)
+    } else {
+      console.log(`地图 ${mapName} 不在缓存中，将下载`)
     }
+    
+    // 重新渲染栅格图（会自动处理下载和缓存）
+    await loadAndRenderHallPGM()
+  } catch (error) {
+    console.error('更新栅格地图失败:', error)
   }
 }
 
-// 监听其他页面的展厅选择变化
-window.addEventListener('storage', handleStorageChange)
+// 监听展厅选择变化，处理相关数据更新
+watch(() => hallStore.selectedHallId, async (newHallId) => {
+  if (newHallId) {
+    // 当展厅切换时，重新获取展区数据
+    await fetchCurrentHallZones()
+    
+    // 重置展区选择为新展厅的第一个展区
+    if (areaList.value.length > 0) {
+      selectedAreaId.value = areaList.value[0].id
+      console.log('展厅切换，重新选择展区:', selectedAreaId.value)
+    } else {
+      selectedAreaId.value = ''
+    }
+    
+    // 重置展厅任务列表选择
+    if (hallTourPresets.value.length > 0) {
+      selectedHallTaskList.value = hallTourPresets.value[0].id.toString()
+      console.log('展厅切换，重新选择展厅任务:', selectedHallTaskList.value)
+    } else {
+      selectedHallTaskList.value = ''
+    }
+    
+    // 下载并更新栅格地图
+    await downloadAndUpdateGridMap()
+  }
+}, { immediate: false })
 
 // 栅格编辑相关
 const isEditMode = ref(false)
@@ -1090,7 +1122,7 @@ const currentTaskPoints = computed(() => {
       y: point.pose_y,
       angle: point.pose_theta, // 直接使用theta原始值
       pointType: point.type === 'explain' ? '讲解点' : '辅助点',
-      robotAction: point.action_code || '默认动作', // API中可能为null
+      robotAction: getRobotActionName(point.action_code || undefined), // 获取动作中文名称
       robotDirection: '前进', // API中没有此字段，使用默认值
       commentary: `点位${point.id}`, // API中没有此字段，使用默认值
       createdTime: '' // API中没有此字段，暂时设为空
@@ -1116,9 +1148,56 @@ const addTaskPointForm = ref({
   y: 0,
   angle: 0,
   pointType: '讲解点',
-  robotAction: '抬左手',
+  robotAction: '',
   robotDirection: '前进'
 })
+
+// 机器人动作列表
+const robotActions = ref<Array<{
+  code: string
+  name: string
+  id: number
+  recommended: boolean
+}>>([])
+
+const loadingRobotActions = ref(false)
+
+// 获取机器人动作列表
+const fetchRobotActions = async () => {
+  if (loadingRobotActions.value) return
+  
+  try {
+    loadingRobotActions.value = true
+    const token = userStore.token
+    if (!token) {
+      throw new Error('用户未登录')
+    }
+    
+    const actions = await getRobotActions(token)
+    robotActions.value = actions
+    
+    // 设置默认选择推荐的第一个动作
+    const defaultAction = actions.find((action: any) => action.recommended)
+    if (defaultAction && !addTaskPointForm.value.robotAction) {
+      addTaskPointForm.value.robotAction = defaultAction.code
+    }
+    
+    console.log('✅ 获取机器人动作列表成功:', actions)
+  } catch (error) {
+    console.error('❌ 获取机器人动作列表失败:', error)
+    alert('获取机器人动作列表失败，请重试')
+  } finally {
+    loadingRobotActions.value = false
+  }
+}
+
+// 根据动作 code 获取中文名称
+const getRobotActionName = (actionCode?: string): string => {
+  if (!actionCode) return '默认动作'
+  
+  const action = robotActions.value.find(a => a.code === actionCode)
+  return action?.name || actionCode // 如果找不到名称，返回code
+}
 
 // 监听点位类型变化，当选择辅助点时清空讲解点位选择
 watch(() => addTaskPointForm.value.pointType, (newPointType) => {
@@ -1219,7 +1298,7 @@ const toggleEditMode = () => {
 
 // 展厅选择处理函数
 const selectHall = (hallId: string) => {
-  selectedHall.value = hallId
+  hallStore.setSelectedHall(hallId)
 }
 
 // 删除选中的展厅处理函数
@@ -1256,17 +1335,65 @@ const deleteSelectedHall = async () => {
       timeout: 10
     })
     
-    // 删除成功后，重新加载展厅列表
-    await hallStore.fetchHalls()
+    // 删除成功后，调用同步接口
+    try {
+      await navigationApi.syncFromNav(token, {
+        sn: currentSn,
+        timeout: 10
+      })
+      console.log('展厅同步成功')
+    } catch (syncError) {
+      console.warn('展厅同步失败，但删除操作已成功:', syncError)
+      // 同步失败不影响删除成功的提示
+    }
+    
+    // 重新加载展厅列表（强制刷新）
+    await hallStore.fetchHalls(true)
     
     // 重新选择第一个展厅
-    selectedHall.value = hallOptions.value.length > 0 ? hallOptions.value[0].id : ''
+    if (hallOptions.value.length > 0) {
+      hallStore.setSelectedHall(hallOptions.value[0].id)
+    } else {
+      hallStore.setSelectedHall('')
+    }
     
     alert(`展厅"${selectedHallInfo.name}"删除成功`)
     console.log('展厅删除成功:', selectedHallInfo.name)
   } catch (error) {
     console.error('删除展厅失败:', error)
     alert(error instanceof Error ? error.message : '删除展厅失败')
+  }
+}
+
+// 处理change_pcd完成后的同步操作
+const handleSyncAfterPcdComplete = async () => {
+  try {
+    const token = userStore.token
+    if (!token) {
+      console.warn('未找到认证token，无法执行同步操作')
+      return
+    }
+    
+    // 获取当前机器人SN
+    const currentSn = getWebSocketSn()
+    
+    console.log('开始执行展厅同步操作...')
+    
+    // 调用同步接口，参考删除按钮的逻辑
+    await navigationApi.syncFromNav(token, {
+      sn: currentSn,
+      timeout: 10
+    })
+    
+    console.log('展厅同步成功')
+    
+    // 重新加载展厅列表（强制刷新），触发展厅列表刷新
+    await hallStore.fetchHalls(true)
+    console.log('展厅列表刷新完成')
+    
+  } catch (error) {
+    console.error('change_pcd完成后同步操作失败:', error)
+    // 同步失败不需要弹出错误提示，只记录日志
   }
 }
 
@@ -1293,12 +1420,28 @@ const deleteHall = async (hall: { id: string, name: string }) => {
       timeout: 10
     })
     
-    // 删除成功后，重新加载展厅列表
-    await hallStore.fetchHalls()
+    // 删除成功后，调用同步接口
+    try {
+      await navigationApi.syncFromNav(token, {
+        sn: currentSn,
+        timeout: 10
+      })
+      console.log('展厅同步成功')
+    } catch (syncError) {
+      console.warn('展厅同步失败，但删除操作已成功:', syncError)
+      // 同步失败不影响删除成功的提示
+    }
+    
+    // 重新加载展厅列表（强制刷新）
+    await hallStore.fetchHalls(true)
     
     // 如果删除的是当前选中的展厅，重新选择第一个展厅
     if (selectedHall.value === hall.id) {
-      selectedHall.value = hallOptions.value.length > 0 ? hallOptions.value[0].id : ''
+      if (hallOptions.value.length > 0) {
+        hallStore.setSelectedHall(hallOptions.value[0].id)
+      } else {
+        hallStore.setSelectedHall('')
+      }
     }
     
     alert(`展厅"${hall.name}"删除成功`)
@@ -1547,7 +1690,7 @@ const stopHallRecording = async () => {
 
     // 停止录包
     const slamData = {
-      sn: '',
+      sn: getWebSocketSn(),
       map_name: '',
       action: 0,
       data_name: currentRecordingDataName.value,
@@ -1593,7 +1736,7 @@ const handleConfirmStartRecording = async () => {
 
     // 开始录包
     const slamData = {
-      sn: '',
+      sn: getWebSocketSn(),
       map_name: '',
       action: 1,
       data_name: recordingForm.value.dataName.trim(),
@@ -1671,7 +1814,7 @@ const stopGenerateHallMap = async () => {
 
     // 停止生成地图
     const mapData = {
-      sn: '',
+      sn: getWebSocketSn(),
       map_name: '',
       action: 0,
       data_name: ''
@@ -1720,7 +1863,7 @@ const handleConfirmGenerateMap = async () => {
 
     // 开始生成地图
     const mapData = {
-      sn: '',
+      sn: getWebSocketSn(),
       map_name: generateMapForm.value.mapName.trim(),
       action: 1,
       data_name: processDataPackageName(generateMapForm.value.dataName.trim())
@@ -1756,7 +1899,7 @@ const loadDataPackages = async () => {
       return
     }
 
-    const response = await navigationApi.getDataPackages(token)
+    const response = await navigationApi.getDataPackages(token, { sn: getWebSocketSn() })
     
     if (response.error_code === 0 && Array.isArray(response.result)) {
       rawDataPackages.value = response.result
@@ -2081,6 +2224,14 @@ onMounted(async () => {
     }
   }
   
+  // 预加载机器人动作列表
+  try {
+    await fetchRobotActions()
+    console.log('机器人动作列表预加载完成')
+  } catch (err) {
+    console.warn('预加载机器人动作列表失败:', err)
+  }
+  
   // 确保展厅任务预设数据已加载
   console.log('=== 检查展厅任务预设数据加载状态 ===')
   console.log('tourStore.isLoaded:', tourStore.isLoaded)
@@ -2096,16 +2247,9 @@ onMounted(async () => {
     console.log('展厅任务预设数据已加载，跳过')
   }
   
-  // 确保从缓存加载的展厅选择在页面加载时生效，如果没有有效选择则选择第一个
-  const cachedHall = getHallFromCache()
-  if (cachedHall && hallOptions.value.some(h => h.id === cachedHall)) {
-    selectedHall.value = cachedHall
-  } else if (hallOptions.value.length > 0) {
-    selectedHall.value = hallOptions.value[0].id
-    saveHallToCache(selectedHall.value)
-  }
-  
-  console.log('页面加载，当前选中展厅:', selectedHall.value)
+  // 初始化展厅选择状态
+  hallStore.initSelectedHall()
+  console.log('页面加载，当前选中展厅:', hallStore.selectedHallId)
   
   // 获取当前选中展厅的展区数据
   await fetchCurrentHallZones()
@@ -2126,30 +2270,93 @@ onMounted(async () => {
 // 栅格图渲染（参考首页实现，简化版）
 const hallGridCanvas = ref<HTMLCanvasElement | null>(null)
 let hallGridCleanup: (() => void) | null = null
+let currentMapOriginInfo: MapOriginInfo | null = null
+let missionGridImageData: ImageData | null = null
+// 重试与清理控制，避免断开后无限重试
+let missionPgmRetryTimer: number | null = null
+let missionPgmRetryCount = 0
+const MISSION_PGM_MAX_RETRIES = 100
+let isMissionUnmountedFlag = false
 
 const loadAndRenderHallPGM = async () => {
   try {
+    // 清空编辑历史记录
+    editHistory.value.length = 0
     // 等待 DOM 更新完成
     await nextTick()
     
-    const canvas = hallGridCanvas.value
-    if (!canvas) {
-      console.warn('Canvas element not found, retrying...')
-      // 如果 canvas 未准备好，稍后重试
-      setTimeout(() => loadAndRenderHallPGM(), 100)
+  const canvas = hallGridCanvas.value
+  if (!canvas) {
+    console.warn('Canvas element not found, retrying...')
+    if (isMissionUnmountedFlag) return
+    if (missionPgmRetryCount >= MISSION_PGM_MAX_RETRIES) {
+      console.warn('Mission Canvas 重试次数达到上限，停止重试')
       return
     }
+    if (missionPgmRetryTimer != null) return
+    missionPgmRetryTimer = window.setTimeout(() => {
+      missionPgmRetryTimer = null
+      missionPgmRetryCount++
+      loadAndRenderHallPGM()
+    }, 100)
+    return
+  }
     
-    // 检查 canvas 是否在 DOM 中且可见
-    if (!canvas.isConnected || !canvas.offsetParent) {
-      console.warn('Canvas not visible, retrying...')
-      setTimeout(() => loadAndRenderHallPGM(), 100)
+  // 检查 canvas 是否在 DOM 中且可见
+  if (!canvas.isConnected || !canvas.offsetParent) {
+    console.warn('Canvas not visible, retrying...')
+    if (isMissionUnmountedFlag) return
+    if (missionPgmRetryCount >= MISSION_PGM_MAX_RETRIES) {
+      console.warn('Mission Canvas 可见性重试达到上限，停止重试')
       return
     }
-    // 示例：可以根据 selectedHall 切换不同资源，这里先固定为 gridMap.pgm
-    const url = new URL('../assets/source_data/pgm_data/gridMap.pgm', import.meta.url).href
-    const response = await fetch(url)
-    const buffer = await response.arrayBuffer()
+    if (missionPgmRetryTimer != null) return
+    missionPgmRetryTimer = window.setTimeout(() => {
+      missionPgmRetryTimer = null
+      missionPgmRetryCount++
+      loadAndRenderHallPGM()
+    }, 100)
+    return
+  }
+
+  // 一旦可见，重置计数器
+  missionPgmRetryCount = 0
+
+    // 获取当前选中展厅的地图名称
+    const currentMapName = getCurrentMapName()
+    let buffer: ArrayBuffer
+
+    if (currentMapName) {
+      // 尝试从缓存获取或下载地图
+      try {
+        const currentSn = getWebSocketSn()
+        buffer = await downloadAndCacheMap(currentSn, currentMapName, 'gridMap.pgm')
+        console.log(`使用展厅地图: ${currentMapName}`)
+        
+        // 同时下载YAML文件获取原点信息
+        try {
+          currentMapOriginInfo = await getMapOriginInfo(currentSn, currentMapName)
+          console.log('Mission页面地图原点信息:', currentMapOriginInfo)
+        } catch (error) {
+          console.warn('获取地图原点信息失败:', error)
+          currentMapOriginInfo = null
+        }
+      } catch (error) {
+        console.warn(`下载展厅地图失败，使用默认地图:`, error)
+        // 回退到默认地图
+        const url = new URL('../assets/source_data/pgm_data/gridMap.pgm', import.meta.url).href
+        const response = await fetch(url)
+        buffer = await response.arrayBuffer()
+        currentMapOriginInfo = null
+      }
+    } else {
+      // 使用默认地图
+      const url = new URL('../assets/source_data/pgm_data/gridMap.pgm', import.meta.url).href
+      const response = await fetch(url)
+      buffer = await response.arrayBuffer()
+      currentMapOriginInfo = null
+    }
+
     const bytes = new Uint8Array(buffer)
     // 解析头
     let header = ''
@@ -2303,8 +2510,10 @@ const loadAndRenderHallPGM = async () => {
     const onMouseDown = (e: MouseEvent) => { 
       // 编辑模式下且为编辑导航模式的左键编辑
       if (isEditMode.value && navMode.value === 'edit' && e.button === 0 && !e.ctrlKey) {
-        // 开始编辑前保存当前状态到历史记录
-        saveToHistory()
+        // 开始编辑前保存当前状态到历史记录（仅在新的编辑操作开始时保存）
+        if (!drawing) {
+          saveToHistory()
+        }
         drawing = true
         const coords = getCanvasCoords(e)
         editLastX = coords.x
@@ -2370,8 +2579,218 @@ const loadAndRenderHallPGM = async () => {
       canvas.removeEventListener('mouseleave', endDrag as any)
       canvas.removeEventListener('contextmenu', () => {})
     }
+
+    // 保存栅格图数据以便后续绘制机器人位置
+    missionGridImageData = ctx.getImageData(0, 0, width, height)
+    
+    // 绘制机器人位置
+    drawMissionRobotPosition()
   } catch (e) {
     // 忽略
+  }
+}
+
+// 绘制Mission页面机器人位置
+const drawMissionRobotPosition = async () => {
+  const canvas = hallGridCanvas.value
+  if (!canvas || !missionGridImageData || !currentMapOriginInfo) {
+    return
+  }
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  // 如果在编辑模式下，我们需要保留当前的编辑内容
+  // 如果不在编辑模式，恢复原始栅格图
+  if (!isEditMode.value) {
+    ctx.putImageData(missionGridImageData, 0, 0)
+  } else {
+    // 在编辑模式下，如果有编辑内容则使用当前画布，否则使用原始数据
+    if (!gridImageData) {
+      ctx.putImageData(missionGridImageData, 0, 0)
+    }
+    // 如果已有编辑内容，则不重置画布，直接在上面绘制机器人
+  }
+
+  // 获取当前机器人位置
+  const robotPose = getRobotPose(getWebSocketSn())
+  if (!robotPose || typeof robotPose.x !== 'number' || typeof robotPose.y !== 'number') {
+    return
+  }
+
+  // console.log('Mission页面绘制机器人位置:', robotPose)
+
+  // 转换世界坐标到像素坐标
+  const pixelPos = worldToPixel(
+    robotPose.x,
+    robotPose.y,
+    currentMapOriginInfo,
+    canvas.width,
+    canvas.height
+  )
+
+  // 检查是否在画布范围内
+  if (pixelPos.x < 0 || pixelPos.x >= canvas.width || pixelPos.y < 0 || pixelPos.y >= canvas.height) {
+    console.warn('机器人位置超出栅格图范围:', pixelPos)
+    return
+  }
+
+  // 绘制机器人位置 - 等腰三角箭头
+  ctx.save()
+  
+  const triangleHeight = 8 // 三角形高度
+  const triangleBase = 6   // 三角形底边宽度
+  const theta = typeof robotPose.theta === 'number' ? robotPose.theta : 0
+
+  // 计算三角形的三个顶点（以机器人位置为中心）
+  // 顶点（箭头指向方向）
+  const tipX = pixelPos.x + Math.cos(theta) * (triangleHeight / 2)
+  const tipY = pixelPos.y - Math.sin(theta) * (triangleHeight / 2) // Y轴翻转
+  
+  // 底边中点（机器人位置向后）
+  const baseX = pixelPos.x - Math.cos(theta) * (triangleHeight / 2)
+  const baseY = pixelPos.y + Math.sin(theta) * (triangleHeight / 2)
+  
+  // 左底顶点（垂直于朝向方向）
+  const leftX = baseX - Math.cos(theta + Math.PI / 2) * (triangleBase / 2)
+  const leftY = baseY + Math.sin(theta + Math.PI / 2) * (triangleBase / 2)
+  
+  // 右底顶点（垂直于朝向方向）
+  const rightX = baseX + Math.cos(theta + Math.PI / 2) * (triangleBase / 2)
+  const rightY = baseY - Math.sin(theta + Math.PI / 2) * (triangleBase / 2)
+
+  // 绘制等腰三角形
+  ctx.fillStyle = '#00ff00'  // 绿色，与首页区分
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = 1
+  
+  ctx.beginPath()
+  ctx.moveTo(tipX, tipY)
+  ctx.lineTo(leftX, leftY)
+  ctx.lineTo(rightX, rightY)
+  ctx.closePath()
+  ctx.fill()
+  ctx.stroke()
+
+  ctx.restore()
+  
+  // 绘制任务点位
+  await drawMissionTaskPoints(ctx, canvas)
+}
+
+// 绘制Mission页面任务点位
+const drawMissionTaskPoints = async (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+  // 只有当前任务存在且状态为running时，才绘制任务点
+  if (!websocketDataStore.currentTourRun || websocketDataStore.currentTourRun.status !== 'running') {
+    return
+  }
+  
+  // 获取任务点数据
+  const taskPoints = websocketDataStore.tourRunPoints
+  if (!taskPoints || taskPoints.length === 0 || !currentMapOriginInfo) {
+    return
+  }
+
+  // 获取当前缩放比例
+  const currentScale = canvas.clientWidth / canvas.width
+  
+  // 固定视觉大小（像素）
+  const visualSize = 8 // 任务点比机器人图标小一些
+  const pointSize = visualSize / currentScale // 根据缩放调整实际绘制大小
+
+  ctx.save()
+  
+  // 启用抗锯齿
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
+  taskPoints.forEach((point, index) => {
+    // 检查点位是否有有效的坐标
+    if (typeof point.x !== 'number' || typeof point.y !== 'number') {
+      return
+    }
+
+    // 转换世界坐标到像素坐标
+    const pixelPos = worldToPixel(
+      point.x,
+      point.y,
+      currentMapOriginInfo!,
+      canvas.width,
+      canvas.height
+    )
+
+    // 检查是否在画布范围内
+    if (pixelPos.x < 0 || pixelPos.x >= canvas.width || pixelPos.y < 0 || pixelPos.y >= canvas.height) {
+      return
+    }
+
+    // 根据任务点状态选择颜色
+    let fillColor = '#4CAF50' // 绿色 - 待执行
+    let strokeColor = '#FFFFFF'
+    
+    if (point.status === 'done') {
+      fillColor = '#2196F3' // 蓝色 - 已完成
+    } else if (point.status === 'arriving') {
+      fillColor = '#FF9800' // 橙色 - 正在执行
+    }
+
+    // 绘制任务点（带阴影效果）
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
+    ctx.shadowBlur = 2 / currentScale
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 1 / currentScale
+
+    ctx.fillStyle = fillColor
+    ctx.strokeStyle = strokeColor
+    ctx.lineWidth = Math.max(0.5, 1 / currentScale)
+
+    ctx.beginPath()
+    ctx.arc(pixelPos.x, pixelPos.y, pointSize * 0.5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+
+    // 清除阴影设置
+    ctx.shadowColor = 'transparent'
+  })
+
+  ctx.restore()
+}
+
+// 监听机器人位置变化，实时更新显示（编辑模式下暂停更新以避免干扰编辑）
+watch(() => getRobotPose(getWebSocketSn()), (newPose) => {
+  if (newPose && missionGridImageData && currentMapOriginInfo && !isEditMode.value) {
+    // 当机器人位置更新时，重新绘制（仅在非编辑模式下）
+    drawMissionRobotPosition()
+  }
+}, { immediate: false, deep: true })
+
+// 监听任务状态变化，实时更新任务点显示
+watch(() => websocketDataStore.currentTourRun, (newTourRun) => {
+  if (missionGridImageData && currentMapOriginInfo && !isEditMode.value) {
+    // 当任务状态更新时，重新绘制（仅在非编辑模式下）
+    drawMissionRobotPosition()
+  }
+}, { deep: true })
+
+// Mission页面机器人位置更新定时器
+let missionRobotPositionUpdateTimer: number | null = null
+
+const startMissionRobotPositionUpdate = () => {
+  if (missionRobotPositionUpdateTimer) {
+    clearInterval(missionRobotPositionUpdateTimer)
+  }
+  
+  missionRobotPositionUpdateTimer = setInterval(() => {
+    if (missionGridImageData && currentMapOriginInfo) {
+      drawMissionRobotPosition()
+    }
+  }, 500) // 每500ms更新一次
+}
+
+const stopMissionRobotPositionUpdate = () => {
+  if (missionRobotPositionUpdateTimer) {
+    clearInterval(missionRobotPositionUpdateTimer)
+    missionRobotPositionUpdateTimer = null
   }
 }
 
@@ -2395,11 +2814,26 @@ onMounted(() => {
   // 初次渲染
   // 等 DOM 就绪后加载
   setTimeout(() => loadAndRenderHallPGM(), 0)
+  
+  // 启动机器人位置更新
+  startMissionRobotPositionUpdate()
 })
 
 // 页面激活时重新渲染栅格图（用于处理页面切换后的空白问题）
-onActivated(() => {
+onActivated(async () => {
   console.log('Mission page activated, reloading hall grid...')
+  
+  // 页面激活时刷新任务状态
+  const token = userStore.token || localStorage.getItem('token') || ''
+  if (token) {
+    try {
+      await websocketDataStore.fetchTourRuns(token)
+      console.log('✅ Mission页面激活时刷新任务状态成功')
+    } catch (error) {
+      console.warn('❌ Mission页面激活时刷新任务状态失败:', error)
+    }
+  }
+  
   // 延迟一点时间确保 DOM 完全渲染
   setTimeout(() => {
     loadAndRenderHallPGM()
@@ -2408,8 +2842,13 @@ onActivated(() => {
 
 // 组件卸载时清理事件监听器
 onUnmounted(() => {
-  // 清理展厅同步事件监听器
-  window.removeEventListener('storage', handleStorageChange)
+  isMissionUnmountedFlag = true
+  if (missionPgmRetryTimer) {
+    clearTimeout(missionPgmRetryTimer)
+    missionPgmRetryTimer = null
+  }
+  // 停止机器人位置更新
+  stopMissionRobotPositionUpdate()
   
   // 清理栅格图相关资源
   if (hallGridCleanup) {
@@ -2487,8 +2926,14 @@ watch(activeTool, () => {
   setupCanvasEditEvents()
 })
 
-watch(isEditMode, () => {
+watch(isEditMode, (newValue, oldValue) => {
   setupCanvasEditEvents()
+  // 当退出编辑模式时，重新绘制机器人位置
+  if (oldValue && !newValue) {
+    setTimeout(() => {
+      drawMissionRobotPosition()
+    }, 0)
+  }
 })
 
 watch(navMode, () => {
@@ -2608,7 +3053,7 @@ const handleDeleteArea = async () => {
 }
 
 // 新增任务点
-const handleAddTaskPoint = () => {
+const handleAddTaskPoint = async () => {
   if (!selectedAreaId.value) return
   
   // 获取当前机器人的位置数据
@@ -2633,6 +3078,14 @@ const handleAddTaskPoint = () => {
     rawPose: robotPose 
   })
   
+  // 获取机器人动作列表（如果还没有获取过）
+  if (robotActions.value.length === 0) {
+    await fetchRobotActions()
+  }
+  
+  // 选择默认动作
+  const defaultAction = robotActions.value.find(action => action.recommended)
+  
   editingTaskPoint.value = null
   addTaskPointForm.value = { 
     name: '',
@@ -2641,7 +3094,7 @@ const handleAddTaskPoint = () => {
     y: defaultY, 
     angle: defaultAngle, 
     pointType: '讲解点', 
-    robotAction: '抬左手',
+    robotAction: defaultAction?.code || '',
     robotDirection: '前进'
   }
   showAddTaskPointDialog.value = true
@@ -4503,6 +4956,18 @@ const showErrorMessage = (message: string) => {
 .add-user-form .custom-select-arrow svg {
   width: 12px;
   height: 12px;
+}
+
+/* 机器人动作选择器特殊样式 */
+.add-user-form .robot-action-select {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* 为机器人动作选择器的下拉选项设置样式 */
+.add-user-form .robot-action-select option {
+  padding: 8px 12px;
+  line-height: 1.4;
 }
 
 /* 讲解对象选择弹窗的特殊样式 */

@@ -36,7 +36,8 @@ const roleNames = computed(() => {
 
 // 计算默认角色显示
 const defaultRole = computed(() => {
-  if (props.user.is_superuser === '1') {
+  const isSuperuser = props.user.is_superuser as any
+  if (isSuperuser === true || isSuperuser === 1 || isSuperuser === '1') {
     return '超级管理员'
   }
   return '普通用户'

@@ -7,6 +7,7 @@ import type {
   RobotPose,
   CmdStatus,
   CurrentMap,
+  RobotSpeed,
   TourEvent,
   WebSocketConfig
 } from '@/types/websocket'
@@ -33,14 +34,14 @@ export function parseChannel(channel: string): ParsedChannel {
     
     const [, sn, dataType] = parts
     
-    if (!['pose', 'cmd_status', 'current_map'].includes(dataType)) {
+    if (!['pose', 'cmd_status', 'current_map', 'speed'].includes(dataType)) {
       return { type: 'robot', sn, isValid: false }
     }
     
     return {
       type: 'robot',
       sn,
-      dataType: dataType as 'pose' | 'cmd_status' | 'current_map',
+      dataType: dataType as 'pose' | 'cmd_status' | 'current_map' | 'speed',
       isValid: true
     }
   }
@@ -147,13 +148,48 @@ export function validateCurrentMap(data: any): data is CurrentMap {
 }
 
 /**
+ * 验证机器人速度数据
+ */
+export function validateRobotSpeed(data: any): data is RobotSpeed {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    typeof data.ts === 'number' &&
+    (
+      // 新格式：v, w
+      (typeof data.v === 'number' && typeof data.w === 'number') ||
+      // 向后兼容：linear_x, linear_y, angular_z
+      (typeof data.linear_x === 'number' && 
+       typeof data.linear_y === 'number' && 
+       typeof data.angular_z === 'number')
+    )
+  )
+}
+
+/**
  * 验证任务事件数据
  */
 export function validateTourEvent(data: any): data is TourEvent {
-  if (typeof data !== 'object' || data === null || typeof data.event !== 'string') {
+  console.log('🔍 验证tour事件数据:', data)
+  
+  if (typeof data !== 'object' || data === null) {
+    console.warn('⚠️ tour数据不是对象或为null:', data)
     return false
   }
   
+  if (typeof data.event !== 'string') {
+    console.warn('⚠️ tour数据缺少event字段或event不是字符串:', data)
+    return false
+  }
+  
+  // 临时显示所有tour事件，不过滤任何类型
+  console.log('✅ 收到有效tour事件:', data.event, data)
+  
+  // 基本验证：确保有event字段即可
+  return true
+  
+  // 原来的严格验证逻辑（暂时注释）
+  /*
   switch (data.event) {
     case 'started':
       return (
@@ -177,6 +213,7 @@ export function validateTourEvent(data: any): data is TourEvent {
     default:
       return false
   }
+  */
 }
 
 /**
@@ -235,6 +272,8 @@ export function validateChannelData(channel: string, data: any): boolean {
         return validateCmdStatus(data)
       case 'current_map':
         return validateCurrentMap(data)
+      case 'speed':
+        return validateRobotSpeed(data)
       default:
         return false
     }
@@ -262,15 +301,15 @@ export function buildWebSocketUrl(config: WebSocketConfig): string {
   
   const url = new URL('/ws', baseUrl)
   
+  // 始终设置 sn 和 kinds
+  url.searchParams.set('sn', sn)
+  if (kinds.length > 0) {
+    url.searchParams.set('kinds', kinds.join(','))
+  }
+  
+  // 如果有自定义频道，也添加channels参数
   if (channels && channels.length > 0) {
-    // 使用自定义频道
     url.searchParams.set('channels', channels.join(','))
-  } else {
-    // 使用 sn 和 kinds
-    url.searchParams.set('sn', sn)
-    if (kinds.length > 0) {
-      url.searchParams.set('kinds', kinds.join(','))
-    }
   }
   
   return url.toString()

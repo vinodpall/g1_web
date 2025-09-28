@@ -821,6 +821,40 @@ export const zoneApi = {
 
 // 展厅任务管理相关接口
 export const tourApi = {
+  // 获取展厅任务运行列表
+  getTourRuns: (token: string) => {
+    const url = `${API_BASE_URL}/tours/runs`
+    
+    console.log('tourApi.getTourRuns 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('任务运行列表API响应状态:', response.status)
+      console.log('任务运行列表API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('任务运行列表API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('任务运行列表API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('任务运行列表API请求失败:', error)
+      throw error
+    })
+  },
+
   // 获取展厅任务预设列表
   getTourPresets: (token: string) => {
     const url = `${API_BASE_URL}/tours/presets`
@@ -1055,11 +1089,18 @@ export const navigationApi = {
   },
 
   // 生成地图接口
-  generateMap: (token: string, mapData: { sn: string, map_name: string, action: number, data_name: string }) => {
+  generateMap: (token: string, mapData: { sn: string, map_name: string, action: number, data_name: string, timeout?: number }) => {
     const originalUrl = `${API_BASE_URL}/navigation/slam`
     
+    // 构建URL并添加timeout参数
+    const fullUrl = new URL(buildApiUrl('/navigation/slam'))
+    
+    // 添加timeout参数到URL，默认值为10
+    const timeoutValue = mapData.timeout || 10
+    fullUrl.searchParams.append('timeout', timeoutValue.toString())
+    
     // 处理SN参数从body移到URL
-    const { url, data } = processSnParams(originalUrl, mapData)
+    const { url, data } = processSnParams(fullUrl.toString(), mapData)
     
     console.log('navigationApi.generateMap 被调用')
     console.log('原始URL:', originalUrl)
@@ -1096,20 +1137,18 @@ export const navigationApi = {
   },
 
   // 获取数据包列表接口
-  getDataPackages: (token: string) => {
+  getDataPackages: (token: string, params: { sn: string, timeout?: number }) => {
     const baseUrl = buildApiUrl('/navigation/data/list')
     const url = new URL(baseUrl)
     
-    // 从缓存获取sn并添加到URL
-    const cachedSn = getCachedSn()
-    if (cachedSn) {
-      url.searchParams.append('sn', cachedSn)
-    }
+    // 添加参数到URL
+    url.searchParams.append('sn', params.sn)
+    url.searchParams.append('timeout', (params.timeout || 10).toString())
     
     console.log('navigationApi.getDataPackages 被调用')
     console.log('请求URL:', url.toString())
     console.log('请求token:', token ? '存在' : '不存在')
-    console.log('使用的SN:', cachedSn || '无')
+    console.log('获取数据包参数:', params)
     
     return fetch(url.toString(), {
       method: 'GET',
@@ -1133,6 +1172,51 @@ export const navigationApi = {
       return data
     }).catch(error => {
       console.error('获取数据包列表API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 地图下载接口
+  downloadMap: (token: string, params: { sn: string, map_name: string, file: string, timeout?: number }) => {
+    const baseUrl = buildApiUrl('/navigation/maps/download')
+    const url = new URL(baseUrl)
+    
+    // 添加参数到URL
+    url.searchParams.append('sn', params.sn)
+    url.searchParams.append('map_name', params.map_name)
+    url.searchParams.append('file', params.file)
+    url.searchParams.append('timeout', (params.timeout || 10).toString())
+    
+    console.log('navigationApi.downloadMap 被调用')
+    console.log('请求URL:', url.toString())
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('下载地图参数:', params)
+    
+    return fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }).then(response => {
+      console.log('下载地图API响应状态:', response.status)
+      console.log('下载地图API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('下载地图API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }).catch(() => {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      
+      // 返回 ArrayBuffer 用于处理二进制文件
+      return response.arrayBuffer()
+    }).then(buffer => {
+      console.log('地图文件下载成功，大小:', buffer.byteLength, 'bytes')
+      return buffer
+    }).catch(error => {
+      console.error('下载地图API请求失败:', error)
       throw error
     })
   },
@@ -1174,6 +1258,46 @@ export const navigationApi = {
       return data
     }).catch(error => {
       console.error('删除地图API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 展厅同步接口
+  syncFromNav: (token: string, params: { sn: string, timeout?: number }) => {
+    const baseUrl = buildApiUrl('/halls/sync-from-nav')
+    const url = new URL(baseUrl)
+    
+    // 添加参数到URL
+    url.searchParams.append('sn', params.sn)
+    url.searchParams.append('timeout', (params.timeout || 10).toString())
+    
+    console.log('navigationApi.syncFromNav 被调用')
+    console.log('请求URL:', url.toString())
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('同步参数:', params)
+    
+    return fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('展厅同步API响应状态:', response.status)
+      console.log('展厅同步API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('展厅同步API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('展厅同步API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('展厅同步API请求失败:', error)
       throw error
     })
   },
@@ -1404,4 +1528,156 @@ export const pointApi = {
   }
 }
 
+// Tours API
+export async function getTourRunDetails(token: string, runId: number): Promise<any> {
+  const url = buildApiUrl(`/tours/runs/${runId}`)
+  
+  console.log('getTourRunDetails 被调用')
+  console.log('请求URL:', url)
+  console.log('请求token:', token ? '存在' : '不存在')
+  
+  return fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  }).then(response => {
+    console.log(`获取任务详情 API 响应状态 [${runId}]:`, response.status)
+    console.log(`获取任务详情 API 响应OK [${runId}]:`, response.ok)
+    
+    if (!response.ok) {
+      return response.json().then(errorData => {
+        console.error(`获取任务详情 API 错误响应 [${runId}]:`, errorData)
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+      }).catch(parseError => {
+        // 如果响应不是JSON格式，使用状态码作为错误信息
+        console.error(`获取任务详情 API 解析错误 [${runId}]:`, parseError)
+        throw new Error(`HTTP error! status: ${response.status}`)
+      })
+    }
+    
+    return response.json()
+  }).then(data => {
+    console.log(`获取任务详情 API 响应数据 [${runId}]:`, data)
+    return data
+  }).catch(error => {
+    console.error(`获取任务详情 API 请求失败 [${runId}]:`, error)
+    throw error
+  })
+}
+
+export async function getTourRunPoints(token: string, runId: number): Promise<any> {
+  const url = buildApiUrl(`/tours/runs/${runId}/points`)
+  
+  console.log('getTourRunPoints 被调用')
+  console.log('请求URL:', url)
+  console.log('请求token:', token ? '存在' : '不存在')
+  
+  return fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  }).then(response => {
+    console.log(`获取任务运行点位 API 响应状态 [${runId}]:`, response.status)
+    console.log(`获取任务运行点位 API 响应OK [${runId}]:`, response.ok)
+    
+    if (!response.ok) {
+      return response.json().then(errorData => {
+        console.error(`获取任务运行点位 API 错误响应 [${runId}]:`, errorData)
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+      }).catch(parseError => {
+        // 如果响应不是JSON格式，使用状态码作为错误信息
+        console.error(`解析错误响应失败 [${runId}]:`, parseError)
+        throw new Error(`HTTP error! status: ${response.status}`)
+      })
+    }
+    return response.json()
+  }).then(data => {
+    console.log(`获取任务运行点位 API 响应数据 [${runId}]:`, data)
+    return data
+  }).catch(error => {
+    console.error(`获取任务运行点位 API 请求失败 [${runId}]:`, error)
+    throw error
+  })
+}
+
+export async function stopTourRun(token: string, runId: number): Promise<any> {
+  const url = buildApiUrl(`/tours/runs/${runId}/stop`)
+  
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  }).then(response => {
+    console.log(`停止任务运行 API 响应状态 [${runId}]:`, response.status)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    return response.json()
+  }).then(data => {
+    console.log(`停止任务运行 API 响应数据 [${runId}]:`, data)
+    return data
+  }).catch(error => {
+    console.error(`停止任务运行 API 请求失败 [${runId}]:`, error)
+    throw error
+  })
+}
+
+// 获取机器人动作列表
+export async function getRobotActions(token: string): Promise<any> {
+  const url = buildApiUrl('/actions/arm')
+  
+  console.log('getRobotActions 被调用')
+  console.log('请求URL:', url)
+  console.log('请求token:', token ? '存在' : '不存在')
+  
+  return fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  }).then(response => {
+    console.log('获取机器人动作列表 API 响应状态:', response.status)
+    console.log('获取机器人动作列表 API 响应OK:', response.ok)
+    
+    if (!response.ok) {
+      return response.json().then(errorData => {
+        console.error('获取机器人动作列表 API 错误响应:', errorData)
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+      }).catch(parseError => {
+        // 如果响应不是JSON格式，使用状态码作为错误信息
+        console.error('解析错误响应失败:', parseError)
+        throw new Error(`HTTP error! status: ${response.status}`)
+      })
+    }
+    return response.json()
+  }).then(data => {
+    console.log('获取机器人动作列表 API 响应数据:', data)
+    return data
+  }).catch(error => {
+    console.error('获取机器人动作列表 API 请求失败:', error)
+    throw error
+  })
+}
+
 // 其他API接口已移除，等待重新对接
+
+// 兼容性占位：旧版 API 名称，避免构建期引用错误
+// 这些仅为占位，返回 rejected Promise 或简单的 no-op，以便逐步替换为新接口
+export const dockApi = undefined as unknown as Record<string, any>
+export const droneApi = undefined as unknown as Record<string, any>
+export const missionApi = undefined as unknown as Record<string, any>
+export const missionRecordApi = undefined as unknown as Record<string, any>
+export const alertApi = undefined as unknown as Record<string, any>
+export const roleApi = undefined as unknown as Record<string, any>
+export const deviceApi = undefined as unknown as Record<string, any>
+export const controlApi = undefined as unknown as Record<string, any>
+export const drcApi = undefined as unknown as Record<string, any>
+export const waylineApi = undefined as unknown as Record<string, any>
+export const livestreamApi = undefined as unknown as Record<string, any>

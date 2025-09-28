@@ -7,6 +7,6 @@ module.exports = {
   VITE_APP_ENVIRONMENT: 'internet',
   
   // 其他环境变量
-  VITE_APP_TITLE: 'DJI控制平台',
+  VITE_APP_TITLE: 'G1控制平台',
   VITE_APP_VERSION: '1.0.0'
 } 

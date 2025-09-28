@@ -84,7 +84,7 @@ const showPermissionDenied = ref(false)
 const requiredPermission = ref('')
 const closePermissionDenied = () => { showPermissionDenied.value = false }
 const contactAdmin = () => console.log('contactAdmin - 等待重新对接')
-const checkPermission = () => true // 临时返回true
+const checkPermission = (_permission?: string | string[], _desc?: string) => true // 临时返回true，兼容旧签名
 
 // 计算属性
 const showTaskCompletionDialog = computed(() => {

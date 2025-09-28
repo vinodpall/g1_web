@@ -49,6 +49,11 @@ export class SimpleWebSocketClient {
     try {
       const wsUrl = buildWebSocketUrl(this.config)
       console.log(`🚀 连接WebSocket: ${wsUrl}`)
+      console.log(`📋 WebSocket配置:`, {
+        sn: this.config.sn,
+        kinds: this.config.kinds,
+        channels: this.config.channels
+      })
       
       this.ws = new WebSocket(wsUrl)
       this.setupEventHandlers()
@@ -111,10 +116,13 @@ export class SimpleWebSocketClient {
         const parsedMessage = parseWebSocketMessage(rawMessage)
         
         if (parsedMessage) {
-          // console.log('✅ 解析成功:', parsedMessage.channel)
+          // 只对 tour 相关消息显示详细日志
+          if (parsedMessage.channel.includes('tours:')) {
+            console.log('✅ 收到 tours 消息:', parsedMessage.channel, parsedMessage.data)
+          }
           this.handleMessage(parsedMessage)
         } else {
-          console.warn('⚠️ WebSocket 消息解析失败:', rawMessage)
+          // console.warn('⚠️ WebSocket 消息解析失败，尝试旧格式处理:', rawMessage)
           // 尝试处理旧格式消息
           this.handleLegacyMessage(rawMessage)
         }
@@ -165,9 +173,44 @@ export class SimpleWebSocketClient {
   // 处理旧格式消息（向后兼容）
   private handleLegacyMessage(message: any): void {
     // 收到旧格式WebSocket消息
+    console.log('🔄 处理旧格式WebSocket消息:', message)
     
     this.dataCount.value++
     this.lastUpdateTime.value = new Date()
+
+    // 特殊处理：如果消息有 event 字段，可能是 tour 事件
+    if (message.event && ['started', 'finished', 'point'].includes(message.event)) {
+      console.log('🎯 检测到 tour 事件，转换为新格式处理:', message)
+      
+      // 根据消息内容构造 channel
+      let channel = ''
+      if (message.run_id) {
+        channel = `tours:run:${message.run_id}`
+      } else if (message.robot_sn) {
+        channel = `tours:robot:${message.robot_sn}`
+      } else {
+        console.warn('⚠️ 无法确定 tour 事件的 channel:', message)
+        return
+      }
+      
+      // 构造新格式消息并处理
+      const formattedMessage = {
+        channel: channel as any, // 临时类型断言，因为我们构造的是合法的 tour channel
+        data: message,
+        timestamp: Date.now()
+      }
+      
+      this.lastMessage.value = formattedMessage
+      // 直接调用消息处理器
+      this.messageHandlers.forEach(handler => {
+        try {
+          handler(formattedMessage)
+        } catch (error) {
+          console.error('❌ tour 事件处理器执行失败:', error)
+        }
+      })
+      return
+    }
 
     // 根据消息类型进行处理
     switch (message.type) {
@@ -188,7 +231,7 @@ export class SimpleWebSocketClient {
         // 服务端错误
         break
       default:
-        // 未知消息类型
+        console.log('🤷 未知消息类型:', message)
     }
   }
 
@@ -257,6 +300,11 @@ export class SimpleWebSocketClient {
 
   // 更新配置
   updateConfig(config: Partial<WebSocketConfig>): void {
+    console.log('🔧 更新WebSocket配置:', {
+      旧配置: this.config,
+      新配置: config,
+      合并后: { ...this.config, ...config }
+    })
     this.config = { ...this.config, ...config }
   }
 

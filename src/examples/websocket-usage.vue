@@ -127,7 +127,7 @@
               v-for="(event, index) in getTourRunEvents(parseInt(runId)).slice(-5)" 
               :key="index"
               class="event-item"
-              :class="[`event-${event.event}`, `status-${event.status || ''}`]"
+              :class="[`event-${event.event}`, `status-${(event as any).status || ''}`]"
             >
               <div class="event-type">{{ getEventTypeText(event.event) }}</div>
               <div v-if="event.event === 'point'" class="event-details">

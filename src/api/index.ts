@@ -1,16 +1,18 @@
-import { authApi, userApi, dockApi, droneApi, missionApi, missionRecordApi, alertApi, roleApi, deviceApi, controlApi, drcApi } from './services'
+import { authApi, userApi, robotApi, guideApi, hallApi, zoneApi, tourApi, navigationApi, pointApi, getTourRunDetails, getTourRunPoints, stopTourRun, getRobotActions } from './services'
 
 // 导出所有API服务
 export {
   authApi,
   userApi,
-  dockApi,
-  droneApi,
-  missionApi,
-  missionRecordApi,
-  alertApi,
-  roleApi,
-  deviceApi,
-  controlApi,
-  drcApi
+  robotApi,
+  guideApi,
+  hallApi,
+  zoneApi,
+  tourApi,
+  navigationApi,
+  pointApi,
+  getTourRunDetails,
+  getTourRunPoints,
+  stopTourRun,
+  getRobotActions
 }

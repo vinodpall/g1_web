@@ -39,7 +39,7 @@
                 <div class="mission-td">{{ idx + 1 }}</div>
                 <div class="mission-td">{{ role.role_name }}</div>
                 <div class="mission-td">{{ role.role_description || '-' }}</div>
-                <div class="mission-td">{{ formatTime(role.created_time) }}</div>
+                <div class="mission-td">{{ role.created_time ? formatTime(role.created_time) : '-' }}</div>
                 <div class="mission-td">
                   <div class="role-action-btns">
                     <button class="icon-btn" title="查看" @click="onClickOpenPermission(role)"><img :src="permissionIcon" /></button>
@@ -206,15 +206,23 @@ import PermissionDenied from '../components/PermissionDenied.vue'
 const router = useRouter()
 const route = useRoute()
 
-// 使用角色管理API
-const { roles, loading, error, fetchRoles, createRole, updateRole, deleteRole } = useRoles()
+// 使用角色管理API - 占位实现
+const roles = ref<{ id: number; role_name: string; role_description?: string; created_time?: string }[]>([])
+const loading = ref(false)
+const error = ref(null)
+const fetchRoles = async (_params?: { skip?: number; limit?: number; search?: string }) => {}
+const createRole = async (_roleData: any) => {}
+const updateRole = async (_id: number, _roleData: any) => {}
+const deleteRole = async (_id: number) => {}
 
 // 导入roleApi
 import { roleApi } from '../api/services'
 // 移除按钮上的权限包装，改为点击时校验
 
-// 使用权限API
-const { fetchAllPermissions } = usePermissions()
+// 使用权限API - 占位实现
+const fetchAllPermissions = async (): Promise<any[]> => {
+  return []
+}
 
 // 使用权限Store
 const permissionStore = usePermissionStore()

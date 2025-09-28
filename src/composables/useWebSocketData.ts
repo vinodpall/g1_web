@@ -123,7 +123,8 @@ export function useWebSocketData(
       const channels = [
         `robot:${sn}:pose`,
         `robot:${sn}:cmd_status`,
-        `robot:${sn}:current_map`
+        `robot:${sn}:current_map`,
+        `robot:${sn}:speed`
       ]
       return dataStore.subscribe(channels, handler)
     },
@@ -164,6 +165,7 @@ export function useWebSocketDataOnly() {
     getRobotPose: dataStore.getRobotPose,
     getRobotCmdStatus: dataStore.getRobotCmdStatus,
     getRobotCurrentMap: dataStore.getRobotCurrentMap,
+    getRobotSpeed: dataStore.getRobotSpeed,
     getRobotSlamProgress: dataStore.getRobotSlamProgress,
     getRobotSlamAutoStatus: dataStore.getRobotSlamAutoStatus,
     getTourRunEvents: dataStore.getTourRunEvents,

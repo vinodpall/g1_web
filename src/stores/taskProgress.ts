@@ -28,8 +28,8 @@ export const useTaskProgressStore = defineStore('taskProgress', () => {
   // const { fetchWaylineProgress, fetchWaylineJobDetail } = useWaylineJobs()
   const getCachedDeviceSns = () => ({ dockSns: [], droneSns: [] })
   const getCachedWorkspaceId = () => localStorage.getItem('workspace_id')
-  const fetchWaylineProgress = () => Promise.resolve(null)
-  const fetchWaylineJobDetail = () => Promise.resolve(null)
+  const fetchWaylineProgress = (_workspaceId?: string | number, _dockSn?: string) => Promise.resolve(null as any)
+  const fetchWaylineJobDetail = (_workspaceId?: string | number, _jobId?: string | number) => Promise.resolve(null as any)
   
   // 计算任务状态
   const taskStatus = computed(() => {

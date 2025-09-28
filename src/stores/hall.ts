@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { hallApi } from '@/api/services'
 import { useUserStore } from './user'
@@ -10,6 +10,10 @@ export const useHallStore = defineStore('hall', () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const isLoaded = ref(false) // 标记是否已加载过数据
+  
+  // 全局展厅选择状态
+  const selectedHallId = ref<string>('')
+  const HALL_CACHE_KEY = 'selected_hall_cache'
 
   // 计算属性
   const enabledHalls = computed(() => 
@@ -72,20 +76,97 @@ export const useHallStore = defineStore('hall', () => {
     return halls.value.find(hall => hall.nav_name === navName)
   }
 
+  // 全局展厅选择管理方法
+  const saveHallToCache = (hallId: string) => {
+    try {
+      localStorage.setItem(HALL_CACHE_KEY, hallId)
+      console.log('展厅已保存到缓存:', hallId)
+    } catch (error) {
+      console.warn('保存展厅到缓存失败:', error)
+    }
+  }
+
+  const getHallFromCache = (): string => {
+    try {
+      const cached = localStorage.getItem(HALL_CACHE_KEY)
+      // 验证缓存的展厅ID是否有效
+      if (cached && halls.value.some(h => h.id.toString() === cached)) {
+        return cached
+      }
+    } catch (error) {
+      console.warn('从缓存获取展厅失败:', error)
+    }
+    // 默认返回第一个展厅的ID，如果没有展厅则返回空字符串
+    return halls.value.length > 0 ? halls.value[0].id.toString() : ''
+  }
+
+  // 初始化展厅选择
+  const initSelectedHall = () => {
+    if (!selectedHallId.value) {
+      selectedHallId.value = getHallFromCache()
+      console.log('初始化展厅选择:', selectedHallId.value)
+    }
+  }
+
+  // 设置选中的展厅
+  const setSelectedHall = (hallId: string) => {
+    if (hallId !== selectedHallId.value) {
+      selectedHallId.value = hallId
+      saveHallToCache(hallId)
+      console.log('展厅选择已更新:', hallId)
+      
+      // 触发storage事件，实现跨页面同步
+      try {
+        const event = new StorageEvent('storage', {
+          key: HALL_CACHE_KEY,
+          newValue: hallId,
+          oldValue: localStorage.getItem(HALL_CACHE_KEY),
+          url: window.location.href
+        })
+        window.dispatchEvent(event)
+      } catch (error) {
+        console.warn('触发storage事件失败:', error)
+      }
+    }
+  }
+
+  // 监听展厅数据变化，自动初始化选择
+  watch(halls, (newHalls) => {
+    if (newHalls.length > 0 && !selectedHallId.value) {
+      initSelectedHall()
+    }
+  }, { immediate: true })
+
+  // 计算属性：当前选中的展厅
+  const currentHall = computed(() => {
+    return halls.value.find(hall => hall.id.toString() === selectedHallId.value)
+  })
+
+  // 计算属性：当前展厅名称
+  const currentHallName = computed(() => {
+    return currentHall.value ? currentHall.value.nav_name : ''
+  })
+
   return {
     // 状态
     halls,
     isLoading,
     error,
     isLoaded,
+    selectedHallId,
     
     // 计算属性
     enabledHalls,
+    currentHall,
+    currentHallName,
     
     // 方法
     fetchHalls,
     clearCache,
     getHallById,
-    getHallByNavName
+    getHallByNavName,
+    setSelectedHall,
+    initSelectedHall,
+    getHallFromCache
   }
 })

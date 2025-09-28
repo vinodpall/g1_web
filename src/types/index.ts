@@ -37,6 +37,49 @@ export interface Robot {
   last_seen_at: string | null
 }
 
+export interface TourRun {
+  id: number
+  preset_id: number
+  hall_id: number
+  audience_id: number
+  robot_sn: string
+  map_name: string
+  status: 'running' | 'completed' | 'failed' | 'canceled' | 'paused' | 'pending'
+  error: string | null
+  created_at: string
+  started_at: string | null
+  ended_at: string | null
+}
+
+export interface TourPresetItem {
+  id: number
+  preset_id: number
+  seq: number
+  zone_id: number
+  zone_name: string
+  zone_enabled: boolean
+  hall_id: number
+  hall_alias: string
+  hall_nav_name: string
+  points: TourPresetPoint[]
+  points_count: number
+  enabled_points_count: number
+}
+
+export interface TourPresetPoint {
+  id: number
+  type: 'explain' | 'action'
+  custom_name: string | null
+  is_enabled: boolean
+  point_name_id: number
+  pose_x: number
+  pose_y: number
+  pose_theta: number
+  zone_name?: string
+  hall_alias?: string
+  hall_nav_name?: string
+}
+
 export interface Dock {
   id: string
   name: string
@@ -294,17 +337,7 @@ export interface Point {
   action_params: string | null
 }
 
-// 任务预设详情中的任务点信息
-export interface TourPresetPoint {
-  id: number
-  type: 'explain' | 'action'
-  custom_name: string | null
-  is_enabled: boolean
-  point_name_id: number
-  pose_x: number
-  pose_y: number
-  pose_theta: number
-}
+// 任务预设详情中的任务点信息（已在上方定义）
 
 // 任务预设详情项
 export interface TourPresetItem {

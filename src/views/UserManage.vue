@@ -446,6 +446,17 @@ const users = computed(() => userManagementStore.users || [])
 const loading = computed(() => userManagementStore.loading)
 const error = computed(() => userManagementStore.error)
 
+// 缺失的用户操作函数 - 占位实现
+const updateUser = async (_userId: string, _userData: any) => {
+  console.log('updateUser - 等待重新对接')
+}
+const fetchUsers = async (_params: { skip: number; limit: number }) => {
+  console.log('fetchUsers - 等待重新对接')
+}
+const deleteUser = async (_userId: string) => {
+  console.log('deleteUser - 等待重新对接')
+}
+
 const sidebarTabs = [
   { key: 'user', label: '用户管理', icon: userIcon, path: '/dashboard/users' },
   { key: 'introduce', label: '讲解词管理', icon: introduceIcon, path: '/dashboard/introduce' }
@@ -1142,7 +1153,7 @@ const handlePointManage = async () => {
   showPointManageDialog.value = true
   
   // 如果数据还未加载（比如登录时加载失败），尝试重新加载
-  if (!guideStore.isLoaded) {
+  if (!guideStore.isPointNamesLoaded) {
     try {
       await guideStore.fetchPointNames()
     } catch (error) {
