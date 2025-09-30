@@ -1346,6 +1346,52 @@ export const navigationApi = {
       console.error('导航开关API请求失败:', error)
       throw error
     })
+  },
+
+  // 暂停/恢复导航接口
+  pauseResumeNav: (token: string, navData: { sn: string, action: number, timeout?: number }) => {
+    const baseUrl = buildApiUrl('/navigation/nav/pause')
+    const url = new URL(baseUrl)
+    
+    // 添加timeout参数到URL，默认值为10
+    const timeoutValue = navData.timeout || 10
+    url.searchParams.append('timeout', timeoutValue.toString())
+    
+    // 处理SN参数从body移到URL
+    const { url: finalUrl, data } = processSnParams(url.toString(), navData)
+    
+    console.log('navigationApi.pauseResumeNav 被调用')
+    console.log('原始URL:', baseUrl)
+    console.log('修改后URL:', finalUrl)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('导航暂停/恢复数据:', navData)
+    console.log('修改后数据:', data)
+    
+    return fetch(finalUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    }).then(response => {
+      console.log('暂停/恢复导航API响应状态:', response.status)
+      console.log('暂停/恢复导航API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('暂停/恢复导航API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('暂停/恢复导航API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('暂停/恢复导航API请求失败:', error)
+      throw error
+    })
   }
 }
 

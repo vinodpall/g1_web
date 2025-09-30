@@ -99,11 +99,11 @@
                   <span class="progress-label">任务执行进度: {{ taskProgress }}%</span>
                   <button 
                     class="pause-resume-btn" 
-                    :class="{ 'disabled': !navEnabled }" 
-                    :disabled="!navEnabled"
+                    :class="{ 'disabled': !navEnabled || !isTaskExecuting }" 
+                    :disabled="!navEnabled || !isTaskExecuting"
                     @click="toggleTaskExecution"
                   >
-                    {{ isTaskExecuting ? '暂停任务' : '暂停' }}
+                    {{ isTaskPaused ? '恢复' : '暂停' }}
                   </button>
                 </div>
                 <div class="progress-bar-container">
@@ -139,7 +139,7 @@
             <div class="mini-card">
               <img class="mini-card-icon" src="@/assets/source_data/robot_source/position.svg" alt="pos" />
               <div class="mini-card-content">
-                <div class="mini-card-title" :class="{ 'status-error': !localizationStatus }">{{ localizationStatusText }}</div>
+                <div class="mini-card-title" :class="{ 'status-normal': localizationStatus, 'status-error': !localizationStatus }">{{ localizationStatusText }}</div>
                 <div class="mini-card-sub">机器人定位状态</div>
               </div>
             </div>
@@ -174,7 +174,7 @@
             <div class="mini-card">
               <img class="mini-card-icon" src="@/assets/source_data/robot_source/area.svg" alt="area" />
               <div class="mini-card-content">
-                <div class="mini-card-title">A展区</div>
+                <div class="mini-card-title">{{ currentTaskZone }}</div>
                 <div class="mini-card-sub">当前任务展区</div>
               </div>
             </div>
@@ -1309,19 +1309,52 @@ const {
 
 
 // 电量百分比：优先 cmd_status.battery_soc，回退 droneStatus.batteryPercent
-const uiBatteryPercent = computed(() => {
+// 使用本地存储保存电量值，默认为0
+const BATTERY_STORAGE_KEY = 'robot_battery_percent'
+
+// 从本地存储读取初始电量值，默认为0
+const getStoredBattery = () => {
+  const stored = localStorage.getItem(BATTERY_STORAGE_KEY)
+  return stored ? parseInt(stored, 10) : 0
+}
+const uiBatteryPercent = ref<number>(getStoredBattery())
+
+// 监听 WebSocket 电量数据变化并更新
+watch(() => {
   const currentSn = getWebSocketSn()
-  // 优先从实时数据中读取 cmd_status 的 battery_soc
   const cmdStatus = getRobotCmdStatus(currentSn)
   const soc = (cmdStatus as any)?.battery_soc
+  
+  // 检查是否为有效的电量值（大于0的数字）
+  const isValidBattery = (n: any) => {
+    const v = typeof n === 'number' ? n : Number(n)
+    return Number.isFinite(v) && v > 0
+  }
+  
   const clamp = (n: any) => {
     const v = typeof n === 'number' ? n : Number(n)
-    if (Number.isFinite(v)) return Math.min(100, Math.max(0, Math.round(v)))
-    return 0
+    return Math.min(100, Math.max(0, Math.round(v)))
   }
-  if (typeof soc === 'number') return clamp(soc)
+  
+  // 优先使用 cmd_status 的电量
+  if (isValidBattery(soc)) {
+    return clamp(soc)
+  }
+  
   // 回退：使用飞行器/设备状态中的电量百分比
-  return clamp((droneStatus as any)?.value?.batteryPercent)
+  const droneBattery = (droneStatus as any)?.value?.batteryPercent
+  if (isValidBattery(droneBattery)) {
+    return clamp(droneBattery)
+  }
+  
+  return null // 没有有效数据
+}, (newBattery) => {
+  // 只有当新值有效且与当前值不同时才更新
+  if (newBattery !== null && newBattery !== uiBatteryPercent.value) {
+    uiBatteryPercent.value = newBattery
+    localStorage.setItem(BATTERY_STORAGE_KEY, newBattery.toString())
+    console.log(`电量已更新: ${newBattery}%`)
+  }
 })
 
 
@@ -1393,9 +1426,9 @@ const robotSpeed = computed(() => {
   
   if (!result) return null
   
-  // 定义阈值：线速度小于0.01 m/s，角速度小于0.01 rad/s 视为静止
-  const LINEAR_THRESHOLD = 0.01  // m/s
-  const ANGULAR_THRESHOLD = 0.01 // rad/s
+  // 定义阈值：线速度小于0.05 m/s，角速度小于0.05 rad/s 视为静止
+  const LINEAR_THRESHOLD = 0.05  // m/s (扩大阈值，过滤微小波动)
+  const ANGULAR_THRESHOLD = 0.05 // rad/s (扩大阈值，过滤微小波动)
   
   // 过滤后的速度数据
   const filteredSpeed = { ...result }
@@ -1448,7 +1481,7 @@ const robotDisplayInfo = computed(() => {
       statusText: '离线',
       sn: 'SN-20231108',
       batteryLevel: uiBatteryPercent.value,
-      signalStrength: 'weak',
+      signalStrength: 'strong',
       isOnline: false
     }
   }
@@ -1460,7 +1493,7 @@ const robotDisplayInfo = computed(() => {
     statusText: robot.online ? '在线' : '离线',
     sn: robot.sn,
     batteryLevel: uiBatteryPercent.value,
-    signalStrength: 'weak', // 暂时固定，后续可从robot数据中获取
+    signalStrength: 'strong', // 默认为强，暂无实时数据
     isOnline: robot.online
   }
 })
@@ -2016,10 +2049,10 @@ const taskPoints = computed(() => {
   return [{ name: '暂无执行任务', custom_name: '暂无执行任务', zone_name: '--', type: '', status: 'pending' }]
 })
 
-// 限制显示的任务点数量（最多3个）
+// 显示所有任务点（带滚动条）
 const displayTaskPoints = computed(() => {
   const points = taskPoints.value
-  return points.slice(0, 3)
+  return points  // 显示所有任务点，不再限制只显示3个
 })
 
 // 将类型转换为中文显示
@@ -2071,14 +2104,53 @@ const isCurrentTaskPoint = (displayIndex: number): boolean => {
   return displayIndex === arrivingIndex && arrivingIndex < 3
 }
 
+// 获取当前执行任务点的展区名称
+const currentTaskZone = computed(() => {
+  // 如果有实时任务进度数据
+  if (websocketDataStore.currentTaskProgress) {
+    const { current } = websocketDataStore.currentTaskProgress
+    // current 表示当前正在执行的点位序号（从1开始），转换为数组索引（从0开始）
+    const actualIndex = current - 1
+    const points = taskPoints.value
+    if (points && points.length > actualIndex && actualIndex >= 0) {
+      return points[actualIndex].zone_name || '--'
+    }
+  }
+  
+  // 如果没有实时进度数据，回退到根据status判断
+  const points = websocketDataStore.tourRunPoints
+  if (points && points.length > 0) {
+    // 找到第一个状态为'arriving'的点位
+    const arrivingPoint = points.find(p => p.status === 'arriving')
+    if (arrivingPoint) {
+      return arrivingPoint.zone_name || '--'
+    }
+  }
+  
+  // 如果没有执行中的任务，返回默认值
+  return '--'
+})
+
 // 任务执行状态 - 基于第一条数据的状态
 const isTaskExecuting = computed(() => {
   // 直接基于当前任务的状态，只有running才算执行中
   return websocketDataStore.currentTourRun?.status === 'running'
 })
-const isTaskPaused = ref(false)
 
-// 暂停任务执行
+// 导航暂停状态 - 从cmd_status中获取nav_paused字段
+const isTaskPaused = computed(() => {
+  const currentSn = getWebSocketSn()
+  const cmdStatus = getRobotCmdStatus(currentSn)
+  
+  // 如果没有nav_paused字段，返回false（不更新按钮状态）
+  if (cmdStatus && typeof cmdStatus.nav_paused === 'number') {
+    return cmdStatus.nav_paused === 1
+  }
+  
+  return false
+})
+
+// 暂停/恢复任务执行
 const toggleTaskExecution = async () => {
   // 检查导航是否启动
   if (!navEnabled.value) {
@@ -2086,17 +2158,43 @@ const toggleTaskExecution = async () => {
     return
   }
   
-  // 只支持暂停功能
-  if (isTaskExecuting.value) {
-    try {
-      await websocketDataStore.stopCurrentTourRun()
-      console.log('⏸️ 任务已暂停')
-    } catch (error) {
-      console.error('❌ 暂停任务失败:', error)
-      // 可以在这里显示错误提示
-    }
-  } else {
+  // 检查是否有正在执行的任务
+  if (!isTaskExecuting.value) {
     console.log('ℹ️ 当前没有正在执行的任务')
+    return
+  }
+  
+  try {
+    const token = userStore.token || localStorage.getItem('token') || ''
+    if (!token) {
+      console.error('❌ 未登录或token已过期')
+      return
+    }
+    
+    const currentSn = getWebSocketSn()
+    if (!currentSn || currentSn === 'broadcast') {
+      console.error('❌ 无法获取有效的设备SN')
+      return
+    }
+    
+    // 根据当前暂停状态决定操作：当前暂停则恢复(0)，当前未暂停则暂停(1)
+    const action = isTaskPaused.value ? 0 : 1 // 1=暂停导航，0=恢复导航
+    
+    console.log(`${action === 1 ? '⏸️ 发送暂停' : '▶️ 发送恢复'}导航指令`)
+    
+    await navigationApi.pauseResumeNav(token, {
+      sn: currentSn,
+      action: action,
+      timeout: 10
+    })
+    
+    console.log(`✅ ${action === 1 ? '暂停' : '恢复'}导航指令已发送，等待WebSocket状态更新`)
+    
+    // 不需要手动更新状态，等待WebSocket的cmd_status.nav_paused字段更新
+    
+  } catch (error) {
+    console.error('❌ 暂停/恢复导航失败:', error)
+    alert('操作失败，请重试')
   }
 }
 
@@ -5746,7 +5844,8 @@ const centerToDroneMarker = () => {
 }
 .mini-card-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .mini-card-title { color: #FFF; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mini-card-title.status-error { color: #ff5252; }
+.mini-card-title.status-normal { color: #4caf50; } /* 定位正常显示绿色 */
+.mini-card-title.status-error { color: #f44336; } /* 定位异常显示红色 */
 .mini-card-sub { color: #FFF; font-size: 13px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .92; }
 .start-task-btn {
   display: flex;
@@ -5794,7 +5893,7 @@ const centerToDroneMarker = () => {
   flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
-  max-height: 150px; /* 限制最大高度，约3个条目的高度（单行显示） */
+  max-height: 280px; /* 增加最大高度，可以显示约5-6个条目 */
   overflow-y: auto; /* 添加垂直滚动条 */
   padding-right: 4px; /* 为滚动条留出空间 */
 }

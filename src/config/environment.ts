@@ -61,21 +61,21 @@ const intranetConfig: EnvironmentConfig = {
 // 外网环境配置
 const internetConfig: EnvironmentConfig = {
   api: {
-    baseUrl: 'http://10.10.1.40:8000/api/v1',
-    domain: 'http://10.10.1.40:8000/api/v1'
+    baseUrl: 'http://10.10.1.41:8000/api/v1',
+    domain: 'http://10.10.1.41:8000/api/v1'
   },
   websocket: {
-    host: '10.10.1.40',
+    host: '10.10.1.41',
     port: 8000,
-    fullUrl: 'ws://10.10.1.40:8000'
+    fullUrl: 'ws://10.10.1.41:8000'
   },
   video: {
-    webrtcDomain: 'webrtc://10.10.1.40:8000',
-    rtmpDomain: 'rtmp://10.10.1.40:8000'
+    webrtcDomain: 'webrtc://10.10.1.41:8000',
+    rtmpDomain: 'rtmp://10.10.1.41:8000'
   },
   services: {
-    vision: 'http://10.10.1.40:8000',
-    livestream: 'http://10.10.1.40:8000'
+    vision: 'http://10.10.1.41:8000',
+    livestream: 'http://10.10.1.41:8000'
   }
 }
 

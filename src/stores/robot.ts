@@ -58,9 +58,16 @@ export const useRobotStore = defineStore('robot', () => {
         console.log('搜索模式，不更新缓存')
       }
       
-      // 如果没有选中的机器人且有可用机器人，自动选中第一个
-      if (!selectedRobotId.value && robots.value.length > 0) {
-        selectedRobotId.value = robots.value[0].id
+      // 列表更新时，检查当前选中的机器人是否还在列表中
+      if (robots.value.length > 0) {
+        const currentSelectedExists = selectedRobotId.value && robots.value.some(r => r.id === selectedRobotId.value)
+        
+        // 如果没有选中机器人，或当前选中的机器人不在列表中，自动选择第一个
+        if (!currentSelectedExists) {
+          selectedRobotId.value = robots.value[0].id
+          localStorage.setItem('selectedRobotId', robots.value[0].id.toString())
+          console.log('自动选择第一个机器人:', robots.value[0].name)
+        }
       }
       
       return data

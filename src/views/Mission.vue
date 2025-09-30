@@ -181,7 +181,6 @@
                 <div class="mission-th">点位类型</div>
                 <div class="mission-th">机器人动作</div>
                 <div class="mission-th">机器人朝向</div>
-                <div class="mission-th">创建时间</div>
                 <div class="mission-th">操作</div>
               </div>
               <div class="mission-table-body">
@@ -201,7 +200,6 @@
                   <div class="mission-td">{{ point.pointType }}</div>
                   <div class="mission-td">{{ point.robotAction }}</div>
                   <div class="mission-td">{{ point.robotDirection }}</div>
-                  <div class="mission-td">{{ formatTime(point.createdTime) }}</div>
                   <div class="mission-td">
                     <div class="user-action-btns">
                       <button class="icon-btn" title="编辑" @click="onClickEditTaskPoint(point)">
@@ -250,8 +248,10 @@
                     <button 
                       class="mission-btn mission-btn-stop"
                       @click="handlePauseTask"
-                      :disabled="!taskRunning"
-                    >暂停任务</button>
+                      :disabled="!isTaskExecuting"
+                    >
+                      {{ isTaskPaused ? '恢复' : '暂停' }}
+                    </button>
                   </div>
                 </div>
                 <div class="area-action-buttons">
@@ -619,6 +619,7 @@ import { useRobotStore } from '../stores/robot'
 import { useWebSocketData } from '@/composables/useWebSocketData'
 import { useWebSocketDataStore } from '@/stores/websocketData'
 import { navigationApi, tourApi, getRobotActions } from '@/api/services'
+import { API_BASE_URL } from '@/api/config'
 import { downloadAndCacheMap, mapCache, getMapOriginInfo, worldToPixel, type MapOriginInfo } from '@/utils/mapCache'
 import type { Zone, TourPreset } from '@/types'
 import trackListIcon from '@/assets/source_data/svg_data/track_list.svg'
@@ -1006,7 +1007,7 @@ watch(() => hallStore.selectedHallId, async (newHallId) => {
 // 栅格编辑相关
 const isEditMode = ref(false)
 const activeTool = ref<'pen' | 'eraser'>('pen')
-const brushSize = ref(16)
+const brushSize = ref(10)
 const brushColor = ref('#000000') // 黑色表示障碍物
 const navMode = ref<'edit' | 'pan'>('edit') // 导航模式：编辑或拖动
 
@@ -1163,7 +1164,7 @@ const robotActions = ref<Array<{
 const loadingRobotActions = ref(false)
 
 // 获取机器人动作列表
-const fetchRobotActions = async () => {
+const fetchRobotActions = async (showError: boolean = true) => {
   if (loadingRobotActions.value) return
   
   try {
@@ -1185,7 +1186,11 @@ const fetchRobotActions = async () => {
     console.log('✅ 获取机器人动作列表成功:', actions)
   } catch (error) {
     console.error('❌ 获取机器人动作列表失败:', error)
-    alert('获取机器人动作列表失败，请重试')
+    // 只有在明确要求显示错误时才弹窗
+    if (showError) {
+      console.warn('获取机器人动作列表失败，将使用默认动作')
+    }
+    // 不再抛出错误，允许继续执行
   } finally {
     loadingRobotActions.value = false
   }
@@ -1532,16 +1537,45 @@ const onUploadGrid = async () => {
     const pgmData = await canvasToPGM(canvas, ctx)
     console.log('PGM数据生成完成，大小:', pgmData.length)
     
-    // 先下载到本地供验证（不依赖上传成功）
-    downloadPGMToLocal(pgmData)
-    
     try {
       // 上传到指定路径
       await uploadGridToServer(pgmData)
-      showSuccessMessage('栅格图上传成功，并已下载到本地供验证！')
+      showSuccessMessage('栅格图上传成功！')
+      
+      // 上传成功后的清理工作，即使失败也不影响上传成功的提示
+      try {
+        // 清空编辑历史
+        editHistory.value.length = 0
+        
+        // 直接用上传的数据更新本地缓存（而不是清除后重新下载）
+        const mapName = getCurrentMapName()
+        if (mapName) {
+          // 将Uint8Array转换为ArrayBuffer
+          const arrayBuffer = pgmData.buffer.slice(pgmData.byteOffset, pgmData.byteOffset + pgmData.byteLength)
+          
+          // 更新缓存
+          const cacheSuccess = mapCache.cacheMap(mapName, arrayBuffer)
+          if (cacheSuccess) {
+            console.log('✅ 本地缓存已更新为上传的栅格图')
+          } else {
+            console.warn('⚠️ 更新本地缓存失败，但文件已上传成功')
+          }
+        }
+        
+        // 退出编辑模式
+        isEditMode.value = false
+        
+        // 重新加载栅格图（从刚更新的缓存中加载）
+        setTimeout(() => {
+          loadAndRenderHallPGM()
+        }, 100)
+      } catch (cleanupError) {
+        console.warn('上传成功，但清理操作失败:', cleanupError)
+      }
+      
     } catch (uploadError) {
       console.error('上传失败:', uploadError)
-      showErrorMessage('栅格图上传失败，但已下载到本地供验证')
+      showErrorMessage('栅格图上传失败，请重试')
     }
     
   } catch (error) {
@@ -1581,30 +1615,81 @@ const canvasToPGM = async (canvas: HTMLCanvasElement, ctx: CanvasRenderingContex
 
 // 上传栅格图到服务器
 const uploadGridToServer = async (pgmData: Uint8Array) => {
+  // 获取必要参数
+  const sn = getWebSocketSn()
+  const mapName = getCurrentMapName()
+  const token = userStore.token || localStorage.getItem('token') || ''
+  
+  if (!sn) {
+    throw new Error('无法获取设备SN')
+  }
+  
+  if (!mapName) {
+    throw new Error('无法获取当前地图名称')
+  }
+  
+  if (!token) {
+    throw new Error('未登录或token已过期，请重新登录')
+  }
+  
   // 创建FormData用于文件上传
   const formData = new FormData()
   const blob = new Blob([pgmData], { type: 'application/octet-stream' })
-  const filename = 'gridMap.pgm' // 使用固定文件名
-  formData.append('file', blob, filename)
-  formData.append('hallId', selectedHall.value)
+  const filename = 'gridMap.pgm'
+  formData.append('file_obj', blob, filename)
   
-  // TODO: 替换为实际的API端点
-  const uploadUrl = '/api/upload/gridmap' // 需要根据实际后端API调整
+  // 构建完整的API URL
+  const baseUrl = API_BASE_URL.startsWith('http') ? API_BASE_URL : `${window.location.origin}${API_BASE_URL}`
+  const params = new URLSearchParams({
+    sn: sn,
+    map_name: mapName,
+    dest_file: 'gridMap.pgm',
+    backup: 'true'
+  })
+  
+  const uploadUrl = `${baseUrl}/navigation/maps/upload?${params.toString()}`
+  
+  console.log('栅格图上传URL:', uploadUrl)
+  console.log('上传参数 - sn:', sn, 'map_name:', mapName)
   
   const response = await fetch(uploadUrl, {
     method: 'POST',
     body: formData,
     headers: {
-      // 如果需要认证，在这里添加认证头
-      // 'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${token}`
     }
   })
   
+  console.log('栅格图上传响应状态:', response.status)
+  
   if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    console.error('栅格图上传失败:', errorData)
     throw new Error(`上传失败: ${response.status} ${response.statusText}`)
   }
   
-  const result = await response.json()
+  // 尝试解析JSON响应
+  let result = null
+  try {
+    const text = await response.text()
+    console.log('栅格图上传响应原始内容:', text)
+    
+    if (text && text.trim()) {
+      result = JSON.parse(text)
+      console.log('栅格图上传成功，响应数据:', result)
+      
+      // 检查响应中的saved字段
+      if (result.saved === true) {
+        console.log('✅ 服务器确认文件已保存:', result.path)
+      }
+    } else {
+      console.log('栅格图上传成功（无响应内容）')
+    }
+  } catch (parseError) {
+    console.warn('响应解析失败，但HTTP状态码表示成功:', parseError)
+    console.log('原始响应可能不是JSON格式')
+  }
+  
   return result
 }
 
@@ -2224,12 +2309,12 @@ onMounted(async () => {
     }
   }
   
-  // 预加载机器人动作列表
+  // 预加载机器人动作列表（静默加载，失败不影响页面）
   try {
-    await fetchRobotActions()
+    await fetchRobotActions(false) // 不显示错误弹窗
     console.log('机器人动作列表预加载完成')
   } catch (err) {
-    console.warn('预加载机器人动作列表失败:', err)
+    console.warn('预加载机器人动作列表失败，将在需要时重试:', err)
   }
   
   // 确保展厅任务预设数据已加载
@@ -2560,6 +2645,82 @@ const loadAndRenderHallPGM = async () => {
       }
     }
 
+    // 触摸事件处理（用于平板设备）
+    const getTouchCanvasCoords = (touch: Touch) => {
+      if (!canvas) return { x: 0, y: 0 }
+      
+      const rect = canvas.getBoundingClientRect()
+      const scaleX = canvas.width / rect.width
+      const scaleY = canvas.height / rect.height
+      
+      return {
+        x: Math.floor((touch.clientX - rect.left) * scaleX),
+        y: Math.floor((touch.clientY - rect.top) * scaleY)
+      }
+    }
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return
+      
+      const touch = e.touches[0]
+      
+      // 编辑模式下且为编辑导航模式
+      if (isEditMode.value && navMode.value === 'edit') {
+        if (!drawing) {
+          saveToHistory()
+        }
+        drawing = true
+        const coords = getTouchCanvasCoords(touch)
+        editLastX = coords.x
+        editLastY = coords.y
+        editGridPixel(coords.x, coords.y)
+        e.preventDefault() // 阻止页面滚动
+        return
+      }
+      
+      // 拖动模式
+      if (navMode.value === 'pan' || !isEditMode.value) {
+        isDragging = true
+        lastX = touch.clientX
+        lastY = touch.clientY
+        canvas.style.cursor = 'grabbing'
+        e.preventDefault() // 阻止页面滚动
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return
+      
+      const touch = e.touches[0]
+      
+      // 处理编辑绘制
+      if (drawing && isEditMode.value) {
+        const coords = getTouchCanvasCoords(touch)
+        drawLine(editLastX, editLastY, coords.x, coords.y)
+        editLastX = coords.x
+        editLastY = coords.y
+        e.preventDefault() // 阻止页面滚动
+        return
+      }
+      
+      // 处理拖动
+      if (isDragging) {
+        const dx = touch.clientX - lastX
+        const dy = touch.clientY - lastY
+        currentOffsetX += dx
+        currentOffsetY += dy
+        applyTransform()
+        lastX = touch.clientX
+        lastY = touch.clientY
+        e.preventDefault() // 阻止页面滚动
+      }
+    }
+
+    const onTouchEnd = (e: TouchEvent) => {
+      endDrag()
+      e.preventDefault() // 阻止页面滚动
+    }
+
     resize()
     window.addEventListener('resize', resize)
     canvas.addEventListener('wheel', onWheel, { passive: false })
@@ -2568,6 +2729,11 @@ const loadAndRenderHallPGM = async () => {
     canvas.addEventListener('mouseup', endDrag)
     canvas.addEventListener('mouseleave', endDrag)
     canvas.addEventListener('contextmenu', (e) => e.preventDefault()) // 禁用右键菜单
+    // 添加触摸事件监听（用于平板设备）
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false })
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false })
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false })
+    canvas.addEventListener('touchcancel', onTouchEnd, { passive: false })
 
     if (hallGridCleanup) hallGridCleanup()
     hallGridCleanup = () => {
@@ -2578,6 +2744,11 @@ const loadAndRenderHallPGM = async () => {
       canvas.removeEventListener('mouseup', endDrag as any)
       canvas.removeEventListener('mouseleave', endDrag as any)
       canvas.removeEventListener('contextmenu', () => {})
+      // 移除触摸事件监听
+      canvas.removeEventListener('touchstart', onTouchStart as any)
+      canvas.removeEventListener('touchmove', onTouchMove as any)
+      canvas.removeEventListener('touchend', onTouchEnd as any)
+      canvas.removeEventListener('touchcancel', onTouchEnd as any)
     }
 
     // 保存栅格图数据以便后续绘制机器人位置
@@ -2600,16 +2771,14 @@ const drawMissionRobotPosition = async () => {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  // 如果在编辑模式下，我们需要保留当前的编辑内容
-  // 如果不在编辑模式，恢复原始栅格图
-  if (!isEditMode.value) {
-    ctx.putImageData(missionGridImageData, 0, 0)
+  // 优先使用编辑后的数据，如果没有编辑数据则使用原始数据
+  // 退出编辑模式时保留编辑内容，不要恢复原始地图
+  if (gridImageData) {
+    // 有编辑数据，使用编辑后的数据
+    ctx.putImageData(gridImageData, 0, 0)
   } else {
-    // 在编辑模式下，如果有编辑内容则使用当前画布，否则使用原始数据
-    if (!gridImageData) {
-      ctx.putImageData(missionGridImageData, 0, 0)
-    }
-    // 如果已有编辑内容，则不重置画布，直接在上面绘制机器人
+    // 没有编辑数据，使用原始数据
+    ctx.putImageData(missionGridImageData, 0, 0)
   }
 
   // 获取当前机器人位置
@@ -2928,8 +3097,16 @@ watch(activeTool, () => {
 
 watch(isEditMode, (newValue, oldValue) => {
   setupCanvasEditEvents()
-  // 当退出编辑模式时，重新绘制机器人位置
+  // 当退出编辑模式时，保存当前编辑内容，然后重新绘制机器人位置
   if (oldValue && !newValue) {
+    // 退出编辑模式前，保存当前canvas内容到gridImageData
+    const canvas = hallGridCanvas.value
+    const ctx = canvas?.getContext('2d')
+    if (canvas && ctx) {
+      gridImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      console.log('退出编辑模式，保存当前编辑内容')
+    }
+    
     setTimeout(() => {
       drawMissionRobotPosition()
     }, 0)
@@ -3031,22 +3208,28 @@ const handleDeleteArea = async () => {
       const zoneId = parseInt(selectedAreaId.value)
       console.log('删除展区:', area.name, 'ID:', zoneId)
       
+      // 调用API删除展区
       await zoneStore.deleteZone(zoneId)
       
       // 删除成功后，重新获取当前展厅的展区列表
       await fetchCurrentHallZones()
       
+      // 重新获取任务点列表（因为展区删除后，相关任务点也被删除）
+      await pointStore.fetchPoints(undefined, true) // 强制刷新所有任务点
+      console.log('✅ 任务点列表已更新')
+      
       // 重置选中的展区
       if (areaList.value.length > 0) {
         selectedAreaId.value = areaList.value[0].id
-        console.log('删除展区后，重新选择展区:', selectedAreaId.value)
+        console.log('删除展区后，重新选择第一个展区:', selectedAreaId.value)
       } else {
-    selectedAreaId.value = ''
+        selectedAreaId.value = ''
+        console.log('删除展区后，没有可选展区了')
       }
       
       alert(`展区"${area.name}"删除成功`)
     } catch (error) {
-      console.error('删除展区失败:', error)
+      console.error('❌ 删除展区失败:', error)
       alert(error instanceof Error ? error.message : '删除展区失败')
     }
   }
@@ -3080,7 +3263,11 @@ const handleAddTaskPoint = async () => {
   
   // 获取机器人动作列表（如果还没有获取过）
   if (robotActions.value.length === 0) {
-    await fetchRobotActions()
+    try {
+      await fetchRobotActions(false) // 不显示错误提示
+    } catch (error) {
+      console.warn('获取机器人动作列表失败，将使用空列表')
+    }
   }
   
   // 选择默认动作
@@ -3257,7 +3444,7 @@ const onClickEditTaskPoint = (point: TaskPoint) => {
     y: point.y,
     angle: point.angle,
     pointType: point.pointType,
-    robotAction: point.robotAction,
+    robotAction: originalPoint?.action_code || '', // 使用原始的 action_code
     robotDirection: point.robotDirection
   }
   showAddTaskPointDialog.value = true
@@ -3375,6 +3562,25 @@ const handleAddAreaTask = () => {
   showAddAreaTaskDialog.value = true
 }
 
+// 任务执行状态计算属性
+const isTaskExecuting = computed(() => {
+  // 直接基于当前任务的状态，只有running才算执行中
+  return websocketDataStore.currentTourRun?.status === 'running'
+})
+
+// 导航暂停状态 - 从cmd_status中获取nav_paused字段
+const isTaskPaused = computed(() => {
+  const currentSn = getWebSocketSn()
+  const cmdStatus = getRobotCmdStatus(currentSn)
+  
+  // 如果没有nav_paused字段，返回false（不更新按钮状态）
+  if (cmdStatus && typeof cmdStatus.nav_paused === 'number') {
+    return cmdStatus.nav_paused === 1
+  }
+  
+  return false
+})
+
 // 任务控制相关方法
 const handleStartTask = async () => {
   if (!selectedHallTaskList.value) {
@@ -3403,10 +3609,51 @@ const handleStartTask = async () => {
   showVisitorTypeDialog.value = true
 }
 
-const handlePauseTask = () => {
-  if (confirm('确定要暂停当前任务吗？')) {
-    taskRunning.value = false
-    alert('任务已暂停')
+// 暂停/恢复任务执行
+const handlePauseTask = async () => {
+  // 检查导航是否启动
+  if (!isNavEnabled.value) {
+    console.warn('⚠️ 导航未启动，无法操作任务')
+    return
+  }
+  
+  // 检查是否有正在执行的任务
+  if (!isTaskExecuting.value) {
+    console.log('ℹ️ 当前没有正在执行的任务')
+    return
+  }
+  
+  try {
+    const token = userStore.token || localStorage.getItem('token') || ''
+    if (!token) {
+      console.error('❌ 未登录或token已过期')
+      return
+    }
+    
+    const currentSn = getWebSocketSn()
+    if (!currentSn || currentSn === 'broadcast') {
+      console.error('❌ 无法获取有效的设备SN')
+      return
+    }
+    
+    // 根据当前暂停状态决定操作：当前暂停则恢复(0)，当前未暂停则暂停(1)
+    const action = isTaskPaused.value ? 0 : 1 // 1=暂停导航，0=恢复导航
+    
+    console.log(`${action === 1 ? '⏸️ 发送暂停' : '▶️ 发送恢复'}导航指令`)
+    
+    await navigationApi.pauseResumeNav(token, {
+      sn: currentSn,
+      action: action,
+      timeout: 10
+    })
+    
+    console.log(`✅ ${action === 1 ? '暂停' : '恢复'}导航指令已发送，等待WebSocket状态更新`)
+    
+    // 不需要手动更新状态，等待WebSocket的cmd_status.nav_paused字段更新
+    
+  } catch (error) {
+    console.error('❌ 暂停/恢复导航失败:', error)
+    alert('操作失败，请重试')
   }
 }
 
@@ -3440,15 +3687,26 @@ const handleConfirmStartTask = async () => {
     const selectedAudience = availableAudiences.value.find(audience => audience.id === audienceId)
     const audienceName = selectedAudience ? selectedAudience.name : '未知'
     
+    // 获取当前机器人的SN
+    const currentSn = getWebSocketSn()
+    
     // 调用开始任务API
     const startData = {
       audience_id: audienceId,
-      robot_sn: "default_robot", // 默认值，后续可根据需要修改
+      robot_sn: currentSn,
       prefer_current_pose: true
     }
     
     console.log('开始展厅任务, preset_id:', presetId, 'start_data:', startData)
     await tourApi.startTourPreset(token, presetId, startData)
+    
+    // 任务开始成功后，刷新任务运行列表状态
+    try {
+      await websocketDataStore.fetchTourRuns(token)
+      console.log('✅ 任务开始后刷新任务列表成功')
+    } catch (error) {
+      console.warn('❌ 刷新任务列表失败:', error)
+    }
     
     // 开始任务成功
     taskRunning.value = true
@@ -4213,6 +4471,9 @@ const showErrorMessage = (message: string) => {
   cursor: grab; 
   user-select: none; 
   transform-origin: 0 0; 
+  touch-action: none; /* 禁用浏览器默认的触摸行为，防止页面滚动 */
+  -webkit-user-select: none; /* Safari */
+  -webkit-touch-callout: none; /* iOS Safari - 禁用长按弹出菜单 */
 }
 .grid-canvas:active { cursor: grabbing; }
 
