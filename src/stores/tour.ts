@@ -243,6 +243,45 @@ export const useTourStore = defineStore('tour', () => {
     }
   }
 
+  // 删除展厅任务预设
+  const deleteTourPreset = async (presetId: number) => {
+    console.log('=== tourStore.deleteTourPreset 被调用 ===')
+    console.log('presetId:', presetId)
+    
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      console.error('未找到认证token')
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      console.log('=== 准备调用tourApi.deleteTourPreset ===')
+      await tourApi.deleteTourPreset(token, presetId)
+      
+      // 删除成功后，从本地缓存中移除该预设
+      const index = tourPresets.value.findIndex(preset => preset.id === presetId)
+      if (index !== -1) {
+        tourPresets.value.splice(index, 1)
+      }
+      
+      console.log('展厅任务预设删除成功')
+      return { success: true }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '删除展厅任务预设失败'
+      console.error('=== 删除展厅任务预设失败 ===', err)
+      throw err
+    } finally {
+      isLoading.value = false
+      console.log('=== tourStore.deleteTourPreset 执行完成 ===')
+    }
+  }
+
   return {
     tourPresets,
     isLoading,
@@ -261,6 +300,7 @@ export const useTourStore = defineStore('tour', () => {
     fetchTourPresetItems,
     clearPresetItems,
     addTourPresetItem,
-    startTourPreset
+    startTourPreset,
+    deleteTourPreset
   }
 })

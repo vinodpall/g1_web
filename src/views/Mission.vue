@@ -1235,6 +1235,27 @@ const hallTourPresets = computed(() => {
 
 const selectedHallTaskList = ref<string>('') // 默认选择第一个任务列表
 
+// 监听展厅任务预设列表变化，自动选中第一个
+watch(hallTourPresets, (newPresets) => {
+  // 如果列表有值且当前没有选中任务，自动选中第一个
+  if (newPresets && newPresets.length > 0 && !selectedHallTaskList.value) {
+    selectedHallTaskList.value = newPresets[0].id.toString()
+    console.log('自动选中第一个展厅任务:', newPresets[0].name)
+  }
+  // 如果当前选中的任务已被删除（不在列表中），则清空选择或选中第一个
+  else if (selectedHallTaskList.value && newPresets && newPresets.length > 0) {
+    const currentExists = newPresets.some(p => p.id.toString() === selectedHallTaskList.value)
+    if (!currentExists) {
+      selectedHallTaskList.value = newPresets[0].id.toString()
+      console.log('当前任务已删除，自动选中第一个:', newPresets[0].name)
+    }
+  }
+  // 如果列表为空，清空选择
+  else if (!newPresets || newPresets.length === 0) {
+    selectedHallTaskList.value = ''
+  }
+}, { immediate: true })
+
 // 当选中的展厅任务改变时，获取任务详情
 watch(selectedHallTaskList, async (newTaskId) => {
   if (newTaskId) {
@@ -2761,6 +2782,80 @@ const loadAndRenderHallPGM = async () => {
   }
 }
 
+// 绘制高清机器人图标（与首页一致） - 实心圆 + 外环小白点设计
+const drawMissionRobotSVGIcon = async (ctx: CanvasRenderingContext2D, x: number, y: number, theta: number, canvas: HTMLCanvasElement) => {
+  // 获取当前缩放比例
+  const currentScale = canvas.clientWidth / canvas.width
+  
+  // 固定视觉大小（像素）
+  const visualSize = 20
+  const iconSize = visualSize / currentScale // 根据缩放调整实际绘制大小
+  
+  ctx.save()
+  
+  // 移动到机器人位置
+  ctx.translate(x, y)
+  
+  // 启用抗锯齿以获得更平滑的渲染
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  
+  // 绘制主体实心圆（带阴影效果，无边框）
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
+  ctx.shadowBlur = 3 / currentScale
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 1 / currentScale
+  
+  ctx.fillStyle = '#FF4444'
+  
+  ctx.beginPath()
+  ctx.arc(0, 0, iconSize * 0.4, 0, Math.PI * 2)
+  ctx.fill()
+  
+  // 清除阴影设置
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 0
+  
+  // 计算小白点位置（在圆内，表示机器人朝向）
+  const dotRadius = iconSize * 0.25 // 小白点距离中心的距离（在圆内）
+  const dotSize = iconSize * 0.12 // 小白点大小固定为主圆的12%
+  const dotX = Math.cos(-theta || 0) * dotRadius // 注意角度方向
+  const dotY = Math.sin(-theta || 0) * dotRadius
+  
+  // 绘制方向指示小白点
+  ctx.fillStyle = '#FFFFFF'
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)' // 更淡的边框
+  ctx.lineWidth = Math.max(0.2, 0.3 / currentScale)
+  
+  ctx.beginPath()
+  ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  
+  ctx.restore()
+}
+
+// 判断是否为当前执行的任务点（与首页一致）
+const isMissionCurrentTaskPoint = (index: number): boolean => {
+  // 如果有实时任务进度数据，根据当前进度判断高亮哪个点位
+  if (websocketDataStore.currentTaskProgress) {
+    const { current } = websocketDataStore.currentTaskProgress
+    // current 表示当前正在执行的点位序号（从1开始），转换为数组索引（从0开始）
+    const actualIndex = current - 1
+    return index === actualIndex
+  }
+  
+  // 如果没有实时进度数据，回退到根据status判断
+  const points = websocketDataStore.tourRunPoints
+  if (!points || points.length === 0) return false
+  
+  // 找到第一个状态为'arriving'的点位
+  const arrivingIndex = points.findIndex(p => p.status === 'arriving')
+  return index === arrivingIndex
+}
+
 // 绘制Mission页面机器人位置
 const drawMissionRobotPosition = async () => {
   const canvas = hallGridCanvas.value
@@ -2804,44 +2899,8 @@ const drawMissionRobotPosition = async () => {
     return
   }
 
-  // 绘制机器人位置 - 等腰三角箭头
-  ctx.save()
-  
-  const triangleHeight = 8 // 三角形高度
-  const triangleBase = 6   // 三角形底边宽度
-  const theta = typeof robotPose.theta === 'number' ? robotPose.theta : 0
-
-  // 计算三角形的三个顶点（以机器人位置为中心）
-  // 顶点（箭头指向方向）
-  const tipX = pixelPos.x + Math.cos(theta) * (triangleHeight / 2)
-  const tipY = pixelPos.y - Math.sin(theta) * (triangleHeight / 2) // Y轴翻转
-  
-  // 底边中点（机器人位置向后）
-  const baseX = pixelPos.x - Math.cos(theta) * (triangleHeight / 2)
-  const baseY = pixelPos.y + Math.sin(theta) * (triangleHeight / 2)
-  
-  // 左底顶点（垂直于朝向方向）
-  const leftX = baseX - Math.cos(theta + Math.PI / 2) * (triangleBase / 2)
-  const leftY = baseY + Math.sin(theta + Math.PI / 2) * (triangleBase / 2)
-  
-  // 右底顶点（垂直于朝向方向）
-  const rightX = baseX + Math.cos(theta + Math.PI / 2) * (triangleBase / 2)
-  const rightY = baseY - Math.sin(theta + Math.PI / 2) * (triangleBase / 2)
-
-  // 绘制等腰三角形
-  ctx.fillStyle = '#00ff00'  // 绿色，与首页区分
-  ctx.strokeStyle = '#ffffff'
-  ctx.lineWidth = 1
-  
-  ctx.beginPath()
-  ctx.moveTo(tipX, tipY)
-  ctx.lineTo(leftX, leftY)
-  ctx.lineTo(rightX, rightY)
-  ctx.closePath()
-  ctx.fill()
-  ctx.stroke()
-
-  ctx.restore()
+  // 绘制机器人位置 - 使用高清SVG图标（与首页一致）
+  await drawMissionRobotSVGIcon(ctx, pixelPos.x, pixelPos.y, robotPose.theta, canvas)
   
   // 绘制任务点位
   await drawMissionTaskPoints(ctx, canvas)
@@ -2893,13 +2952,13 @@ const drawMissionTaskPoints = async (ctx: CanvasRenderingContext2D, canvas: HTML
       return
     }
 
-    // 根据任务点状态选择颜色
+    // 根据任务点状态选择颜色（与首页一致）
     let fillColor = '#4CAF50' // 绿色 - 待执行
     let strokeColor = '#FFFFFF'
     
     if (point.status === 'done') {
       fillColor = '#2196F3' // 蓝色 - 已完成
-    } else if (point.status === 'arriving') {
+    } else if (point.status === 'arriving' || isMissionCurrentTaskPoint(index)) {
       fillColor = '#FF9800' // 橙色 - 正在执行
     }
 
@@ -2920,6 +2979,9 @@ const drawMissionTaskPoints = async (ctx: CanvasRenderingContext2D, canvas: HTML
 
     // 清除阴影设置
     ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
   })
 
   ctx.restore()
@@ -3540,15 +3602,27 @@ const handleAddHallTask = () => {
   showAddHallTaskDialog.value = true
 }
 
-const handleDeleteHallTask = () => {
+const handleDeleteHallTask = async () => {
   if (!selectedHallTaskList.value) {
     return
   }
   
-  if (confirm(`确定要删除任务列表"${selectedHallTaskList.value}"吗？`)) {
-    // 删除选中的任务列表
-    selectedHallTaskList.value = ''
-    alert('任务列表删除成功')
+  // 获取选中的任务预设信息
+  const presetId = parseInt(selectedHallTaskList.value)
+  const preset = tourStore.getTourPresetById(presetId)
+  const presetName = preset ? preset.name : '未知任务'
+  
+  if (confirm(`确定要删除展厅任务"${presetName}"吗？`)) {
+    try {
+      // 调用删除 API
+      await tourStore.deleteTourPreset(presetId)
+      
+      // 删除成功后，watch 会自动处理选中第一个任务的逻辑
+      alert('展厅任务删除成功')
+    } catch (error) {
+      console.error('删除展厅任务失败:', error)
+      alert('删除展厅任务失败: ' + (error instanceof Error ? error.message : '未知错误'))
+    }
   }
 }
 

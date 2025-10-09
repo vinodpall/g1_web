@@ -61,27 +61,51 @@ const intranetConfig: EnvironmentConfig = {
 // 外网环境配置
 const internetConfig: EnvironmentConfig = {
   api: {
-    baseUrl: 'http://10.10.1.41:8000/api/v1',
-    domain: 'http://10.10.1.41:8000/api/v1'
+    baseUrl: 'http://10.10.1.40:8000/api/v1',
+    domain: 'http://10.10.1.40:8000/api/v1'
   },
   websocket: {
-    host: '10.10.1.41',
+    host: '10.10.1.40',
     port: 8000,
-    fullUrl: 'ws://10.10.1.41:8000'
+    fullUrl: 'ws://10.10.1.40:8000'
   },
   video: {
-    webrtcDomain: 'webrtc://10.10.1.41:8000',
-    rtmpDomain: 'rtmp://10.10.1.41:8000'
+    webrtcDomain: 'webrtc://10.10.1.40:8000',
+    rtmpDomain: 'rtmp://10.10.1.40:8000'
   },
   services: {
-    vision: 'http://10.10.1.41:8000',
-    livestream: 'http://10.10.1.41:8000'
+    vision: 'http://10.10.1.40:8000',
+    livestream: 'http://10.10.1.40:8000'
   }
 }
 
 // 获取当前环境类型
 export function getCurrentEnvironment(): Environment {
-  // 优先使用构建时注入的常量，其次使用 Vite 环境变量
+  // 运行时动态检测：根据访问的 hostname 判断环境
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    
+    // 判断逻辑：
+    // 1. 如果访问的是 172.16.x.x 或 localhost，使用内网配置
+    // 2. 如果访问的是 10.10.x.x 或其他地址，使用外网配置
+    
+    const isIntranet = 
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('172.16.') ||
+      hostname.startsWith('192.168.')
+    
+    const detectedEnv = isIntranet ? Environment.INTRANET : Environment.INTERNET
+    
+    console.log('🔧 环境检测 (运行时):')
+    console.log('- 访问 hostname:', hostname)
+    console.log('- 检测为:', detectedEnv === Environment.INTRANET ? '内网' : '外网')
+    console.log('- WebSocket 地址:', detectedEnv === Environment.INTRANET ? 'ws://172.16.8.233:8000' : 'ws://10.10.1.40:8000')
+    
+    return detectedEnv
+  }
+  
+  // 构建时或 SSR 环境：使用构建时配置作为后备
   let envFromDefine: string | undefined
   try {
     // __APP_ENVIRONMENT__ 由 vite.config.ts 的 define 注入
@@ -94,7 +118,7 @@ export function getCurrentEnvironment(): Environment {
   const envFromVar = (import.meta.env && (import.meta.env as any).VITE_APP_ENVIRONMENT) as string | undefined
   const resolved = envFromDefine || envFromVar || Environment.INTRANET
 
-  console.log('🔧 环境检测:')
+  console.log('🔧 环境检测 (构建时后备):')
   console.log('- __APP_ENVIRONMENT__:', envFromDefine)
   console.log('- VITE_APP_ENVIRONMENT:', envFromVar)
   console.log('- 最终环境:', resolved)

@@ -98,11 +98,27 @@ export const authApi = {
       body: JSON.stringify(loginData)
     }).then(response => {
       if (!response.ok) {
-        return response.json().then(errorData => {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        // 根据HTTP状态码直接返回中文错误提示
+        let errorMessage = '登录失败'
+        if (response.status === 401) {
+          errorMessage = '用户名或密码错误'
+        } else if (response.status === 403) {
+          errorMessage = '没有访问权限'
+        } else if (response.status === 500) {
+          errorMessage = '服务器错误，请稍后重试'
+        } else if (response.status === 503) {
+          errorMessage = '服务暂时不可用，请稍后重试'
+        }
+        throw new Error(errorMessage)
       }
       return response.json()
+    }).catch(error => {
+      // 处理网络错误（如服务器未启动、网络断开等）
+      if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('Failed') || error.message.includes('Network'))) {
+        throw new Error('网络连接失败，请检查网络或服务器是否正常')
+      }
+      // 如果已经是自定义错误（如401、500等），直接抛出
+      throw error
     })
   }
 }
@@ -186,11 +202,11 @@ export const robotApi = {
 
   // 更新机器人
   updateRobot: (token: string, robotId: number, robotData: Partial<{
-    sn: string
     name: string
     model: string
     firmware_version: string
     ip_address: string
+    voice_ip: string
     mac_address: string
     location: string
     status: string
@@ -198,21 +214,40 @@ export const robotApi = {
     mqtt_client_id: string
     mqtt_status_topic: string
     notes: string
+    photo_url: string
   }>) => {
-    return fetch(`${API_BASE_URL}/robots/${robotId}/`, {
-      method: 'PUT',
+    const url = `${API_BASE_URL}/robots/${robotId}`
+    
+    console.log('robotApi.updateRobot 被调用')
+    console.log('请求URL:', url)
+    console.log('机器人ID:', robotId)
+    console.log('更新数据:', robotData)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(robotData)
     }).then(response => {
+      console.log('更新机器人API响应状态:', response.status)
+      console.log('更新机器人API响应OK:', response.ok)
+      
       if (!response.ok) {
         return response.json().then(errorData => {
+          console.error('更新机器人API错误响应:', errorData)
           throw new Error(`HTTP error! status: ${response.status}`)
         })
       }
       return response.json()
+    }).then(data => {
+      console.log('更新机器人API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('更新机器人API请求失败:', error)
+      throw error
     })
   },
 
@@ -330,20 +365,72 @@ export const userApi = {
     is_active: boolean
     is_superuser: boolean
   }>) => {
-    return fetch(`${API_BASE_URL}/users/${userId}`, {
-      method: 'PUT',
+    const url = `${API_BASE_URL}/users/${userId}`
+    
+    console.log('userApi.updateUser 被调用')
+    console.log('请求URL:', url)
+    console.log('用户ID:', userId)
+    console.log('更新数据:', userData)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(userData)
     }).then(response => {
+      console.log('更新用户API响应状态:', response.status)
+      console.log('更新用户API响应OK:', response.ok)
+      
       if (!response.ok) {
         return response.json().then(errorData => {
+          console.error('更新用户API错误响应:', errorData)
           throw new Error(`HTTP error! status: ${response.status}`)
         })
       }
       return response.json()
+    }).then(data => {
+      console.log('更新用户API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('更新用户API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 获取当前用户信息
+  getCurrentUser: (token: string) => {
+    const url = `${API_BASE_URL}/users/me`
+    
+    console.log('userApi.getCurrentUser 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('获取当前用户API响应状态:', response.status)
+      console.log('获取当前用户API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('获取当前用户API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('获取当前用户API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('获取当前用户API请求失败:', error)
+      throw error
     })
   },
 
@@ -453,6 +540,43 @@ export const guideApi = {
     })
   },
 
+  // 删除点位名称
+  deletePointName: (token: string, pointNameId: number) => {
+    const url = `${API_BASE_URL}/guide/point-names/${pointNameId}`
+    
+    console.log('guideApi.deletePointName 被调用')
+    console.log('请求URL:', url)
+    console.log('点位名称ID:', pointNameId)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('删除点位名称API响应状态:', response.status)
+      console.log('删除点位名称API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('删除点位名称API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }).catch(() => {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json().catch(() => ({})) // 如果响应体为空，返回空对象
+    }).then(data => {
+      console.log('删除点位名称API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('删除点位名称API请求失败:', error)
+      throw error
+    })
+  },
+
   // 获取讲解对象列表
   getAudiences: (token: string) => {
     const url = `${API_BASE_URL}/guide/audiences`
@@ -520,6 +644,47 @@ export const guideApi = {
       return data
     }).catch(error => {
       console.error('创建讲解对象API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 删除讲解对象
+  deleteAudience: (token: string, audienceId: number) => {
+    const url = `${API_BASE_URL}/guide/audiences/${audienceId}`
+    
+    console.log('guideApi.deleteAudience 被调用')
+    console.log('请求URL:', url)
+    console.log('删除讲解对象ID:', audienceId)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('删除讲解对象API响应状态:', response.status)
+      console.log('删除讲解对象API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('删除讲解对象API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      
+      // DELETE请求可能返回空响应
+      if (response.status === 204) {
+        return { success: true }
+      }
+      
+      return response.json()
+    }).then(data => {
+      console.log('删除讲解对象API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('删除讲解对象API请求失败:', error)
       throw error
     })
   },
@@ -1033,6 +1198,47 @@ export const tourApi = {
       return data
     }).catch(error => {
       console.error('开始展厅任务API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 删除展厅任务预设
+  deleteTourPreset: (token: string, presetId: number) => {
+    const url = `${API_BASE_URL}/tours/presets/${presetId}`
+    
+    console.log('tourApi.deleteTourPreset 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('预设ID:', presetId)
+    
+    return fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('删除展厅任务预设API响应状态:', response.status)
+      console.log('删除展厅任务预设API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('删除展厅任务预设API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      
+      // DELETE请求可能返回空响应
+      if (response.status === 204) {
+        return { success: true }
+      }
+      
+      return response.json()
+    }).then(data => {
+      console.log('删除展厅任务预设API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('删除展厅任务预设API请求失败:', error)
       throw error
     })
   }

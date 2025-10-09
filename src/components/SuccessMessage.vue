@@ -1,7 +1,7 @@
 <template>
   <div v-if="show" class="success-message-overlay" @click.self="close">
     <div class="success-message-dialog">
-      <div class="success-message-content">{{ message }}</div>
+      {{ message }}
     </div>
   </div>
 </template>
@@ -31,24 +31,33 @@ const close = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 10000;
+  pointer-events: none;
 }
 
 .success-message-dialog {
-  background: rgba(0, 0, 0, 0.72);
-  border-radius: 6px;
-  padding: 12px 18px;
-  min-width: 140px;
-  max-width: 240px;
+  background: rgba(103, 213, 253, 0.9);
+  color: #172233;
+  padding: 16px 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slideInScale 0.3s ease-out;
+  pointer-events: auto;
 }
 
-.success-message-content {
-  color: #ffffff;
-  font-size: 14px;
-  text-align: center;
+@keyframes slideInScale {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 </style>

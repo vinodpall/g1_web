@@ -203,9 +203,37 @@
       <div class="custom-dialog">
         <div class="custom-dialog-title">编辑用户</div>
         <div class="custom-dialog-content">
-          <div class="edit-user-form">
-            <div class="edit-user-form-row"><label>用户名：</label><input v-model="editUserForm.username" class="user-input" placeholder="请输入用户名" /></div>
-            <div class="edit-user-form-row"><label>姓名：</label><input v-model="editUserForm.name" class="user-input" placeholder="请输入姓名" /></div>
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label><span class="required">*</span>用户名：</label>
+              <input v-model="editUserForm.username" class="user-input" placeholder="请输入用户名" />
+            </div>
+            <div class="add-user-form-row">
+              <label><span class="required">*</span>姓名：</label>
+              <input v-model="editUserForm.full_name" class="user-input" placeholder="请输入姓名" />
+            </div>
+            <div class="add-user-form-row">
+              <label>密码：</label>
+              <input v-model="editUserForm.password" type="password" class="user-input" placeholder="不修改请留空" />
+            </div>
+            <div class="add-user-form-row">
+              <label>邮箱：</label>
+              <input v-model="editUserForm.email" type="email" class="user-input" placeholder="请输入邮箱地址" />
+            </div>
+            <div class="add-user-form-row">
+              <label>是否激活：</label>
+              <select v-model="editUserForm.is_active" class="user-input">
+                <option :value="true">是</option>
+                <option :value="false">否</option>
+              </select>
+            </div>
+            <div class="add-user-form-row">
+              <label>超级管理员：</label>
+              <select v-model="editUserForm.is_superuser" class="user-input">
+                <option :value="false">否</option>
+                <option :value="true">是</option>
+              </select>
+            </div>
           </div>
         </div>
         <div class="custom-dialog-actions">
@@ -289,6 +317,25 @@
       </div>
     </div>
 
+    <!-- 删除讲解词确认弹窗 -->
+    <div v-if="showDeleteIntroduceContentDialog" class="custom-dialog-mask">
+      <div class="custom-dialog delete-confirm-dialog">
+        <div class="custom-dialog-title">删除确认</div>
+        <div class="custom-dialog-content">
+          <div class="delete-confirm-message">
+            <div class="delete-icon">⚠️</div>
+            <div class="delete-text">
+              确定要删除点位"{{ deleteContentName }}"的讲解词吗？删除后无法恢复，请谨慎操作。
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-stop" @click="confirmDeleteIntroduceContent">确认删除</button>
+          <button class="mission-btn mission-btn-cancel" @click="showDeleteIntroduceContentDialog = false">取消</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 添加讲解词弹窗 -->
     <div v-if="showAddIntroduceContentDialog" class="custom-dialog-mask">
       <div class="custom-dialog">
@@ -368,6 +415,25 @@
       </div>
     </div>
 
+    <!-- 删除点位名称确认弹窗 -->
+    <div v-if="showDeletePointNameDialog" class="custom-dialog-mask">
+      <div class="custom-dialog delete-confirm-dialog">
+        <div class="custom-dialog-title">删除确认</div>
+        <div class="custom-dialog-content">
+          <div class="delete-confirm-message">
+            <div class="delete-icon">⚠️</div>
+            <div class="delete-text">
+              确定要删除点位名称"{{ deletePointNameText }}"吗？删除后无法恢复，请谨慎操作。
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-stop" @click="confirmDeletePointName">确认删除</button>
+          <button class="mission-btn mission-btn-cancel" @click="showDeletePointNameDialog = false">取消</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 编辑讲解词弹窗 -->
     <div v-if="showEditIntroduceContentDialog" class="custom-dialog-mask">
       <div class="custom-dialog">
@@ -421,7 +487,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserManagementStore } from '../stores/userManagement'
 import { useUserStore } from '../stores/user'
@@ -542,14 +608,20 @@ const introduceTargets = computed(() =>
 )
 const showAddIntroduceTargetDialog = ref(false)
 const showDeleteIntroduceTargetDialog = ref(false)
+const showDeleteIntroduceContentDialog = ref(false)
 const showAddIntroduceContentDialog = ref(false)
 const newIntroduceTargetName = ref('')
 const newIntroduceContent = ref('')
+const deleteContentId = ref('')
+const deleteContentName = ref('')
 
 // 点位名称管理相关状态
 const showPointManageDialog = ref(false)
 const newPointName = ref('')
 const selectedPointForContent = ref('')
+const showDeletePointNameDialog = ref(false)
+const deletePointNameId = ref<number | null>(null)
+const deletePointNameText = ref('')
 
 // 使用computed从guideStore获取点位名称
 const pointNames = computed(() => 
@@ -619,11 +691,11 @@ const addUserForm = ref({
 
 const editUserForm = ref({
   username: '',
-  name: '',
-  is_activate: '1',
-  is_superuser: '0',
-  workspace_id: '123456',
-  user_type: 1
+  email: '',
+  full_name: '',
+  password: '',
+  is_active: true,
+  is_superuser: false
 })
 
 const currentUser = ref<any>(null)
@@ -792,12 +864,12 @@ const openEditUserDialog = (user: any) => {
   currentUser.value = user
   
   editUserForm.value = { 
-    username: user.username,
-    name: user.userfullname || '',
-    is_activate: user.is_activate,
-    is_superuser: user.is_superuser,
-    workspace_id: user.workspace_id,
-    user_type: user.user_type
+    username: user.username || '',
+    email: user.email || '',
+    full_name: user.full_name || user.userfullname || '',
+    password: '', // 编辑时密码留空，不修改则不填
+    is_active: user.is_active ?? true,
+    is_superuser: user.is_superuser ?? false
   }
   showEditUserDialog.value = true
 }
@@ -806,24 +878,28 @@ const openEditUserDialog = (user: any) => {
 const onEditUserConfirm = async () => {
   if (currentUser.value) {
     try {
-      // 将表单数据转换为API需要的格式
-      const apiUserData = {
+      // 构建更新数据，只包含有值的字段
+      const apiUserData: any = {
         username: editUserForm.value.username,
-        userfullname: editUserForm.value.name,
-        is_activate: editUserForm.value.is_activate,
-        is_superuser: editUserForm.value.is_superuser,
-        workspace_id: editUserForm.value.workspace_id,
-        user_type: editUserForm.value.user_type
+        full_name: editUserForm.value.full_name,
+        email: editUserForm.value.email,
+        is_active: editUserForm.value.is_active,
+        is_superuser: editUserForm.value.is_superuser
+      }
+      
+      // 如果密码不为空，则包含密码字段
+      if (editUserForm.value.password && editUserForm.value.password.trim()) {
+        apiUserData.password = editUserForm.value.password
       }
       
       console.log('更新用户信息:', apiUserData)
       
-      // 使用POST接口更新用户信息
-      await updateUser(currentUser.value.id.toString(), apiUserData)
-      console.log('用户基本信息更新成功')
+      // 调用用户管理 store 的更新方法
+      await userManagementStore.updateUser(userStore.token, currentUser.value.id, apiUserData)
+      console.log('用户信息更新成功')
       
-      // 重新获取用户列表以更新显示
-      await fetchUsers({ skip: 0, limit: 100 })
+      // 重新加载用户列表
+      await loadUsers()
       console.log('用户列表已刷新')
       
       // 显示成功结果
@@ -835,14 +911,15 @@ const onEditUserConfirm = async () => {
         details: ''
       }
       
+      // 关闭弹窗并重置表单
       showEditUserDialog.value = false
       editUserForm.value = { 
-        username: '', 
-        name: '',
-        is_activate: '1',
-        is_superuser: '0',
-        workspace_id: '123456',
-        user_type: 1
+        username: '',
+        email: '',
+        full_name: '',
+        password: '',
+        is_active: true,
+        is_superuser: false
       }
     } catch (err: any) {
       console.error('更新用户失败:', err)
@@ -1058,18 +1135,44 @@ const confirmAddIntroduceTarget = async () => {
 }
 
 // 确认删除讲解对象
-const confirmDeleteIntroduceTarget = () => {
-  // TODO: 这里应该调用API来删除讲解对象
-  // 目前只显示提示信息
-  resultDialog.value = {
-    show: true,
-    type: 'info',
-    title: '功能提示',
-    message: '',
-    details: '删除讲解对象功能需要对接相应的API接口'
+const confirmDeleteIntroduceTarget = async () => {
+  if (!selectedIntroduceTarget.value) {
+    return
   }
   
-  showDeleteIntroduceTargetDialog.value = false
+  try {
+    // 调用API删除讲解对象
+    const audienceId = parseInt(selectedIntroduceTarget.value)
+    await guideStore.deleteAudience(audienceId)
+    
+    // 关闭弹窗
+    showDeleteIntroduceTargetDialog.value = false
+    
+    // 删除成功后，watch 会自动处理选中第一个讲解对象的逻辑
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '删除成功',
+      message: '',
+      details: '讲解对象已成功删除'
+    }
+  } catch (error) {
+    console.error('删除讲解对象失败:', error)
+    
+    // 关闭弹窗
+    showDeleteIntroduceTargetDialog.value = false
+    
+    // 显示错误提示
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '删除失败',
+      message: '',
+      details: error instanceof Error ? error.message : '删除讲解对象失败，请稍后重试'
+    }
+  }
 }
 
 // 获取选中的点位名称
@@ -1225,14 +1328,47 @@ const addPointName = async () => {
 // 删除点位名称
 // 注意：这个方法目前只显示提示，后续需要对接相应的API接口
 const deletePointName = (pointId: string) => {
-  // TODO: 这里应该调用API来删除点位名称
-  // 目前只显示提示信息
-  resultDialog.value = {
-    show: true,
-    type: 'info',
-    title: '功能提示',
-    message: '',
-    details: '删除点位名称功能需要对接相应的API接口'
+  const point = guideStore.pointNames.find(p => p.id.toString() === pointId)
+  if (point) {
+    deletePointNameId.value = point.id
+    deletePointNameText.value = point.name
+    showDeletePointNameDialog.value = true
+  }
+}
+
+// 确认删除点位名称
+const confirmDeletePointName = async () => {
+  if (!deletePointNameId.value) return
+  
+  try {
+    await guideStore.deletePointName(deletePointNameId.value)
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '删除成功',
+      message: '',
+      details: `点位名称"${deletePointNameText.value}"已成功删除`
+    }
+    
+    // 关闭确认弹窗
+    showDeletePointNameDialog.value = false
+    deletePointNameId.value = null
+    deletePointNameText.value = ''
+  } catch (error) {
+    console.error('删除点位名称失败:', error)
+    
+    // 显示错误提示
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '删除失败',
+      message: '',
+      details: error instanceof Error ? error.message : '删除点位名称失败，请重试'
+    }
+    
+    showDeletePointNameDialog.value = false
   }
 }
 
@@ -1246,13 +1382,35 @@ const editIntroduceContent = (item: any) => {
   showEditIntroduceContentDialog.value = true
 }
 
-// 删除讲解词
-const deleteIntroduceContent = async (contentId: string) => {
+// 显示删除讲解词确认弹窗
+const deleteIntroduceContent = (contentId: string) => {
+  // 获取讲解词信息
+  const content = introduceContents.value.find(c => c.id === contentId)
+  if (content) {
+    deleteContentId.value = contentId
+    deleteContentName.value = content.pointName
+    showDeleteIntroduceContentDialog.value = true
+  }
+}
+
+// 确认删除讲解词
+const confirmDeleteIntroduceContent = async () => {
+  if (!deleteContentId.value) {
+    return
+  }
+  
   try {
-    const scriptId = parseInt(contentId)
+    const scriptId = parseInt(deleteContentId.value)
     
     // 调用API删除讲解词
     await guideStore.deleteScript(scriptId)
+    
+    // 关闭弹窗
+    showDeleteIntroduceContentDialog.value = false
+    
+    // 清空临时数据
+    deleteContentId.value = ''
+    deleteContentName.value = ''
     
     // 显示成功提示
     resultDialog.value = {
@@ -1264,6 +1422,10 @@ const deleteIntroduceContent = async (contentId: string) => {
     }
   } catch (error) {
     console.error('删除讲解词失败:', error)
+    
+    // 关闭弹窗
+    showDeleteIntroduceContentDialog.value = false
+    
     resultDialog.value = {
       show: true,
       type: 'error',
@@ -1336,6 +1498,27 @@ const confirmEditIntroduceContent = async () => {
     }
   }
 }
+
+// 监听讲解对象列表变化，自动选中第一个
+watch(introduceTargets, (newTargets) => {
+  // 如果列表有值且当前没有选中，自动选中第一个
+  if (newTargets && newTargets.length > 0 && !selectedIntroduceTarget.value) {
+    selectedIntroduceTarget.value = newTargets[0].id
+    console.log('自动选中第一个讲解对象:', newTargets[0].name)
+  }
+  // 如果当前选中的讲解对象已被删除（不在列表中），则清空选择或选中第一个
+  else if (selectedIntroduceTarget.value && newTargets && newTargets.length > 0) {
+    const currentExists = newTargets.some(t => t.id === selectedIntroduceTarget.value)
+    if (!currentExists) {
+      selectedIntroduceTarget.value = newTargets[0].id
+      console.log('当前讲解对象已删除，自动选中第一个:', newTargets[0].name)
+    }
+  }
+  // 如果列表为空，清空选择
+  else if (!newTargets || newTargets.length === 0) {
+    selectedIntroduceTarget.value = ''
+  }
+}, { immediate: true })
 
 // 页面加载时获取用户列表
 onMounted(async () => {

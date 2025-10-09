@@ -41,12 +41,17 @@
                   v-for="(device, idx) in devices"
                   :key="device.id"
                 >
-                  <div class="device-card-header">
-                    <span class="device-card-title">{{ device.name || '-' }}</span>
+                <div class="device-card-header">
+                  <span class="device-card-title">{{ device.name || '-' }}</span>
+                  <div class="device-card-actions">
+                    <span class="device-card-edit" v-permission-click-dialog="'device_management.device.update'" @click="handleEditRobot(device)">
+                      <img :src="editIcon" alt="编辑" />
+                    </span>
                     <span class="device-card-delete" v-permission-click-dialog="'device_management.device.delete'" @click="handleDelete(device.id.toString())">
                       <img :src="rubbishIcon" alt="删除" />
                     </span>
                   </div>
+                </div>
                   <div class="device-card-body">
                     <div class="device-card-img-wrap">
                       <img :src="getDeviceImage(device)" class="device-card-img" />
@@ -171,6 +176,105 @@
                 </div>
               </div>
             </div>
+            <!-- 编辑机器人弹窗 -->
+            <div v-if="showEditRobotModal" class="add-device-modal-mask">
+              <div class="add-device-modal">
+                <div class="add-device-modal-left">
+                  <div class="add-device-title">编辑机器人</div>
+                  <div class="add-device-type-preview">
+                    <img :src="editRobotForm.imagePreview || g1CompStandImg" alt="机器人预览" class="add-device-type-img" />
+                    <div class="image-upload-wrapper">
+                      <input 
+                        type="file" 
+                        ref="editImageInput" 
+                        @change="handleEditImageUpload" 
+                        accept="image/*" 
+                        style="display: none;"
+                      />
+                      <button class="upload-btn" @click="triggerEditImageUpload">上传图片</button>
+                      <button v-if="editRobotForm.imagePreview" class="reset-btn" @click="resetEditImage">使用默认</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="add-device-modal-right">
+                  <div class="add-device-form">
+                    <div class="add-device-row">
+                      <label><span class="required">*</span>SN：</label>
+                      <input 
+                        v-model="editRobotForm.sn" 
+                        class="add-device-input" 
+                        placeholder="SN不可修改"
+                        disabled
+                      />
+                    </div>
+                    <div class="add-device-row">
+                      <label><span class="required">*</span>名称：</label>
+                      <input 
+                        v-model="editRobotForm.name" 
+                        class="add-device-input" 
+                        placeholder="请输入机器人名称（必填）" 
+                      />
+                    </div>
+                    <div class="add-device-row">
+                      <label>型号：</label>
+                      <input v-model="editRobotForm.model" class="add-device-input" placeholder="请输入机器人型号" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>固件版本：</label>
+                      <input v-model="editRobotForm.firmware_version" class="add-device-input" placeholder="请输入固件版本" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>IP地址：</label>
+                      <input v-model="editRobotForm.ip_address" class="add-device-input" placeholder="请输入IP地址" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>语音IP：</label>
+                      <input v-model="editRobotForm.voice_ip" class="add-device-input" placeholder="请输入语音IP地址" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>MAC地址：</label>
+                      <input v-model="editRobotForm.mac_address" class="add-device-input" placeholder="请输入MAC地址" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>位置：</label>
+                      <input v-model="editRobotForm.location" class="add-device-input" placeholder="请输入机器人位置" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>状态：</label>
+                      <select v-model="editRobotForm.status" class="add-device-input">
+                        <option value="active">活跃</option>
+                        <option value="inactive">非活跃</option>
+                        <option value="maintenance">维护中</option>
+                        <option value="error">故障</option>
+                      </select>
+                    </div>
+                    <div class="add-device-row">
+                      <label>是否在线：</label>
+                      <select v-model="editRobotForm.online" class="add-device-input">
+                        <option :value="true">在线</option>
+                        <option :value="false">离线</option>
+                      </select>
+                    </div>
+                    <div class="add-device-row">
+                      <label>MQTT ID：</label>
+                      <input v-model="editRobotForm.mqtt_client_id" class="add-device-input" placeholder="请输入MQTT ID" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>MQTT Topic：</label>
+                      <input v-model="editRobotForm.mqtt_status_topic" class="add-device-input" placeholder="请输入MQTT Topic" />
+                    </div>
+                    <div class="add-device-row">
+                      <label>备注：</label>
+                      <textarea v-model="editRobotForm.notes" class="add-device-textarea" placeholder="请输入机器人备注" rows="3"></textarea>
+                    </div>
+                  </div>
+                  <div class="add-device-actions">
+                    <button class="device-btn" @click="handleEditRobotSubmit">确定</button>
+                    <button class="device-btn device-btn-reset" @click="closeEditRobotModal">取消</button>
+                  </div>
+                </div>
+              </div>
+            </div>
         </section>
       </div>
     </main>
@@ -188,6 +292,7 @@ import m4tdImg from '@/assets/source_data/plane_2.png'
 import g1CompStandImg from '@/assets/source_data/robot_source/g1_comp_stand.png'
 import rubbishIcon from '@/assets/source_data/svg_data/rubbish.svg'
 import videoIcon from '@/assets/source_data/svg_data/video.svg'
+import editIcon from '@/assets/source_data/svg_data/edit.svg'
 
 const router = useRouter()
 const route = useRoute()
@@ -431,6 +536,125 @@ const handleAddRobotSubmit = async () => {
   } catch (error) {
     console.error('创建机器人失败:', error)
     alert('创建机器人失败，请稍后重试')
+  }
+}
+
+// 编辑机器人弹窗控制
+const showEditRobotModal = ref(false)
+const editImageInput = ref<HTMLInputElement>()
+const currentEditRobotId = ref<number>(0)
+const editRobotForm = ref({
+  sn: '',
+  name: '',
+  model: '',
+  firmware_version: '',
+  ip_address: '',
+  voice_ip: '',
+  mac_address: '',
+  location: '',
+  status: 'inactive',
+  online: false,
+  mqtt_client_id: '',
+  mqtt_status_topic: '',
+  notes: '',
+  imagePreview: ''
+})
+
+const handleEditRobot = (device: any) => {
+  currentEditRobotId.value = device.id
+  showEditRobotModal.value = true
+  // 填充表单数据
+  Object.assign(editRobotForm.value, {
+    sn: device.sn || '',
+    name: device.name || '',
+    model: device.model || '',
+    firmware_version: device.firmware_version || '',
+    ip_address: device.ip_address || '',
+    voice_ip: device.voice_ip || '',
+    mac_address: device.mac_address || '',
+    location: device.location || '',
+    status: device.status || 'inactive',
+    online: device.online || false,
+    mqtt_client_id: device.mqtt_client_id || '',
+    mqtt_status_topic: device.mqtt_status_topic || '',
+    notes: device.notes || '',
+    imagePreview: device.photo_url || ''
+  })
+}
+
+const closeEditRobotModal = () => {
+  showEditRobotModal.value = false
+}
+
+const triggerEditImageUpload = () => {
+  editImageInput.value?.click()
+}
+
+const handleEditImageUpload = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      editRobotForm.value.imagePreview = e.target?.result as string
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+const resetEditImage = () => {
+  editRobotForm.value.imagePreview = ''
+  if (editImageInput.value) {
+    editImageInput.value.value = ''
+  }
+}
+
+const handleEditRobotSubmit = async () => {
+  // 验证名称
+  if (!editRobotForm.value.name.trim()) {
+    alert('名称是必填项')
+    return
+  }
+  
+  try {
+    const token = userStore.token
+    if (!token) {
+      alert('用户未登录，请先登录')
+      return
+    }
+    
+    // 准备机器人数据（不包含SN，SN不可修改）
+    const robotData: any = {
+      name: editRobotForm.value.name.trim(),
+      model: editRobotForm.value.model || '',
+      firmware_version: editRobotForm.value.firmware_version || '',
+      ip_address: editRobotForm.value.ip_address || '',
+      voice_ip: editRobotForm.value.voice_ip || '',
+      mac_address: editRobotForm.value.mac_address || '',
+      location: editRobotForm.value.location || '',
+      status: editRobotForm.value.status || 'inactive',
+      online: editRobotForm.value.online || false,
+      mqtt_client_id: editRobotForm.value.mqtt_client_id || '',
+      mqtt_status_topic: editRobotForm.value.mqtt_status_topic || '',
+      notes: editRobotForm.value.notes || ''
+    }
+    
+    // 如果有图片预览，添加photo_url
+    if (editRobotForm.value.imagePreview) {
+      robotData.photo_url = editRobotForm.value.imagePreview
+    }
+    
+    // 调用API更新机器人
+    await robotStore.updateRobot(token, currentEditRobotId.value, robotData)
+    
+    // 关闭弹窗
+    showEditRobotModal.value = false
+    
+    console.log('机器人更新成功:', robotData)
+    alert('机器人更新成功！')
+    
+  } catch (error) {
+    console.error('更新机器人失败:', error)
+    alert('更新机器人失败，请稍后重试')
   }
 }
 
@@ -749,6 +973,33 @@ select.add-device-input option {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.device-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.device-card-edit {
+  color: #1890ff;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  transition: filter 0.2s;
+  height: 44px;
+  padding-left: 8px;
+}
+.device-card-edit img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: none;
+  transition: filter 0.2s;
+  display: block;
+  margin: auto 0;
+}
+.device-card-edit:hover img {
+  filter: drop-shadow(0 0 4px #1890ff);
+}
 .device-card-delete {
   color: #ff4d4f;
   cursor: pointer;
@@ -757,7 +1008,7 @@ select.add-device-input option {
   align-items: center;
   transition: filter 0.2s;
   height: 44px;
-  padding-left: 12px;
+  padding-left: 8px;
 }
 .device-card-delete img {
   width: 18px;

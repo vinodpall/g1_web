@@ -7,7 +7,7 @@
     <div class="login-content">
       <div class="login-left">
         <div class="logo-section">
-          <img src="/src/assets/source_data/robot_source/robot_logo.svg" alt="logo" class="logo" />
+          <img src="/src/assets/source_data/robot_source/robot_logo.png" alt="logo" class="logo" />
           <h1 class="title">机器人管控平台</h1>
         </div>
         <!-- <div class="drone-illustration">
@@ -129,11 +129,25 @@ const handleLogin = async () => {
     errorMessage.value = ''
     showErrorDialog.value = false
     
-    // 正确的代码 👇
+    // 调用登录接口
     const response = await login(loginForm.value)
     
-    userStore.setUser((response as any).user)
+    // 先保存token
     userStore.setToken((response as any).token)
+    
+    // 调用 /api/v1/users/me 获取当前用户信息并保存到缓存
+    try {
+      console.log('登录成功，开始获取当前用户信息...')
+      await userStore.fetchCurrentUser()
+      console.log('当前用户信息获取成功')
+    } catch (err) {
+      console.error('获取当前用户信息失败:', err)
+      // 如果获取失败，使用登录响应中的用户信息作为备选
+      if ((response as any).user) {
+        console.log('使用登录响应中的用户信息作为备选')
+        userStore.setUser((response as any).user)
+      }
+    }
     
     // 根据是否勾选记住密码来保存或清除登录信息
     if (loginForm.value.remember) {
@@ -214,7 +228,7 @@ const closeErrorDialog = () => {
 .login-content {
   display: flex;
   height: 100vh;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 0 5%;
 }
@@ -223,25 +237,29 @@ const closeErrorDialog = () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
   max-width: 600px;
-  margin-top: -380px;
+  margin-top: 0;
+  padding-top: 25px;
+  padding-left: 1px;
 }
 
 .logo-section {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 2rem;
-  transform: translateY(-40px);
-  margin-top: -80px;
+  justify-content: flex-start;
+  margin-bottom: 0;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
 }
 
 .logo {
-  width: 70px;
-  height: 70px;
+  width: 100px;
+  height: 100px;
   margin-right: 1rem;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.8)) 
+          drop-shadow(0 0 15px rgba(255, 255, 255, 0.5))
+          brightness(1.1);
 }
 
 .title {
@@ -254,6 +272,8 @@ const closeErrorDialog = () => {
   line-height: 150%;
   letter-spacing: 1px;
   margin: 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8),
+               0 0 20px rgba(255, 255, 255, 0.3);
 }
 
 .drone-illustration {
@@ -272,6 +292,8 @@ const closeErrorDialog = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: calc(50vh - 250px);
+  margin-right: 80px;
 }
 
 .login-form-container {

@@ -197,6 +197,39 @@ export const useGuideStore = defineStore('guide', () => {
     }
   }
 
+  // 删除点位名称
+  const deletePointName = async (pointNameId: number) => {
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      console.log('删除点位名称:', pointNameId)
+      await guideApi.deletePointName(token, pointNameId)
+      
+      // 从本地缓存中移除已删除的点位名称
+      const index = pointNames.value.findIndex(point => point.id === pointNameId)
+      if (index !== -1) {
+        pointNames.value.splice(index, 1)
+      }
+      
+      console.log('点位名称删除成功')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '删除点位名称失败'
+      console.error('删除点位名称失败:', err)
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   // 创建讲解对象
   const createAudience = async (name: string) => {
     const userStore = useUserStore()
@@ -222,6 +255,40 @@ export const useGuideStore = defineStore('guide', () => {
     } catch (err) {
       error.value = err instanceof Error ? err.message : '创建讲解对象失败'
       console.error('创建讲解对象失败:', err)
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  // 删除讲解对象
+  const deleteAudience = async (audienceId: number) => {
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      console.log('删除讲解对象:', audienceId)
+      await guideApi.deleteAudience(token, audienceId)
+      
+      // 从本地缓存中移除讲解对象
+      const audienceIndex = audiences.value.findIndex(audience => audience.id === audienceId)
+      if (audienceIndex > -1) {
+        audiences.value.splice(audienceIndex, 1)
+      }
+      
+      console.log('讲解对象删除成功')
+      return true
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '删除讲解对象失败'
+      console.error('删除讲解对象失败:', err)
       throw err
     } finally {
       isLoading.value = false
@@ -357,7 +424,9 @@ export const useGuideStore = defineStore('guide', () => {
     getAudienceById,
     getScriptsByAudienceId,
     createPointName,
+    deletePointName,
     createAudience,
+    deleteAudience,
     createScript,
     updateScript,
     deleteScript

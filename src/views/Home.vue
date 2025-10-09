@@ -1015,6 +1015,20 @@
       </div>
     </div>
     
+    <!-- 成功消息提示 -->
+    <SuccessMessage 
+      :show="showSuccessMessage" 
+      :message="successMessageText" 
+      @close="closeSuccessMessage" 
+    />
+    
+    <!-- 错误消息提示 -->
+    <ErrorMessage 
+      :show="showErrorMessage" 
+      :message="errorMessageText" 
+      @close="closeErrorMessage" 
+    />
+    
   </template>
 
 <script setup lang="ts">
@@ -1037,6 +1051,12 @@ import mapDockIcon from '@/assets/source_data/svg_data/map_dock3.svg'
 // 首页底部卡片：导航开关状态
 const navSwitchLoading = ref(false)
 const navLoadingText = ref('')
+
+// 消息提示状态
+const showSuccessMessage = ref(false)
+const successMessageText = ref('')
+const showErrorMessage = ref(false)
+const errorMessageText = ref('')
 
 // 导航开关状态从WebSocket数据同步
 const navEnabled = computed(() => {
@@ -1065,20 +1085,7 @@ const dataRecordEnabled = computed(() => {
   return false
 })
 
-// 定位状态从WebSocket数据同步 - 根据cmd_status中的loc_ok字段
-const localizationStatus = computed(() => {
-  const cmdStatus = robotCmdStatus.value
-  if (cmdStatus?.loc_ok !== undefined) {
-    return Boolean(cmdStatus.loc_ok)
-  }
-  // 如果没有loc_ok字段，默认显示正常状态（保持向后兼容）
-  return true
-})
-
-// 定位状态文本显示
-const localizationStatusText = computed(() => {
-  return localizationStatus.value ? '定位正常' : '定位异常'
-})
+// 定位状态（将在 robotCmdStatus 定义后初始化）
 import mapDroneIcon from '@/assets/source_data/svg_data/map_drone.svg'
 import droneArrowIcon from '@/assets/source_data/svg_data/drone_control_svg/drone_arrow.svg'
 import droneBatteryIcon from '@/assets/source_data/svg_data/drone_battery.svg'
@@ -1232,6 +1239,10 @@ const formatFlightDistance = (val: any, unit?: any) => val || '--'
 import { useTaskProgressStore } from '../stores/taskProgress'
 import { parseErrorMessage } from '../utils/errorCodes'
 const taskProgressStore = useTaskProgressStore()
+
+// 导入消息提示组件
+import SuccessMessage from '../components/SuccessMessage.vue'
+import ErrorMessage from '../components/ErrorMessage.vue'
 
 // 使用机器人store
 import { useRobotStore } from '../stores/robot'
@@ -1412,6 +1423,29 @@ const robotCurrentMap = computed(() => {
   }
   
   return result
+})
+
+// 定位状态 - 使用 ref 保存状态，只有在有新值时才更新
+const localizationStatus = ref(false)
+
+// 监听 robotCmdStatus 的变化，更新定位状态
+watch(() => robotCmdStatus.value, (cmdStatus) => {
+  // 如果导航未开启，设置为异常
+  if (!cmdStatus || cmdStatus.nav !== 1) {
+    localizationStatus.value = false
+    return
+  }
+  
+  // 导航开启时，如果有 loc_ok 字段，才更新状态
+  if (cmdStatus.loc_ok !== undefined) {
+    localizationStatus.value = Boolean(cmdStatus.loc_ok)
+  }
+  // 如果没有 loc_ok 字段，不更新，保持原状态
+}, { immediate: true })
+
+// 定位状态文本显示
+const localizationStatusText = computed(() => {
+  return localizationStatus.value ? '定位正常' : '定位异常'
 })
 
 // 从WebSocket获取的机器人速度信息，过滤微小误差值
@@ -1707,7 +1741,8 @@ const handleNavigationToggle = async () => {
     // 获取当前展厅名称
     const currentHall = hallStore.halls.find(h => h.id.toString() === selectedHallId.value)
     if (!currentHall) {
-      alert('请先选择展厅')
+      errorMessageText.value = '请先选择展厅'
+      showErrorMessage.value = true
       return
     }
     
@@ -1738,18 +1773,34 @@ const handleNavigationToggle = async () => {
       timeout: 15
     })
     
-    // API调用成功，状态将通过WebSocket数据自动更新
+    // API调用成功，显示成功消息并自动消失
+    const statusText = newNavState ? '开启成功' : '关闭成功'
+    successMessageText.value = `导航${statusText}`
+    showSuccessMessage.value = true
     
-    const statusText = newNavState ? '已开启' : '已关闭'
-    alert(`导航开关${statusText}`)
+    // 2秒后自动关闭成功消息
+    setTimeout(() => {
+      showSuccessMessage.value = false
+    }, 2000)
     
   } catch (error) {
     console.error('导航开关切换失败:', error)
-    alert('导航开关切换失败，请重试')
+    errorMessageText.value = '导航开关切换失败，请重试'
+    showErrorMessage.value = true
   } finally {
     // 确保加载状态被清除
     navSwitchLoading.value = false
   }
+}
+
+// 关闭错误消息
+const closeErrorMessage = () => {
+  showErrorMessage.value = false
+}
+
+// 关闭成功消息
+const closeSuccessMessage = () => {
+  showSuccessMessage.value = false
 }
 
 // 监听展厅选择变化，更新地图
@@ -5893,7 +5944,7 @@ const centerToDroneMarker = () => {
   flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
-  max-height: 280px; /* 增加最大高度，可以显示约5-6个条目 */
+  max-height: 168px; /* 限制高度，最多显示3个任务点 (3个任务点56px + 2个gap 8px) */
   overflow-y: auto; /* 添加垂直滚动条 */
   padding-right: 4px; /* 为滚动条留出空间 */
 }

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import type { User } from '@/types'
+import { userApi } from '@/api/services'
 
 export const useUserStore = defineStore('user', {
   state: () => {
@@ -44,6 +45,25 @@ export const useUserStore = defineStore('user', {
     setToken(token: string) {
       this.token = token
       localStorage.setItem('token', token)
+    },
+    
+    // 获取当前用户信息
+    async fetchCurrentUser() {
+      if (!this.token) {
+        console.warn('未找到token，无法获取用户信息')
+        return
+      }
+      
+      try {
+        console.log('开始获取当前用户信息...')
+        const userData = await userApi.getCurrentUser(this.token)
+        this.setUser(userData)
+        console.log('当前用户信息已更新:', userData)
+        return userData
+      } catch (error) {
+        console.error('获取当前用户信息失败:', error)
+        throw error
+      }
     },
     
     logout() {

@@ -198,6 +198,47 @@ export const useRobotStore = defineStore('robot', () => {
     }
   }
 
+  // 更新机器人
+  const updateRobot = async (token: string, robotId: number, robotData: Partial<{
+    name: string
+    model: string
+    firmware_version: string
+    ip_address: string
+    voice_ip: string
+    mac_address: string
+    location: string
+    status: string
+    online: boolean
+    mqtt_client_id: string
+    mqtt_status_topic: string
+    notes: string
+    photo_url: string
+  }>) => {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const updatedRobot = await robotApi.updateRobot(token, robotId, robotData)
+      
+      // 更新本地数据
+      const index = robots.value.findIndex(robot => robot.id === robotId)
+      if (index !== -1) {
+        robots.value[index] = updatedRobot
+      }
+      
+      // 更新缓存
+      localStorage.setItem('robots', JSON.stringify(robots.value))
+      localStorage.setItem('robots_cache_time', Date.now().toString())
+      
+      return updatedRobot
+    } catch (err: any) {
+      error.value = err.message || '更新机器人失败'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   // 删除机器人
   const deleteRobot = async (token: string, robotId: number) => {
     loading.value = true
@@ -241,6 +282,7 @@ export const useRobotStore = defineStore('robot', () => {
     // actions
     fetchRobots,
     createRobot,
+    updateRobot,
     deleteRobot,
     selectRobot,
     clearRobots,

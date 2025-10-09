@@ -1,16 +1,8 @@
 <template>
   <div v-if="show" class="error-message-overlay">
     <div class="error-message-dialog">
-      <div class="error-message-header">
-        <span class="error-icon">⚠️</span>
-        <span class="error-title">操作失败</span>
-      </div>
-      <div class="error-message-content">
-        {{ message }}
-      </div>
-      <div class="error-message-actions">
-        <button class="error-btn error-btn-primary" @click="close">确定</button>
-      </div>
+      <div class="error-message-content">{{ message }}</div>
+      <button class="error-btn" @click="close">确定</button>
     </div>
   </div>
 </template>
@@ -44,64 +36,60 @@ const close = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: 10000;
 }
 
 .error-message-dialog {
-  background: #1a2332;
-  border: 1px solid #ff6b6b;
+  background: rgba(255, 59, 48, 0.95);
+  padding: 20px 32px;
   border-radius: 8px;
-  padding: 24px;
-  min-width: 300px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slideInScale 0.3s ease-out;
+  min-width: 280px;
   max-width: 400px;
-  box-shadow: 0 4px 20px rgba(255, 107, 107, 0.3);
-}
-
-.error-message-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 16px;
 }
 
-.error-icon {
-  font-size: 20px;
-}
-
-.error-title {
-  color: #ff6b6b;
-  font-size: 18px;
-  font-weight: 600;
+@keyframes slideInScale {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .error-message-content {
-  color: #b6b6b6;
-  font-size: 14px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
   line-height: 1.5;
-  margin-bottom: 20px;
-}
-
-.error-message-actions {
-  display: flex;
-  justify-content: center;
 }
 
 .error-btn {
   padding: 8px 24px;
-  border: none;
-  border-radius: 4px;
+  border: 1px solid #fff;
+  border-radius: 6px;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
-}
-
-.error-btn-primary {
-  background: #ff6b6b;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.15);
   color: #fff;
 }
 
-.error-btn-primary:hover {
-  background: #ff5252;
+.error-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
   transform: translateY(-1px);
+}
+
+.error-btn:active {
+  transform: translateY(0);
 }
 </style>

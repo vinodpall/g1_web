@@ -2,7 +2,7 @@
   <div class="layout-container">
     <div class="header">
       <div class="header-left">
-        <img src="/src/assets/source_data/plane_2.png" alt="logo" class="logo" />
+        <img src="/src/assets/source_data/robot_source/logo1.png" alt="logo" class="logo" />
         <span class="title">机器人管控平台</span>
       </div>
       
@@ -60,17 +60,10 @@
                 暂无机器人
               </div>
             </div>
-          </div>
         </div>
+      </div>
 
-        <!-- 急停按钮 -->
-        <span class="stop-btn" :class="{ 'is-active': isStopActive }" @click="toggleStop">
-          <div class="stop-content">
-            <span>{{ isStopActive ? '启动' : '急停' }}</span>
-          </div>
-        </span>
-
-        <!-- 用户信息 -->
+      <!-- 用户信息 -->
         <div class="user-info" @click="toggleUserMenu">
           <img src="/src/assets/source_data/avatar.jpg" alt="avatar" class="avatar" />
           <div class="right-sel">
@@ -97,6 +90,47 @@
         </keep-alive>
       </router-view>
     </main>
+
+    <!-- 修改密码弹窗 -->
+    <div v-if="showChangePasswordDialog" class="password-dialog-mask">
+      <div class="password-dialog">
+        <div class="password-dialog-title">修改密码</div>
+        <div class="password-dialog-content">
+          <div v-if="!passwordSuccess" class="password-form">
+            <div class="password-form-row">
+              <label>新密码：</label>
+              <input 
+                v-model="changePasswordForm.newPassword" 
+                type="password" 
+                class="password-input" 
+                placeholder="请输入新密码（至少6位）"
+                @input="passwordError = ''"
+              />
+            </div>
+            <div class="password-form-row">
+              <label>确认密码：</label>
+              <input 
+                v-model="changePasswordForm.confirmPassword" 
+                type="password" 
+                class="password-input" 
+                placeholder="请再次输入新密码"
+                @input="passwordError = ''"
+                @keyup.enter="confirmChangePassword"
+              />
+            </div>
+            <div v-if="passwordError" class="password-error">{{ passwordError }}</div>
+          </div>
+          <div v-else class="password-success">
+            <div class="success-icon">✓</div>
+            <div class="success-text">密码修改成功！</div>
+          </div>
+        </div>
+        <div v-if="!passwordSuccess" class="password-dialog-actions">
+          <button class="password-btn password-btn-confirm" @click="confirmChangePassword">确认</button>
+          <button class="password-btn password-btn-cancel" @click="showChangePasswordDialog = false">取消</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -105,6 +139,7 @@ import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { useRobotStore } from '../stores/robot'
+import { useUserManagementStore } from '../stores/userManagement'
 // import { useDevices } from '../composables/useApi' // API已移除，等待重新对接
 // import { dockApi } from '../api/services' // API已移除
 // import { useDeviceStatus } from '../composables/useDeviceStatus' // API已移除
@@ -114,6 +149,7 @@ import titleBg from '/src/assets/source_data/bg_data/title.png'
 const router = useRouter()
 const userStore = useUserStore()
 const robotStore = useRobotStore()
+const userManagementStore = useUserManagementStore()
 
 
 const user = computed(() => userStore.user)
@@ -153,10 +189,75 @@ const toggleUserMenu = (e: Event) => {
   isUserMenuVisible.value = !isUserMenuVisible.value
 }
 
+// 修改密码相关状态
+const showChangePasswordDialog = ref(false)
+const changePasswordForm = ref({
+  newPassword: '',
+  confirmPassword: ''
+})
+const passwordError = ref('')
+const passwordSuccess = ref(false)
+
 const handleChangePassword = () => {
-  // 处理修改密码逻辑
-  console.log('修改密码')
+  // 打开修改密码弹窗
+  changePasswordForm.value = {
+    newPassword: '',
+    confirmPassword: ''
+  }
+  passwordError.value = ''
+  showChangePasswordDialog.value = true
   isUserMenuVisible.value = false
+}
+
+// 确认修改密码
+const confirmChangePassword = async () => {
+  // 验证密码
+  if (!changePasswordForm.value.newPassword) {
+    passwordError.value = '请输入新密码'
+    return
+  }
+  
+  if (changePasswordForm.value.newPassword.length < 6) {
+    passwordError.value = '密码长度至少为6位'
+    return
+  }
+  
+  if (changePasswordForm.value.newPassword !== changePasswordForm.value.confirmPassword) {
+    passwordError.value = '两次输入的密码不一致'
+    return
+  }
+  
+  try {
+    // 获取当前用户ID
+    const userId = userStore.user?.id
+    if (!userId) {
+      passwordError.value = '未找到用户信息'
+      return
+    }
+    
+    // 调用API更新密码
+    await userManagementStore.updateUser(
+      userStore.token,
+      userId,
+      { password: changePasswordForm.value.newPassword }
+    )
+    
+    // 显示成功提示
+    passwordSuccess.value = true
+    
+    // 2秒后关闭弹窗
+    setTimeout(() => {
+      showChangePasswordDialog.value = false
+      passwordSuccess.value = false
+      changePasswordForm.value = {
+        newPassword: '',
+        confirmPassword: ''
+      }
+    }, 2000)
+  } catch (error) {
+    console.error('修改密码失败:', error)
+    passwordError.value = '修改密码失败，请重试'
+  }
 }
 
 const handleLogout = () => {
@@ -175,22 +276,54 @@ const closeUserMenu = () => {
 // 监听点击事件
 document.addEventListener('click', closeUserMenu)
 
-// 急停状态计算
-const isStopActive = computed(() => {
-  return false // 暂时返回false，等待重新对接API
-})
-
-// 急停按钮点击处理
-const toggleStop = async () => {
-  // 急停API已移除，等待重新对接
-  console.log('急停操作 - 等待重新对接')
-}
 
 // 页面加载时初始化
 onMounted(async () => {
-  // 机器人数据已在各个页面组件中初始化，这里不需要重复初始化
-  // robotStore.hydrateFromCache()
-  // robotStore.initSelectedRobot()
+  // 如果有token，刷新当前用户信息
+  if (userStore.token) {
+    try {
+      console.log('Layout初始化 - 开始刷新当前用户信息...')
+      await userStore.fetchCurrentUser()
+      console.log('Layout初始化 - 用户信息已刷新:', userStore.user?.username)
+    } catch (error) {
+      console.error('Layout初始化 - 刷新用户信息失败:', error)
+    }
+  }
+  
+  // 从缓存恢复机器人数据和选中状态
+  robotStore.hydrateFromCache()
+  robotStore.initSelectedRobot()
+  
+  console.log('Layout初始化 - 缓存中的机器人数据:', robotStore.robotOptions.length, '个')
+  console.log('Layout初始化 - 缓存中选中的机器人ID:', robotStore.selectedRobotId)
+  
+  // 如果缓存中没有机器人数据，且用户已登录，则主动获取
+  if (robotStore.robotOptions.length === 0 && userStore.token) {
+    console.log('缓存中无机器人数据，主动获取机器人列表...')
+    try {
+      await robotStore.fetchRobots(userStore.token)
+      console.log('机器人列表获取成功，共', robotStore.robotOptions.length, '个')
+      
+      // 获取成功后，如果有机器人且没有选中任何机器人，自动选中第一个
+      if (robotStore.robotOptions.length > 0 && !robotStore.selectedRobotId) {
+        const firstRobotId = robotStore.robotOptions[0].value
+        robotStore.selectRobot(firstRobotId)
+        console.log('自动选中第一个机器人:', robotStore.robotOptions[0].label)
+      }
+    } catch (error) {
+      console.error('获取机器人列表失败:', error)
+    }
+  }
+  
+  // 如果有缓存数据但没有选中机器人，自动选中第一个
+  if (robotStore.robotOptions.length > 0 && !robotStore.selectedRobotId) {
+    const firstRobotId = robotStore.robotOptions[0].value
+    robotStore.selectRobot(firstRobotId)
+    console.log('自动选中第一个机器人:', robotStore.robotOptions[0].label)
+  }
+  
+  console.log('Layout初始化完成 - 最终机器人数据:', robotStore.robotOptions.length, '个')
+  console.log('Layout初始化完成 - 最终选中的机器人ID:', robotStore.selectedRobotId)
 })
 </script>
 
@@ -241,22 +374,25 @@ onMounted(async () => {
 .header-left {
   display: flex;
   align-items: center;
-  gap: clamp(2px, 0.5vw, 4px);
+  /* gap: clamp(8px, 1vw, 12px); */
   position: relative;
   z-index: 1;
   min-width: 0;
-  margin-left: -40px;
+  margin-left: -35px;
   margin-top: 5px;
   flex-shrink: 0;
   flex: 0 0 auto;
-  width: clamp(280px, 30vw, 400px);
+  width: clamp(320px, 35vw, 450px);
 }
 
 .logo {
-  width: clamp(24px, 3vw, 36px);
-  height: clamp(24px, 3vw, 36px);
-  filter: brightness(0) saturate(100%) invert(100%);
+  height: clamp(35px, 4vw, 48px);
+  width: auto;
   flex-shrink: 0;
+  /* 为黑色文字添加白色发光效果，让其在深色背景中清晰可见 */
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.9))
+          drop-shadow(0 0 25px rgba(255, 255, 255, 0.6))
+          brightness(1.05);
 }
 
 .title {
@@ -540,46 +676,6 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-/* 急停按钮样式 */
-.stop-btn {
-  width: clamp(40px, 4vw, 48px); /* 缩小尺寸 */
-  height: clamp(40px, 4vw, 48px); /* 缩小尺寸 */
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s;
-  position: relative;
-  background: url('/src/assets/source_data/stop_release.png') no-repeat center center;
-  background-size: contain;
-  border: none;
-  outline: none;
-  flex-shrink: 0;
-}
-
-.stop-btn:active {
-  background-image: url('/src/assets/source_data/stop_click.png');
-  transform: scale(0.95);
-}
-
-.stop-btn.is-active {
-  background-image: url('/src/assets/source_data/stop_click.png');
-}
-
-.stop-content {
-  display: none; /* 隐藏文字内容 */
-}
-
-.stop-icon {
-  display: flex;
-  align-items: center;
-}
-
-.icon {
-  width: 16px;
-  height: 16px;
-}
-
 /* 用户信息样式 */
 .user-info {
   display: flex;
@@ -827,10 +923,181 @@ onMounted(async () => {
   .robot-selector.el-select {
     width: 220px !important;
   }
-  
-  .stop-btn {
-    width: 42px;
-    height: 42px;
+}
+
+/* 修改密码弹窗样式 */
+.password-dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.password-dialog {
+  background: linear-gradient(135deg, #1a2332 0%, #2d3e50 100%);
+  border: 1px solid rgba(103, 213, 253, 0.3);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 450px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: dialogSlideIn 0.3s ease-out;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.password-dialog-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #67d5fd;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(103, 213, 253, 0.2);
+}
+
+.password-dialog-content {
+  padding: 24px;
+}
+
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.password-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.password-form-row label {
+  color: #cfe9f3;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.password-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(103, 213, 253, 0.3);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.password-input::placeholder {
+  color: #8aa0b5;
+}
+
+.password-input:focus {
+  outline: none;
+  border-color: #67d5fd;
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 3px rgba(103, 213, 253, 0.1);
+}
+
+.password-error {
+  color: #ff4444;
+  font-size: 13px;
+  margin-top: -8px;
+  padding-left: 4px;
+}
+
+.password-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(103, 213, 253, 0.2);
+}
+
+.password-btn {
+  padding: 8px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.password-btn-confirm {
+  background: linear-gradient(135deg, #67d5fd 0%, #4facfe 100%);
+  color: #1a2332;
+}
+
+.password-btn-confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(103, 213, 253, 0.4);
+}
+
+.password-btn-cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cfe9f3;
+  border: 1px solid rgba(103, 213, 253, 0.3);
+}
+
+.password-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: #67d5fd;
+}
+
+.password-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 0;
+  gap: 16px;
+}
+
+.success-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  color: white;
+  font-weight: bold;
+  animation: successBounce 0.6s ease-out;
+}
+
+@keyframes successBounce {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.success-text {
+  font-size: 16px;
+  color: #4ade80;
+  font-weight: 500;
 }
 </style>
