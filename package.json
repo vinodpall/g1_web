@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:intranet": "cross-env VITE_APP_ENVIRONMENT=intranet vite",
-    "dev:internet": "cross-env VITE_APP_ENVIRONMENT=internet vite",
+    "dev:internet": "cross-env VITE_APP_ENVIRONMENT=internet vite --host 0.0.0.0",
     "build": "vue-tsc -b && vite build",
     "build:intranet": "cross-env VITE_APP_ENVIRONMENT=intranet vue-tsc -b && vite build",
     "build:internet": "cross-env VITE_APP_ENVIRONMENT=internet vue-tsc -b && vite build",

@@ -83,8 +83,15 @@ onUnmounted(() => {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   height: 100vh;
+  height: 100dvh; /* 使用动态视口高度，更适合移动端 */
   width: 100vw;
   overflow: hidden;
+  background: #0f192d;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 * {
@@ -97,5 +104,10 @@ html, body {
   height: 100%;
   width: 100%;
   overflow: hidden;
+  background: #0f192d;
+  position: fixed;
+  /* iOS 优化 */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 </style>

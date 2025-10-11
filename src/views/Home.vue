@@ -2057,13 +2057,75 @@ const waylineProgress = computed(() => taskProgressStore.waylineProgress)
 const waylineJobDetail = computed(() => taskProgressStore.waylineJobDetail)
 
 // 监听任务状态变化，确保UI同步更新
-watch(() => websocketDataStore.currentTourRun, (newTourRun) => {
+watch(() => websocketDataStore.currentTourRun, async (newTourRun, oldTourRun) => {
   console.log('🔄 任务状态变化:', {
     newTourRun,
+    oldTourRun,
     status: newTourRun?.status,
     isTaskExecuting: isTaskExecuting.value,
     presetItemsCount: websocketDataStore.tourPresetItems.length
   })
+  
+  // 检测任务从非运行状态变为运行状态（任务启动）
+  const isTaskStarting = (
+    newTourRun?.status === 'running' && 
+    oldTourRun?.status !== 'running' &&
+    websocketDataStore.tourPresetItems.length === 0 // 还没有点位数据
+  )
+  
+  // 检测任务ID变化（说明是新任务）
+  const isNewTask = (
+    newTourRun?.status === 'running' &&
+    newTourRun?.run_id !== oldTourRun?.run_id
+  )
+  
+  // 当检测到任务启动或新任务时，自动加载点位数据
+  if (isTaskStarting || isNewTask) {
+    console.log('🚀 检测到任务启动，自动加载点位数据...')
+    await checkAndLoadTaskData()
+  }
+}, { deep: true })
+
+// 监听预设ID变化，当任务开始执行时自动加载点位数据
+watch(() => websocketDataStore.currentTourPresetId, async (newPresetId, oldPresetId) => {
+  console.log('🔄 预设ID变化:', {
+    newPresetId,
+    oldPresetId,
+    currentTourRunStatus: websocketDataStore.currentTourRun?.status,
+    presetItemsCount: websocketDataStore.tourPresetItems.length,
+    isTaskExecuting: isTaskExecuting.value
+  })
+  
+  // 当预设ID变化，且当前任务正在运行时，自动加载点位数据
+  // 放宽条件：即使已有数据也重新加载，因为可能是新任务
+  if (newPresetId && newPresetId !== oldPresetId && isTaskExecuting.value) {
+    console.log('🚀 检测到新的预设ID且任务正在执行，自动加载点位数据...')
+    const token = userStore.token || localStorage.getItem('token') || ''
+    if (token) {
+      try {
+        await websocketDataStore.fetchTourPresetItems(newPresetId, token)
+        console.log('✅ 点位数据加载成功，点位数量:', websocketDataStore.tourPresetItems.length)
+        // 强制重新渲染栅格图
+        nextTick(() => {
+          setTimeout(() => {
+            loadAndRenderPGM()
+          }, 100)
+        })
+      } catch (error) {
+        console.error('❌ 加载点位数据失败:', error)
+      }
+    } else {
+      console.warn('⚠️ 缺少token，无法加载点位数据')
+    }
+  }
+})
+
+// 监听tourPresetItems变化，输出调试信息
+watch(() => websocketDataStore.tourPresetItems, (newItems) => {
+  console.log('📊 tourPresetItems 数据变化，新的点位数量:', newItems.length)
+  if (newItems.length > 0) {
+    console.log('📋 点位详情（前3个）:', newItems.slice(0, 3))
+  }
 }, { deep: true })
 
 
@@ -2186,6 +2248,26 @@ const currentTaskZone = computed(() => {
 const isTaskExecuting = computed(() => {
   // 直接基于当前任务的状态，只有running才算执行中
   return websocketDataStore.currentTourRun?.status === 'running'
+})
+
+// 监听任务执行状态变化，确保点位数据及时加载
+watch(isTaskExecuting, async (executing, wasExecuting) => {
+  console.log('🎯 任务执行状态变化:', {
+    executing,
+    wasExecuting,
+    currentPresetId: websocketDataStore.currentTourPresetId,
+    presetItemsCount: websocketDataStore.tourPresetItems.length
+  })
+  
+  // 当任务从未执行变为执行中时
+  if (executing && !wasExecuting) {
+    console.log('🚀 任务开始执行，检查并加载点位数据...')
+    // 等待一小段时间，确保presetId已经更新
+    await nextTick()
+    setTimeout(async () => {
+      await checkAndLoadTaskData()
+    }, 200)
+  }
 })
 
 // 导航暂停状态 - 从cmd_status中获取nav_paused字段
@@ -5371,13 +5453,22 @@ const centerToDroneMarker = () => {
 </script>
 
 <style scoped>
+/* 容器样式 - iOS 安全区域适配 */
+.home-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 /* 新布局样式：适配 2200x1440，顶部:底部 = 8:2，顶部左:右 = 1:3 */
 .tablet-dashboard {
   height: calc(100vh - 84px);
+  height: calc(100dvh - 84px); /* 使用动态视口高度，适配移动端 */
   width: 100%;
   display: flex;
   flex-direction: column;
   padding: 20px 12px; /* 上下20px，左右12px */
+  padding-bottom: max(20px, env(safe-area-inset-bottom)); /* iOS 安全区域适配 */
   gap: 24px;
   box-sizing: border-box;
 }
@@ -5796,6 +5887,7 @@ const centerToDroneMarker = () => {
   border: 1px solid rgba(0, 188, 212, 0.25);
   border-radius: 10px;
   padding: 18px 18px 18px 18px;
+  padding-bottom: max(18px, calc(18px + env(safe-area-inset-bottom))); /* iOS 安全区域适配 */
   overflow: hidden;
 }
 .bottom-card .bottom-panel-title,

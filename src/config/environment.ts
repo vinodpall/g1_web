@@ -81,8 +81,11 @@ const internetConfig: EnvironmentConfig = {
 
 // 获取当前环境类型
 export function getCurrentEnvironment(): Environment {
-  // 运行时动态检测：根据访问的 hostname 判断环境
-  if (typeof window !== 'undefined') {
+  const isProd = import.meta.env.PROD
+  const envFromVar = (import.meta.env && (import.meta.env as any).VITE_APP_ENVIRONMENT) as string | undefined
+  
+  // 生产环境（打包后）：优先使用运行时动态检测，支持根据访问地址自动切换
+  if (isProd && typeof window !== 'undefined') {
     const hostname = window.location.hostname
     
     // 判断逻辑：
@@ -97,7 +100,36 @@ export function getCurrentEnvironment(): Environment {
     
     const detectedEnv = isIntranet ? Environment.INTRANET : Environment.INTERNET
     
-    console.log('🔧 环境检测 (运行时):')
+    console.log('🔧 环境检测 (生产环境-自动检测):')
+    console.log('- 访问 hostname:', hostname)
+    console.log('- 检测为:', detectedEnv === Environment.INTRANET ? '内网' : '外网')
+    console.log('- WebSocket 地址:', detectedEnv === Environment.INTRANET ? 'ws://172.16.8.233:8000' : 'ws://10.10.1.40:8000')
+    
+    return detectedEnv
+  }
+  
+  // 开发环境：优先使用环境变量配置，方便手动切换
+  if (envFromVar) {
+    console.log('🔧 环境检测 (开发环境-环境变量):')
+    console.log('- VITE_APP_ENVIRONMENT:', envFromVar)
+    console.log('- 使用环境:', envFromVar === Environment.INTERNET ? '外网' : '内网')
+    console.log('- WebSocket 地址:', envFromVar === Environment.INTERNET ? 'ws://10.10.1.40:8000' : 'ws://172.16.8.233:8000')
+    return envFromVar === Environment.INTERNET ? Environment.INTERNET : Environment.INTRANET
+  }
+  
+  // 开发环境但没有环境变量：使用运行时动态检测
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    
+    const isIntranet = 
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('172.16.') ||
+      hostname.startsWith('192.168.')
+    
+    const detectedEnv = isIntranet ? Environment.INTRANET : Environment.INTERNET
+    
+    console.log('🔧 环境检测 (开发环境-hostname):')
     console.log('- 访问 hostname:', hostname)
     console.log('- 检测为:', detectedEnv === Environment.INTRANET ? '内网' : '外网')
     console.log('- WebSocket 地址:', detectedEnv === Environment.INTRANET ? 'ws://172.16.8.233:8000' : 'ws://10.10.1.40:8000')
@@ -115,12 +147,10 @@ export function getCurrentEnvironment(): Environment {
     envFromDefine = undefined
   }
 
-  const envFromVar = (import.meta.env && (import.meta.env as any).VITE_APP_ENVIRONMENT) as string | undefined
-  const resolved = envFromDefine || envFromVar || Environment.INTRANET
+  const resolved = envFromDefine || Environment.INTRANET
 
   console.log('🔧 环境检测 (构建时后备):')
   console.log('- __APP_ENVIRONMENT__:', envFromDefine)
-  console.log('- VITE_APP_ENVIRONMENT:', envFromVar)
   console.log('- 最终环境:', resolved)
 
   if (resolved === Environment.INTERNET) return Environment.INTERNET

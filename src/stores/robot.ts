@@ -267,6 +267,18 @@ export const useRobotStore = defineStore('robot', () => {
     }
   }
 
+  // 更新机器人在线状态（根据SN）
+  const updateRobotOnlineStatus = (sn: string, online: boolean) => {
+    const robot = robots.value.find(r => r.sn === sn)
+    if (robot) {
+      robot.online = online
+      // 更新缓存
+      localStorage.setItem('robots', JSON.stringify(robots.value))
+      localStorage.setItem('robots_cache_time', Date.now().toString())
+      console.log(`机器人 ${robot.name} (SN: ${sn}) 状态更新为: ${online ? '在线' : '离线'}`)
+    }
+  }
+
   return {
     // state
     robots: computed(() => robots.value),
@@ -288,6 +300,7 @@ export const useRobotStore = defineStore('robot', () => {
     clearRobots,
     hydrateFromCache,
     initSelectedRobot,
+    updateRobotOnlineStatus,
     
     // cache utilities
     getCachedRobots,

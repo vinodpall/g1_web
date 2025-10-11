@@ -88,39 +88,55 @@
                 <canvas ref="hallGridCanvas" class="grid-canvas"></canvas>
                 <div v-show="isEditMode" class="edit-panel-right">
                   <div class="panel-tools">
-                    <div class="tool-group">
-                      <div class="tool-item" :class="{ active: activeTool === 'pen' && navMode === 'edit' }" @click="setTool('pen')" title="画笔">
-                        <img :src="mapPenIcon" alt="画笔" class="tool-icon-img" />
-                      </div>
-                      <div class="tool-item" :class="{ active: activeTool === 'eraser' && navMode === 'edit' }" @click="setTool('eraser')" title="橡皮擦">
-                        <img :src="mapEraserIcon" alt="橡皮擦" class="tool-icon-img" />
-                      </div>
-                    </div>
-                    <div class="tool-settings">
-                      <div class="setting-item">
-                        <label>大小</label>
-                        <input type="range" min="2" max="50" v-model.number="brushSize" class="size-slider" />
-                        <span class="size-value">{{ brushSize }}</span>
-                      </div>
-                    </div>
+                    <!-- 1. 拖动模式 -->
                     <div class="navigation-tools">
                       <div class="nav-item" :class="{ active: navMode === 'pan' }" @click="setNavMode('pan')" title="拖动模式">
                         <img :src="mapMoveIcon" alt="拖动模式" class="nav-icon-img" />
                       </div>
+                    </div>
+                    <!-- 2. 放大 -->
+                    <div class="navigation-tools">
                       <div class="nav-item" @click="zoomIn" title="放大">
                         <img :src="mapMagnifyIcon" alt="放大" class="nav-icon-img" />
                       </div>
+                    </div>
+                    <!-- 3. 缩小 -->
+                    <div class="navigation-tools">
                       <div class="nav-item" @click="zoomOut" title="缩小">
                         <img :src="mapReduceIcon" alt="缩小" class="nav-icon-img" />
                       </div>
                     </div>
+                    <!-- 4. 画笔 -->
+                    <div class="tool-group">
+                      <div class="tool-item" :class="{ active: activeTool === 'pen' && navMode === 'edit' }" @click="setTool('pen')" title="画笔">
+                        <img :src="mapPenIcon" alt="画笔" class="tool-icon-img" />
+                      </div>
+                    </div>
+                    <!-- 5. 橡皮擦 -->
+                    <div class="tool-group">
+                      <div class="tool-item" :class="{ active: activeTool === 'eraser' && navMode === 'edit' }" @click="setTool('eraser')" title="橡皮擦">
+                        <img :src="mapEraserIcon" alt="橡皮擦" class="tool-icon-img" />
+                      </div>
+                    </div>
+                    <!-- 6. 撤销 -->
                     <div class="tool-actions">
                       <button class="action-btn" @click="undoEdit" :disabled="!canUndo">
                         <img :src="mapRollbackIcon" alt="撤回" class="action-icon-img" />
                       </button>
+                    </div>
+                    <!-- 7. 初始化 -->
+                    <div class="tool-actions">
                       <button class="action-btn" @click="clearGridEdit">
                         <img :src="mapInitIcon" alt="重置" class="action-icon-img" />
                       </button>
+                    </div>
+                    <!-- 8. 大小滚动条 -->
+                    <div class="tool-settings">
+                      <div class="setting-item">
+                        <label>大小</label>
+                        <input type="range" min="1" max="20" v-model.number="brushSize" class="size-slider" />
+                        <span class="size-value">{{ brushSize }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -192,7 +208,7 @@
                 </div>
                 <div v-else class="mission-tr" v-for="(point, idx) in currentTaskPoints" :key="point.id">
                   <div class="mission-td">{{ idx + 1 }}</div>
-                  <div class="mission-td">{{ point.name }}</div>
+                  <div class="mission-td task-point-name-cell" :title="point.name">{{ point.name }}</div>
                   <div class="mission-td">{{ getPointNameByPointId(point.id) }}</div>
                   <div class="mission-td">{{ point.x }}</div>
                   <div class="mission-td">{{ point.y }}</div>
@@ -354,7 +370,12 @@
           <div class="add-user-form">
             <div class="add-user-form-row">
               <label>任务点名称：</label>
-              <input v-model="addTaskPointForm.name" class="user-input" placeholder="请输入任务点名称" />
+              <input 
+                v-model="addTaskPointForm.name" 
+                class="user-input" 
+                placeholder="请输入任务点名称"
+                maxlength="8"
+              />
             </div>
             <div class="add-user-form-row">
               <label>点位类型：</label>
@@ -549,24 +570,41 @@
     </div>
 
     <!-- 生成地图弹窗 -->
-    <div v-if="showGenerateMapDialog" class="custom-dialog-mask">
-      <div class="custom-dialog">
+    <div v-if="showGenerateMapDialog" class="custom-dialog-mask" @click="isDataPackageSelectActive = false">
+      <div class="custom-dialog" @click.stop>
         <div class="custom-dialog-title">生成展厅地图</div>
         <div class="custom-dialog-content">
           <div class="add-user-form">
             <div class="add-user-form-row">
               <label>展厅数据包：</label>
-              <div class="custom-select-wrapper">
-                <select v-model="generateMapForm.dataName" class="user-select">
-                  <option v-for="(packageName, index) in rawDataPackages" :key="packageName" :value="packageName">
-                    {{ processDataPackageName(packageName) }}
-                  </option>
-                </select>
-                <span class="custom-select-arrow">
-                  <svg width="12" height="12" viewBox="0 0 12 12">
-                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
-                  </svg>
-                </span>
+              <div class="custom-select-component">
+                <div class="custom-select-trigger" 
+                     :class="{ 'is-active': isDataPackageSelectActive }"
+                     @click.stop="toggleDataPackageSelect">
+                  <span class="custom-select-value">
+                    {{ generateMapForm.dataName ? processDataPackageName(generateMapForm.dataName) : '请选择数据包' }}
+                  </span>
+                  <span class="custom-select-arrow">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                    </svg>
+                  </span>
+                </div>
+                <div v-show="isDataPackageSelectActive" class="custom-select-dropdown" @click.stop>
+                  <div class="custom-select-dropdown-list">
+                    <div 
+                      v-for="packageName in rawDataPackages" 
+                      :key="packageName"
+                      class="custom-select-dropdown-item"
+                      :class="{ 'is-selected': generateMapForm.dataName === packageName }"
+                      @click="selectDataPackage(packageName)">
+                      {{ processDataPackageName(packageName) }}
+                    </div>
+                    <div v-if="rawDataPackages.length === 0" class="custom-select-dropdown-item is-disabled">
+                      暂无数据包
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="add-user-form-row">
@@ -601,6 +639,42 @@
       <div class="generate-map-loading-content">
         <div class="generate-map-loading-spinner"></div>
         <div class="generate-map-loading-text">{{ generateMapLoadingText }}</div>
+      </div>
+    </div>
+
+    <!-- 地图生成完成提示弹窗 -->
+    <div v-if="showMapCompletionDialog" class="custom-dialog-mask">
+      <div class="custom-dialog completion-dialog-compact">
+        <div class="custom-dialog-content">
+          <div class="completion-message-inline">
+            <svg width="24" height="24" viewBox="0 0 24 24" class="completion-check-icon">
+              <circle cx="12" cy="12" r="11" fill="#4CAF50"/>
+              <path d="M7 12 L10 15 L17 8" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="completion-text-inline">地图生成完成，请等待栅格图生成...</span>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-pause" @click="closeMapCompletionDialog">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 栅格图生成完成提示弹窗 -->
+    <div v-if="showGridMapCompletionDialog" class="custom-dialog-mask">
+      <div class="custom-dialog completion-dialog-compact">
+        <div class="custom-dialog-content">
+          <div class="completion-message-inline">
+            <svg width="24" height="24" viewBox="0 0 24 24" class="completion-check-icon">
+              <circle cx="12" cy="12" r="11" fill="#4CAF50"/>
+              <path d="M7 12 L10 15 L17 8" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="completion-text-inline">栅格图生成完成</span>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-pause" @click="closeGridMapCompletionDialog">确定</button>
+        </div>
       </div>
     </div>
   </div>
@@ -702,8 +776,9 @@ const isRecording = ref(false)
 // 进度条状态管理：确保进度只能增长，不会因多线程数据导致回退
 const maxProgress = ref(0) // 记录已达到的最大进度
 const lastResetTime = ref(0) // 记录上次重置时间，用于检测新的生成任务
+const isMapGenerationActive = ref(false) // 标记是否正在生成地图
 
-// 计算属性：从WebSocket获取实时的slam进度，确保单调递增
+// 计算属性：展示的进度值，应用严格的只增不减防呆逻辑
 const mapGenProgress = computed(() => {
   const currentSn = getWebSocketSn()
   let progress = getRobotSlamProgress(currentSn)
@@ -716,24 +791,31 @@ const mapGenProgress = computed(() => {
   const currentProgress = progress || 0
   
   // 检测是否是新的生成任务（进度从较高值突然变为0或很低的值）
-  if (currentProgress === 0 && maxProgress.value > 50) {
-    // 重置最大进度，开始新的生成任务
+  if (currentProgress === 0 && maxProgress.value > 50 && !isMapGenerationActive.value) {
+    // 任务已完成或重置，清空历史最大值
     maxProgress.value = 0
+    hasShownCompletionDialog.value = false // 重置弹窗标记
     lastResetTime.value = Date.now()
-    console.log('检测到新的地图生成任务，重置进度条')
+    console.log('✓ 地图生成任务已完成或重置，清空进度')
+    return 0
   }
   
-  // 确保进度只能增长，不能减少（除非是新任务开始）
-  if (currentProgress > maxProgress.value) {
-    maxProgress.value = currentProgress
+  // 【核心防呆逻辑】使用 Math.max 确保进度永远只增不减
+  const newMaxProgress = Math.max(maxProgress.value, currentProgress)
+  
+  // 更新最大进度并记录日志
+  if (newMaxProgress > maxProgress.value) {
+    console.log(`📈 进度更新: ${maxProgress.value}% → ${newMaxProgress}%`)
+    maxProgress.value = newMaxProgress
+  } else if (currentProgress < maxProgress.value) {
+    console.log(`🛡️ 防呆生效: 收到 ${currentProgress}%，保持显示 ${maxProgress.value}%`)
   }
   
-  // 如果进度达到100%，保持100%
-  if (maxProgress.value >= 100) {
-    maxProgress.value = 100
-  }
+  // 限制在100%以内
+  const finalProgress = Math.min(maxProgress.value, 100)
+  maxProgress.value = finalProgress
   
-  return maxProgress.value
+  return finalProgress
 })
 
 // 计算属性：检查导航状态是否启用
@@ -770,6 +852,18 @@ const recordingLoadingText = ref('')
 const generateMapLoading = ref(false)
 const generateMapLoadingText = ref('')
 
+// 地图生成完成弹窗状态
+const showMapCompletionDialog = ref(false)
+const hasShownCompletionDialog = ref(false) // 标记是否已显示过完成弹窗（避免重复显示）
+
+// 栅格图生成完成弹窗状态
+const showGridMapCompletionDialog = ref(false)
+const hasShownGridMapCompletionDialog = ref(false) // 标记是否已显示过栅格图完成弹窗
+
+// 弹窗自动关闭定时器
+let mapCompletionTimer: ReturnType<typeof setTimeout> | null = null
+let gridMapCompletionTimer: ReturnType<typeof setTimeout> | null = null
+
 // 地图录制弹窗相关状态
 const showRecordingDialog = ref(false)
 const recordingForm = ref({
@@ -785,6 +879,7 @@ const generateMapForm = ref({
   dataName: '',
   mapName: ''
 })
+const isDataPackageSelectActive = ref(false)
 
 // 用户是否已提交生成请求（用于区分用户操作和系统状态）
 const hasSubmittedGeneration = ref(false)
@@ -846,10 +941,27 @@ watch(() => {
     console.log('检测到change_pcd变为1，重置hasSubmittedGeneration为false')
   }
   
-  // 当change_pcd从1变成0时，调用同步接口
+  // 当change_pcd从1变成0时，调用同步接口并弹出栅格图完成提示
   if (oldValue === 1 && newValue === 0) {
     console.log('检测到change_pcd从1变为0，开始执行同步操作')
     handleSyncAfterPcdComplete()
+    
+    // 弹出栅格图生成完成提示
+    if (!hasShownGridMapCompletionDialog.value) {
+      console.log('🎉 栅格图生成完成，显示完成提示')
+      hasShownGridMapCompletionDialog.value = true
+      showGridMapCompletionDialog.value = true
+      
+      // 清除之前的定时器（如果存在）
+      if (gridMapCompletionTimer) {
+        clearTimeout(gridMapCompletionTimer)
+      }
+      // 设置5秒后自动关闭
+      gridMapCompletionTimer = setTimeout(() => {
+        console.log('栅格图完成弹窗5秒后自动关闭')
+        closeGridMapCompletionDialog()
+      }, 5000)
+    }
   }
 })
 
@@ -865,12 +977,34 @@ watch(() => {
   console.log(`slam状态变化: ${oldValue} -> ${newValue}`)
   // 当slam状态变化时，可以在这里添加额外的逻辑
   if (newValue === 0 && oldValue === 1) {
-    console.log('地图生成已停止')
+    console.log('🔴 地图生成已停止')
+    isMapGenerationActive.value = false
+    // 任务停止时不立即清空进度，保持最后的显示值
+    
+    // 弹出地图生成完成提示（等待栅格图生成）
+    if (!hasShownCompletionDialog.value) {
+      console.log('🎉 地图生成完成，等待栅格图生成')
+      hasShownCompletionDialog.value = true
+      showMapCompletionDialog.value = true
+      
+      // 清除之前的定时器（如果存在）
+      if (mapCompletionTimer) {
+        clearTimeout(mapCompletionTimer)
+      }
+      // 设置5秒后自动关闭
+      mapCompletionTimer = setTimeout(() => {
+        console.log('地图完成弹窗5秒后自动关闭')
+        closeMapCompletionDialog()
+      }, 5000)
+    }
   } else if (newValue === 1 && oldValue === 0) {
-    console.log('地图生成已开始')
-    // 重置进度条状态
+    console.log('🟢 地图生成已开始')
+    isMapGenerationActive.value = true
+    // 重置进度条状态和弹窗标记
     maxProgress.value = 0
     lastResetTime.value = Date.now()
+    hasShownCompletionDialog.value = false
+    hasShownGridMapCompletionDialog.value = false
   }
 })
 
@@ -1007,9 +1141,9 @@ watch(() => hallStore.selectedHallId, async (newHallId) => {
 // 栅格编辑相关
 const isEditMode = ref(false)
 const activeTool = ref<'pen' | 'eraser'>('pen')
-const brushSize = ref(10)
+const brushSize = ref(5)
 const brushColor = ref('#000000') // 黑色表示障碍物
-const navMode = ref<'edit' | 'pan'>('edit') // 导航模式：编辑或拖动
+const navMode = ref<'edit' | 'pan'>('pan') // 导航模式：编辑或拖动，默认为拖动模式
 
 // 展区管理相关状态
 interface Area {
@@ -1100,6 +1234,19 @@ const areaList = computed(() => {
   }))
 })
 
+// 从action_params中解析nav_mode获取机器人朝向
+const parseRobotDirection = (actionParams: string | null): string => {
+  if (!actionParams) return '前进' // 默认值
+  
+  try {
+    const params = JSON.parse(actionParams)
+    return params.nav_mode === -1 ? '后退' : '前进'
+  } catch (error) {
+    console.warn('解析action_params失败:', error)
+    return '前进' // 解析失败时使用默认值
+  }
+}
+
 // 从API获取的任务点列表，根据当前选中的展区筛选
 const selectedAreaId = ref<string>('') // 默认选择第一个展区
 const currentTaskPoints = computed(() => {
@@ -1124,7 +1271,7 @@ const currentTaskPoints = computed(() => {
       angle: point.pose_theta, // 直接使用theta原始值
       pointType: point.type === 'explain' ? '讲解点' : '辅助点',
       robotAction: getRobotActionName(point.action_code || undefined), // 获取动作中文名称
-      robotDirection: '前进', // API中没有此字段，使用默认值
+      robotDirection: parseRobotDirection(point.action_params), // 从action_params解析机器人朝向
       commentary: `点位${point.id}`, // API中没有此字段，使用默认值
       createdTime: '' // API中没有此字段，暂时设为空
     }
@@ -1928,6 +2075,7 @@ const stopGenerateHallMap = async () => {
 
     await navigationApi.generateMap(token, mapData)
     hasSubmittedGeneration.value = false
+    isMapGenerationActive.value = false // 主动标记生成已停止
     alert('地图生成已停止')
     console.log('手动停止地图生成，重置hasSubmittedGeneration为false')
   } catch (error) {
@@ -1977,6 +2125,10 @@ const handleConfirmGenerateMap = async () => {
 
     await navigationApi.generateMap(token, mapData)
     hasSubmittedGeneration.value = true
+    isMapGenerationActive.value = true // 主动标记生成已开始
+    maxProgress.value = 0 // 重置进度
+    hasShownCompletionDialog.value = false // 重置完成弹窗标记
+    hasShownGridMapCompletionDialog.value = false // 重置栅格图完成弹窗标记
     showGenerateMapDialog.value = false
     alert(`地图生成已开始\n数据包：${processDataPackageName(generateMapForm.value.dataName)}\n地图名称：${generateMapForm.value.mapName}`)
     console.log('生成地图请求已提交，设置hasSubmittedGeneration为true')
@@ -1994,6 +2146,39 @@ const handleCancelGenerateMap = () => {
   showGenerateMapDialog.value = false
   generateMapForm.value.dataName = ''
   generateMapForm.value.mapName = ''
+  isDataPackageSelectActive.value = false
+}
+
+// 数据包下拉框处理函数
+const toggleDataPackageSelect = () => {
+  isDataPackageSelectActive.value = !isDataPackageSelectActive.value
+}
+
+const selectDataPackage = (packageName: string) => {
+  generateMapForm.value.dataName = packageName
+  isDataPackageSelectActive.value = false
+}
+
+// 关闭地图生成完成提示弹窗
+const closeMapCompletionDialog = () => {
+  showMapCompletionDialog.value = false
+  // 清除定时器
+  if (mapCompletionTimer) {
+    clearTimeout(mapCompletionTimer)
+    mapCompletionTimer = null
+  }
+  console.log('关闭地图生成完成提示弹窗')
+}
+
+// 关闭栅格图生成完成提示弹窗
+const closeGridMapCompletionDialog = () => {
+  showGridMapCompletionDialog.value = false
+  // 清除定时器
+  if (gridMapCompletionTimer) {
+    clearTimeout(gridMapCompletionTimer)
+    gridMapCompletionTimer = null
+  }
+  console.log('关闭栅格图生成完成提示弹窗')
 }
 
 // 加载数据包列表
@@ -3078,6 +3263,17 @@ onUnmounted(() => {
     clearTimeout(missionPgmRetryTimer)
     missionPgmRetryTimer = null
   }
+  
+  // 清理弹窗自动关闭定时器
+  if (mapCompletionTimer) {
+    clearTimeout(mapCompletionTimer)
+    mapCompletionTimer = null
+  }
+  if (gridMapCompletionTimer) {
+    clearTimeout(gridMapCompletionTimer)
+    gridMapCompletionTimer = null
+  }
+  
   // 停止机器人位置更新
   stopMissionRobotPositionUpdate()
   
@@ -3429,6 +3625,14 @@ const handleConfirmAddTaskPoint = async () => {
       // 获取当前机器人的SN
       const currentSn = getWebSocketSn()
       
+      // 根据机器人朝向生成 action_params
+      const navMode = addTaskPointForm.value.robotDirection === '前进' ? 1 : -1
+      const actionParams = JSON.stringify({
+        hold: 1.5,
+        auto_release: true,
+        nav_mode: navMode
+      })
+      
       const pointData = {
         type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
         point_name_id: addTaskPointForm.value.pointType === '讲解点' && addTaskPointForm.value.pointNameId 
@@ -3439,7 +3643,7 @@ const handleConfirmAddTaskPoint = async () => {
         pose_y: addTaskPointForm.value.y,
         pose_theta: addTaskPointForm.value.angle, // 直接使用原始值
         action_code: addTaskPointForm.value.robotAction,
-        action_params: '', // 暂时为空
+        action_params: actionParams,
         robot_sn: currentSn // 使用当前机器人的SN
       }
       
@@ -3458,6 +3662,14 @@ const handleConfirmAddTaskPoint = async () => {
       // 获取当前机器人的SN
       const currentSn = getWebSocketSn()
       
+      // 根据机器人朝向生成 action_params
+      const navMode = addTaskPointForm.value.robotDirection === '前进' ? 1 : -1
+      const actionParams = JSON.stringify({
+        hold: 1.5,
+        auto_release: true,
+        nav_mode: navMode
+      })
+      
       const pointData = {
         zone_id: parseInt(selectedAreaId.value),
         type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
@@ -3469,7 +3681,7 @@ const handleConfirmAddTaskPoint = async () => {
         pose_y: addTaskPointForm.value.y,
         pose_theta: addTaskPointForm.value.angle, // 直接使用原始值
         action_code: addTaskPointForm.value.robotAction,
-        action_params: '', // 暂时为空
+        action_params: actionParams,
         robot_sn: currentSn // 使用当前机器人的SN
       }
       
@@ -3507,7 +3719,7 @@ const onClickEditTaskPoint = (point: TaskPoint) => {
     angle: point.angle,
     pointType: point.pointType,
     robotAction: originalPoint?.action_code || '', // 使用原始的 action_code
-    robotDirection: point.robotDirection
+    robotDirection: parseRobotDirection(originalPoint?.action_params || null) // 从action_params解析机器人朝向
   }
   showAddTaskPointDialog.value = true
 }
@@ -4551,8 +4763,16 @@ const showErrorMessage = (message: string) => {
 }
 .grid-canvas:active { cursor: grabbing; }
 
+/* 展厅管理标题栏间距优化 */
+.mission-top-card {
+  gap: 6px !important; /* 减少标题和内容之间的间距 */
+}
+.mission-top-header {
+  margin-bottom: 2px !important; /* 减少标题底部间距 */
+}
+
 /* 展厅管理工具栏与进度条 */
-.hall-toolbar { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.hall-toolbar { display: flex; flex-direction: column; gap: 10px; margin-top: 0px; }
 .hall-toolbar-row { display: flex; align-items: center; gap: 12px; min-height: 40px; }
 .hall-actions { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; }
 .hall-btn { height: 32px; padding: 0 14px; border-radius: 6px; }
@@ -5096,6 +5316,135 @@ const showErrorMessage = (message: string) => {
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
+}
+
+/* 自定义下拉组件样式 */
+.custom-select-component {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.custom-select-trigger {
+  width: 100%;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid #164159;
+  background: transparent;
+  color: #fff;
+  padding: 0 30px 0 12px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.2s;
+  box-shadow: 0 0 0 1px #164159 inset;
+  box-sizing: border-box;
+}
+
+.custom-select-trigger:hover {
+  border-color: rgba(103, 213, 253, 0.5);
+  background: rgba(103, 213, 253, 0.05);
+}
+
+.custom-select-trigger.is-active {
+  border-color: #67d5fd;
+  box-shadow: 0 0 0 2px rgba(103, 213, 253, 0.15);
+}
+
+.custom-select-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #fff;
+  text-align: left;
+}
+
+.custom-select-trigger .custom-select-arrow {
+  position: static;
+  transform: none;
+  margin-left: 8px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.custom-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  background: #0a2a3a;
+  border: 1px solid #164159;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.custom-select-dropdown-list {
+  padding: 4px 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.custom-select-dropdown-item {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #b8c7d9;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.custom-select-dropdown-item:hover {
+  background: rgba(103, 213, 253, 0.1);
+  color: #67d5fd;
+}
+
+.custom-select-dropdown-item.is-selected {
+  background: rgba(103, 213, 253, 0.15);
+  color: #67d5fd;
+  font-weight: 500;
+}
+
+.custom-select-dropdown-item.is-disabled {
+  color: rgba(184, 199, 217, 0.5);
+  cursor: not-allowed;
+}
+
+.custom-select-dropdown-item.is-disabled:hover {
+  background: transparent;
+  color: rgba(184, 199, 217, 0.5);
+}
+
+/* 下拉框滚动条样式 */
+.custom-select-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-track {
+  background: rgba(22, 65, 89, 0.3);
+  border-radius: 3px;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-thumb {
+  background: rgba(103, 213, 253, 0.3);
+  border-radius: 3px;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-thumb:hover {
+  background: rgba(103, 213, 253, 0.5);
 }
 
 .empty-state {
@@ -5647,6 +5996,89 @@ const showErrorMessage = (message: string) => {
 @keyframes generate-map-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* 地图生成完成弹窗样式 */
+.completion-dialog {
+  min-width: 400px;
+  max-width: 500px;
+}
+
+/* 紧凑型完成弹窗 */
+.completion-dialog-compact {
+  min-width: 360px;
+  max-width: 450px;
+}
+
+.completion-message-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px 0;
+}
+
+.completion-check-icon {
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(76, 175, 80, 0.3));
+  animation: check-pop 0.4s ease-out;
+}
+
+.completion-text-inline {
+  color: #67D5FD;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+@keyframes check-pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 保留旧样式以兼容其他地方可能的使用 */
+.completion-message {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.completion-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.completion-text {
+  color: #67D5FD;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 16px 0 8px 0;
+  line-height: 1.5;
+}
+
+.completion-hint {
+  color: #b8c7d9;
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* 任务点名称单元格样式 - 文本截断 */
+.task-point-name-cell {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 </style>

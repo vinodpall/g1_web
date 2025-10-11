@@ -4,6 +4,17 @@
       <img src="/src/assets/source_data/bg_data/bg_1.jpg" alt="background" />
     </div>
     
+    <!-- 全屏切换按钮 - 全屏后或 PWA 模式下自动隐藏 -->
+    <button 
+      v-show="!isFullscreen && !isPWAMode()" 
+      class="fullscreen-btn-login" 
+      @click="toggleFullscreen" 
+      title="进入全屏">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+      </svg>
+    </button>
+    
     <div class="login-content">
       <div class="login-left">
         <div class="logo-section">
@@ -79,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { useAuth } from '../composables/useApi'
@@ -98,6 +109,96 @@ const loginForm = ref({
 
 const errorMessage = ref('')
 const showErrorDialog = ref(false)
+
+// 全屏状态
+const isFullscreen = ref(false)
+
+// 检测是否在 PWA 模式（从主屏幕打开）
+const isPWAMode = () => {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+         (window.navigator as any).standalone === true
+}
+
+// 检查是否处于全屏状态
+const checkFullscreen = () => {
+  isFullscreen.value = !!(
+    document.fullscreenElement ||
+    (document as any).webkitFullscreenElement ||
+    (document as any).msFullscreenElement
+  )
+}
+
+// 检测是否是 iOS 设备
+const isIOS = () => {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
+
+// 进入全屏
+const requestFullscreen = () => {
+  const elem = document.documentElement
+  
+  // iOS 设备使用滚动方式隐藏地址栏
+  if (isIOS()) {
+    console.log('iOS 设备：使用滚动方式优化显示')
+    // 滚动到顶部以隐藏地址栏
+    window.scrollTo(0, 1)
+    setTimeout(() => window.scrollTo(0, 0), 0)
+    
+    // 同时尝试全屏 API（虽然 iOS Safari 可能不支持）
+    if ((elem as any).webkitRequestFullscreen) {
+      (elem as any).webkitRequestFullscreen().catch((err: Error) => {
+        console.log('iOS 全屏 API 不可用，使用视口优化')
+      })
+    }
+    return
+  }
+  
+  // 其他设备（Android/桌面）使用标准全屏 API
+  if (elem.requestFullscreen) {
+    elem.requestFullscreen().catch(err => {
+      console.warn('无法进入全屏模式:', err)
+    })
+  } else if ((elem as any).webkitRequestFullscreen) { /* Safari */
+    (elem as any).webkitRequestFullscreen()
+  } else if ((elem as any).msRequestFullscreen) { /* IE11 */
+    (elem as any).msRequestFullscreen()
+  }
+  
+  console.log('已请求全屏模式')
+}
+
+// 退出全屏
+const exitFullscreen = () => {
+  if (document.exitFullscreen) {
+    document.exitFullscreen()
+  } else if ((document as any).webkitExitFullscreen) { /* Safari */
+    (document as any).webkitExitFullscreen()
+  } else if ((document as any).msExitFullscreen) { /* IE11 */
+    (document as any).msExitFullscreen()
+  }
+  
+  console.log('已退出全屏模式')
+}
+
+// 切换全屏
+const toggleFullscreen = () => {
+  if (isFullscreen.value) {
+    exitFullscreen()
+  } else {
+    requestFullscreen()
+  }
+}
+
+// 监听全屏状态变化
+const handleFullscreenChange = () => {
+  checkFullscreen()
+}
+
+// 监听全屏变化事件
+document.addEventListener('fullscreenchange', handleFullscreenChange)
+document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+document.addEventListener('msfullscreenchange', handleFullscreenChange)
 
 // 页面加载时检查是否有保存的登录信息
 onMounted(() => {
@@ -122,6 +223,23 @@ onMounted(() => {
       localStorage.removeItem('savedExpireTime')
     }
   }
+  
+  // 自动进入全屏（稍微延迟以确保页面完全加载）
+  // PWA 模式下不需要调用全屏 API，因为已经是全屏模式
+  if (!isPWAMode()) {
+    setTimeout(() => {
+      requestFullscreen()
+    }, 500)
+  } else {
+    console.log('PWA 模式：无需调用全屏 API，已处于全屏状态')
+  }
+})
+
+// 组件卸载时清理事件监听
+onUnmounted(() => {
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.removeEventListener('msfullscreenchange', handleFullscreenChange)
 })
 
 const handleLogin = async () => {
@@ -203,11 +321,56 @@ const closeErrorDialog = () => {
 
 .login-container {
   height: 100vh;
+  height: 100dvh; /* 使用动态视口高度，适配移动端 */
   width: 100vw;
   position: fixed;
   top: 0;
   left: 0;
+  right: 0;
+  bottom: 0;
   overflow: hidden;
+  background: #0f192d;
+  /* iOS 优化 */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* 全屏切换按钮 */
+.fullscreen-btn-login {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  background: rgba(0, 188, 212, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 188, 212, 0.4);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #00bcd4;
+  transition: all 0.3s ease;
+  padding: 0;
+  z-index: 100;
+}
+
+.fullscreen-btn-login:hover {
+  background: rgba(0, 188, 212, 0.3);
+  border-color: rgba(0, 188, 212, 0.6);
+  color: #fff;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 188, 212, 0.4);
+}
+
+.fullscreen-btn-login:active {
+  transform: scale(0.95);
+}
+
+.fullscreen-btn-login svg {
+  width: 22px;
+  height: 22px;
 }
 
 .login-background {

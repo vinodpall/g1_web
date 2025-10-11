@@ -519,8 +519,22 @@ const updateUser = async (_userId: string, _userData: any) => {
 const fetchUsers = async (_params: { skip: number; limit: number }) => {
   console.log('fetchUsers - 等待重新对接')
 }
-const deleteUser = async (_userId: string) => {
-  console.log('deleteUser - 等待重新对接')
+const deleteUser = async (userId: string) => {
+  console.log('deleteUser - 开始删除用户, userId:', userId)
+  const token = userStore.token
+  if (!token) {
+    throw new Error('未找到认证token')
+  }
+  
+  // 将userId转换为number类型
+  const userIdNumber = parseInt(userId)
+  if (isNaN(userIdNumber)) {
+    throw new Error('无效的用户ID')
+  }
+  
+  // 调用userManagementStore的deleteUser方法
+  await userManagementStore.deleteUser(token, userIdNumber)
+  console.log('deleteUser - 用户删除成功')
 }
 
 const sidebarTabs = [
@@ -959,7 +973,7 @@ const onDeleteUserConfirm = async () => {
       showDeleteUserDialog.value = false
       
       // 重新获取用户列表以更新显示
-      await fetchUsers({ skip: 0, limit: 100 })
+      await loadUsers()
       
       // 显示成功结果
       resultDialog.value = {

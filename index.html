@@ -3,8 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/src/assets/source_data/svg_data/logo.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- iOS Safari 全屏优化 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
+    
+    <!-- 隐藏 iOS Safari 的全屏退出按钮提示 -->
+    <style>
+      /* 尝试隐藏 Safari 的全屏控制条 */
+      *::-webkit-full-screen-ancestor:not(iframe) {
+        display: none !important;
+      }
+      
+      ::-webkit-full-screen-controls {
+        display: none !important;
+      }
+    </style>
+    
+    <!-- Android Chrome 全屏优化 -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0f192d" />
+    <meta name="color-scheme" content="dark" />
+    
     <title>机器人自主导览平台</title>
+    
+    <style>
+      /* iOS 全屏安全区域处理 */
+      body {
+        margin: 0;
+        padding: 0;
+        /* 不在 body 上添加 padding，让各页面自己处理安全区域 */
+      }
+      
+      /* 防止 iOS 滚动时出现白色背景 */
+      html, body {
+        background: #0f192d;
+        overflow: hidden;
+        height: 100%;
+        width: 100%;
+        position: fixed;
+        -webkit-overflow-scrolling: touch;
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

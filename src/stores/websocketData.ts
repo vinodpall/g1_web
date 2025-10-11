@@ -79,6 +79,51 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       taskCompletionCallbacks.value.splice(index, 1)
     }
   }
+
+  // 机器人在线状态检测
+  const robotLastCmdStatusTime = ref<Record<string, number>>({}) // 记录每个机器人最后接收cmd_status的时间
+  let onlineCheckTimer: number | null = null
+  
+  // 启动在线状态检测
+  function startOnlineStatusCheck() {
+    if (onlineCheckTimer) return // 避免重复启动
+    
+    onlineCheckTimer = setInterval(() => {
+      const now = Date.now()
+      const timeout = 5000 // 5秒超时
+      
+      // 检查每个机器人的状态
+      Object.keys(robotLastCmdStatusTime.value).forEach(async (sn) => {
+        const lastTime = robotLastCmdStatusTime.value[sn]
+        if (now - lastTime > timeout) {
+          // 超时，更新为离线
+          const { useRobotStore } = await import('./robot')
+          const robotStore = useRobotStore()
+          robotStore.updateRobotOnlineStatus(sn, false)
+        }
+      })
+    }, 1000) as unknown as number // 每秒检测一次
+    
+    console.log('✅ 机器人在线状态检测已启动')
+  }
+  
+  // 停止在线状态检测
+  function stopOnlineStatusCheck() {
+    if (onlineCheckTimer) {
+      clearInterval(onlineCheckTimer)
+      onlineCheckTimer = null
+      console.log('⏹️ 机器人在线状态检测已停止')
+    }
+  }
+  
+  // 更新机器人最后接收时间
+  async function updateRobotLastCmdStatusTime(sn: string) {
+    robotLastCmdStatusTime.value[sn] = Date.now()
+    // 接收到数据，更新为在线
+    const { useRobotStore } = await import('./robot')
+    const robotStore = useRobotStore()
+    robotStore.updateRobotOnlineStatus(sn, true)
+  }
   
   // 触发任务完成回调
   function triggerTaskCompletionCallbacks() {
@@ -460,6 +505,8 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       case 'cmd_status':
         // console.log(`cmd_status [${sn}]`, data)
         robot.cmdStatus = data as CmdStatus
+        // 更新最后接收cmd_status的时间
+        updateRobotLastCmdStatusTime(sn)
         break
       case 'current_map':
         // console.log(`current_map [${sn}]`, data)
@@ -903,6 +950,10 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
     
     // 数据管理
     cleanupExpiredData,
-    resetData
+    resetData,
+    
+    // 在线状态检测
+    startOnlineStatusCheck,
+    stopOnlineStatusCheck
   }
 })

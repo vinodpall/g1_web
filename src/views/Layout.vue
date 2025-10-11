@@ -22,7 +22,6 @@
       </nav>
       
       <div class="header-right">
-
         <!-- 机器人选择器 -->
         <div class="el-select robot-selector">
           <div class="el-select__wrapper" 
@@ -30,6 +29,7 @@
                @click.stop="toggleRobotSelect">
             <div class="el-select__selection">
               <div class="el-select__selected-item el-select__placeholder">
+                <span class="status-indicator-inline" :class="{ 'online': selectedRobot?.online, 'offline': !selectedRobot?.online }"></span>
                 <span>{{ selectedRobot?.name || '选择机器人' }}</span>
               </div>
             </div>
@@ -80,6 +80,17 @@
             </div>
           </div>
         </div>
+
+        <!-- 全屏切换按钮 - 全屏后或 PWA 模式下自动隐藏 -->
+        <button 
+          v-show="!isFullscreen && !isPWAMode()" 
+          class="fullscreen-btn" 
+          @click="toggleFullscreen" 
+          title="进入全屏">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
       </div>
     </div>
     
@@ -135,11 +146,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { useRobotStore } from '../stores/robot'
 import { useUserManagementStore } from '../stores/userManagement'
+import { useWebSocketDataStore } from '../stores/websocketData'
 // import { useDevices } from '../composables/useApi' // API已移除，等待重新对接
 // import { dockApi } from '../api/services' // API已移除
 // import { useDeviceStatus } from '../composables/useDeviceStatus' // API已移除
@@ -150,9 +162,19 @@ const router = useRouter()
 const userStore = useUserStore()
 const robotStore = useRobotStore()
 const userManagementStore = useUserManagementStore()
+const websocketDataStore = useWebSocketDataStore()
 
 
 const user = computed(() => userStore.user)
+
+// 全屏状态
+const isFullscreen = ref(false)
+
+// 检测是否在 PWA 模式（从主屏幕打开）
+const isPWAMode = () => {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+         (window.navigator as any).standalone === true
+}
 
 // 机器人相关状态
 const robotOptions = computed(() => robotStore.robotOptions)
@@ -277,6 +299,87 @@ const closeUserMenu = () => {
 document.addEventListener('click', closeUserMenu)
 
 
+// 检查是否处于全屏状态
+const checkFullscreen = () => {
+  isFullscreen.value = !!(
+    document.fullscreenElement ||
+    (document as any).webkitFullscreenElement ||
+    (document as any).msFullscreenElement
+  )
+}
+
+// 检测是否是 iOS 设备
+const isIOS = () => {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
+
+// 进入全屏
+const requestFullscreen = () => {
+  const elem = document.documentElement
+  
+  // iOS 设备使用滚动方式隐藏地址栏
+  if (isIOS()) {
+    console.log('iOS 设备：使用滚动方式优化显示')
+    // 滚动到顶部以隐藏地址栏
+    window.scrollTo(0, 1)
+    setTimeout(() => window.scrollTo(0, 0), 0)
+    
+    // 同时尝试全屏 API（虽然 iOS Safari 可能不支持）
+    if ((elem as any).webkitRequestFullscreen) {
+      (elem as any).webkitRequestFullscreen().catch((err: Error) => {
+        console.log('iOS 全屏 API 不可用，使用视口优化')
+      })
+    }
+    return
+  }
+  
+  // 其他设备（Android/桌面）使用标准全屏 API
+  if (elem.requestFullscreen) {
+    elem.requestFullscreen().catch(err => {
+      console.warn('无法进入全屏模式:', err)
+    })
+  } else if ((elem as any).webkitRequestFullscreen) { /* Safari */
+    (elem as any).webkitRequestFullscreen()
+  } else if ((elem as any).msRequestFullscreen) { /* IE11 */
+    (elem as any).msRequestFullscreen()
+  }
+  
+  console.log('已请求全屏模式')
+}
+
+// 退出全屏
+const exitFullscreen = () => {
+  if (document.exitFullscreen) {
+    document.exitFullscreen()
+  } else if ((document as any).webkitExitFullscreen) { /* Safari */
+    (document as any).webkitExitFullscreen()
+  } else if ((document as any).msExitFullscreen) { /* IE11 */
+    (document as any).msExitFullscreen()
+  }
+  
+  console.log('已退出全屏模式')
+}
+
+// 切换全屏
+const toggleFullscreen = () => {
+  if (isFullscreen.value) {
+    exitFullscreen()
+  } else {
+    requestFullscreen()
+  }
+}
+
+// 监听全屏状态变化
+const handleFullscreenChange = () => {
+  checkFullscreen()
+}
+
+// 监听全屏变化事件
+document.addEventListener('fullscreenchange', handleFullscreenChange)
+document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+document.addEventListener('msfullscreenchange', handleFullscreenChange)
+
 // 页面加载时初始化
 onMounted(async () => {
   // 如果有token，刷新当前用户信息
@@ -324,6 +427,29 @@ onMounted(async () => {
   
   console.log('Layout初始化完成 - 最终机器人数据:', robotStore.robotOptions.length, '个')
   console.log('Layout初始化完成 - 最终选中的机器人ID:', robotStore.selectedRobotId)
+  
+  // 启动机器人在线状态检测
+  websocketDataStore.startOnlineStatusCheck()
+  
+  // 自动进入全屏（稍微延迟以确保页面完全加载）
+  // PWA 模式下不需要调用全屏 API，因为已经是全屏模式
+  if (!isPWAMode()) {
+    setTimeout(() => {
+      requestFullscreen()
+    }, 500)
+  } else {
+    console.log('PWA 模式：无需调用全屏 API，已处于全屏状态')
+  }
+})
+
+// 组件卸载时清理事件监听
+onUnmounted(() => {
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.removeEventListener('msfullscreenchange', handleFullscreenChange)
+  
+  // 停止机器人在线状态检测
+  websocketDataStore.stopOnlineStatusCheck()
 })
 </script>
 
@@ -344,10 +470,16 @@ onMounted(async () => {
 
 .layout-container {
   height: 100vh;
+  height: 100dvh; /* 使用动态视口高度，适配移动端 */
   width: 100vw;
   position: fixed;
   top: 0;
   left: 0;
+  right: 0;
+  bottom: 0;
+  /* iOS 优化 */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
   overflow: hidden;
   background-color: #0a0f1c;
 }
@@ -386,7 +518,7 @@ onMounted(async () => {
 }
 
 .logo {
-  height: clamp(35px, 4vw, 48px);
+  height: clamp(40px, 4.5vw, 55px);
   width: auto;
   flex-shrink: 0;
   /* 为黑色文字添加白色发光效果，让其在深色背景中清晰可见 */
@@ -403,7 +535,7 @@ onMounted(async () => {
   text-align: left;
   font-style: normal;
   text-transform: none;
-  margin-left: 0px;
+  margin-left: 10px;
   background: linear-gradient(to bottom, #fff, #63d8ff);
   -webkit-background-clip: text;
   background-clip: text;
@@ -478,15 +610,48 @@ onMounted(async () => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: clamp(8px, 1.2vw, 12px); /* 减少元素间距 */
+  gap: clamp(8px, 1.2vw, 10px); /* 减少元素间距 */
   position: relative;
   z-index: 1;
-  margin-right: clamp(10px, 1.5vw, 15px);
+  margin-right: 0;
   flex-shrink: 0;
   min-width: 0;
   flex: 0 0 auto;
   width: clamp(280px, 32vw, 380px); /* 增加整体宽度给机器人选择器更多空间 */
   justify-content: flex-end; /* 右对齐，避免挤压 */
+}
+
+/* 全屏切换按钮 */
+.fullscreen-btn {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #67d5fd;
+  transition: all 0.3s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.fullscreen-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+  transform: scale(1.05);
+}
+
+.fullscreen-btn:active {
+  transform: scale(0.95);
+}
+
+.fullscreen-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* 机场选择器样式 */
@@ -664,11 +829,59 @@ onMounted(async () => {
 .status-indicator.online {
   background-color: #2ed573;
   box-shadow: 0 0 4px rgba(46, 213, 115, 0.6);
+  animation: breathe-green 2s ease-in-out infinite;
 }
 
 .status-indicator.offline {
   background-color: #ff4757;
   box-shadow: 0 0 4px rgba(255, 71, 87, 0.6);
+  animation: breathe-red 2s ease-in-out infinite;
+}
+
+/* 右上角机器人名称前的呼吸灯 */
+.status-indicator-inline {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.status-indicator-inline.online {
+  background-color: #2ed573;
+  box-shadow: 0 0 6px rgba(46, 213, 115, 0.8);
+  animation: breathe-green 2s ease-in-out infinite;
+}
+
+.status-indicator-inline.offline {
+  background-color: #ff4757;
+  box-shadow: 0 0 6px rgba(255, 71, 87, 0.8);
+  animation: breathe-red 2s ease-in-out infinite;
+}
+
+/* 绿色呼吸灯动画 */
+@keyframes breathe-green {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(46, 213, 115, 0.8);
+  }
+  50% {
+    opacity: 0.5;
+    box-shadow: 0 0 12px rgba(46, 213, 115, 1);
+  }
+}
+
+/* 红色呼吸灯动画 */
+@keyframes breathe-red {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(255, 71, 87, 0.8);
+  }
+  50% {
+    opacity: 0.5;
+    box-shadow: 0 0 12px rgba(255, 71, 87, 1);
+  }
 }
 
 .robot-name {
