@@ -164,7 +164,7 @@
                 </div>
               </div>
             </div>
-            <div class="mini-card clickable-hall" @click="handleHallClick">
+            <div class="mini-card clickable-hall" :class="{ 'hall-disabled': navEnabled }" @click="handleHallClick">
               <img class="mini-card-icon" src="@/assets/source_data/robot_source/hall.svg" alt="hall" />
               <div class="mini-card-content">
                 <div class="mini-card-title">{{ currentHallName }}</div>
@@ -178,7 +178,7 @@
                 <div class="mini-card-sub">当前任务展区</div>
               </div>
             </div>
-            <button class="start-task-btn" @click="handleTaskControlClick" :class="{ 'stop-task': isTaskExecuting }">
+            <button class="start-task-btn" @click="handleTaskControlClick" :class="{ 'stop-task': isTaskExecuting }" :disabled="!isTaskExecuting && !navEnabled">
               {{ isTaskExecuting ? '停止执行任务' : '开始执行任务' }}
             </button>
           </div>
@@ -1029,6 +1029,15 @@
       @close="closeErrorMessage" 
     />
     
+    <!-- 确认弹窗 -->
+    <ConfirmDialog
+      :show="confirmDialogState.show"
+      :title="confirmDialogState.title"
+      :message="confirmDialogState.message"
+      @confirm="closeConfirmDialog(true)"
+      @cancel="closeConfirmDialog(false)"
+    />
+    
   </template>
 
 <script setup lang="ts">
@@ -1057,6 +1066,14 @@ const showSuccessMessage = ref(false)
 const successMessageText = ref('')
 const showErrorMessage = ref(false)
 const errorMessageText = ref('')
+
+// 确认弹窗状态
+const confirmDialogState = ref({
+  show: false,
+  title: '',
+  message: '',
+  resolve: null as ((value: boolean) => void) | null
+})
 
 // 导航开关状态从WebSocket数据同步
 const navEnabled = computed(() => {
@@ -1243,6 +1260,7 @@ const taskProgressStore = useTaskProgressStore()
 // 导入消息提示组件
 import SuccessMessage from '../components/SuccessMessage.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 // 使用机器人store
 import { useRobotStore } from '../stores/robot'
@@ -1560,6 +1578,13 @@ const currentHallName = computed(() => {
 
 // 展厅选择相关方法
 const handleHallClick = async () => {
+  // 检查导航状态，导航开启时不允许切换展厅
+  if (navEnabled.value) {
+    errorMessageText.value = '导航开启时不能切换展厅，请先关闭导航'
+    showErrorMessage.value = true
+    return
+  }
+  
   // 确保展厅数据已加载
   if (!hallStore.isLoaded || hallStore.halls.length === 0) {
     try {
@@ -1647,6 +1672,17 @@ const handleTaskControlClick = async () => {
 // 处理开始执行任务按钮点击
 const handleStartTaskClick = async () => {
   console.log('=== 开始执行任务按钮被点击 ===')
+  
+  // 检查导航是否开启
+  if (!navEnabled.value) {
+    errorMessageText.value = '请先开启导航后再执行任务'
+    showErrorMessage.value = true
+    setTimeout(() => {
+      showErrorMessage.value = false
+    }, 3000)
+    return
+  }
+  
   try {
     // 先确保数据已加载
     if (!tourStore.tourPresets.length) {
@@ -1803,6 +1839,31 @@ const closeSuccessMessage = () => {
   showSuccessMessage.value = false
 }
 
+// 显示确认对话框
+const showConfirmDialog = (title: string, message: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    confirmDialogState.value = {
+      show: true,
+      title,
+      message,
+      resolve
+    }
+  })
+}
+
+// 关闭确认弹窗
+const closeConfirmDialog = (confirmed: boolean) => {
+  if (confirmDialogState.value.resolve) {
+    confirmDialogState.value.resolve(confirmed)
+  }
+  confirmDialogState.value = {
+    show: false,
+    title: '',
+    message: '',
+    resolve: null
+  }
+}
+
 // 监听展厅选择变化，更新地图
 watch(() => hallStore.selectedHallId, (newHallId) => {
   if (newHallId) {
@@ -1813,6 +1874,20 @@ watch(() => hallStore.selectedHallId, (newHallId) => {
     }, 50)
   }
 }, { immediate: false })
+
+// 监听导航状态和当前地图，自动同步展厅选择
+watch([navEnabled, () => robotCurrentMap.value?.map_name, hallOptions], ([isNavEnabled, mapName, halls]) => {
+  console.log(`首页导航状态变化: navEnabled=${isNavEnabled}, currentMapName=${mapName}`)
+  
+  if (isNavEnabled && mapName) {
+    // 当导航启用且有当前地图时，查找对应的展厅
+    const matchingHall = halls.find(hall => hall.name === mapName)
+    if (matchingHall && selectedHallId.value !== matchingHall.id) {
+      console.log(`首页自动选择展厅: ${matchingHall.name} (${matchingHall.id})`)
+      hallStore.setSelectedHall(matchingHall.id)
+    }
+  }
+}, { immediate: true })
 
 // 监听机器人位置变化，实时更新显示
 watch(() => getRobotPose(getWebSocketSn()), (newPose) => {
@@ -4029,7 +4104,7 @@ const getCurrentWaylineName = computed(() => {
 })
 
 // 下发任务处理
-const handleDispatchTask = () => {
+const handleDispatchTask = async () => {
   // 获取当前选中的航线信息
   const currentWayline = waylineFiles.value.find(f => f.wayline_id === selectedWayline.value)
   if (!currentWayline) {
@@ -4049,7 +4124,7 @@ const handleDispatchTask = () => {
     ? Math.round(droneStatus.value.batteryPercent as number) 
     : null
   if (currentBatteryPercent !== null && currentBatteryPercent < 30) {
-    const confirmContinue = window.confirm(`当前电量为${currentBatteryPercent}%，低于30%，不建议飞行。是否继续下发任务？`)
+    const confirmContinue = await showConfirmDialog('电量警告', `当前电量为${currentBatteryPercent}%，低于30%，不建议飞行。是否继续下发任务？`)
     if (!confirmContinue) {
       return
     }
@@ -4243,9 +4318,10 @@ const handleCancelTask = async () => {
       return
     }
     
-    if (!confirm('确定要取消当前任务吗？')) {
-      return
-    }
+  const confirmed = await showConfirmDialog('取消确认', '确定要取消当前任务吗？')
+  if (!confirmed) {
+    return
+  }
     
     await stopJob(workspaceId, waylineProgress.value.job_id)
     alert('任务取消指令已发送')
@@ -4320,9 +4396,10 @@ const handleCancelReturnHome = async () => {
       return
     }
     
-    if (!confirm('确定要取消返航吗？')) {
-      return
-    }
+  const confirmed = await showConfirmDialog('取消确认', '确定要取消返航吗？')
+  if (!confirmed) {
+    return
+  }
     
     await cancelReturnHome(workspaceId, dockSns[0])
     alert('取消返航指令已发送')
@@ -4348,10 +4425,10 @@ const handleReturnHome = async () => {
     const dockSn = dockSns[0]
     
     // 弹出确认对话框
-    const confirmed = confirm('确定要执行一键返航吗？')
-    if (!confirmed) {
-      return
-    }
+  const confirmed = await showConfirmDialog('确认操作', '确定要执行一键返航吗？')
+  if (!confirmed) {
+    return
+  }
     
     // 调用一键返航API
     const result = await controlApi.returnHome(dockSn)
@@ -6015,6 +6092,17 @@ const centerToDroneMarker = () => {
 .start-task-btn.stop-task:hover {
   background: #d32f2f;
   filter: brightness(1.05);
+}
+
+/* 按钮禁用状态样式 */
+.start-task-btn:disabled {
+  background: #666;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.start-task-btn:disabled:hover {
+  filter: none;
+  background: #666;
 }
 .bottom-card::before,
 .bottom-card::after {
@@ -9153,6 +9241,19 @@ const centerToDroneMarker = () => {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(103, 213, 253, 0.2);
   border-color: rgba(103, 213, 253, 0.3);
+}
+
+/* 展厅禁用状态（导航开启时） */
+.clickable-hall.hall-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  filter: grayscale(0.3);
+}
+
+.clickable-hall.hall-disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* 展厅选择弹窗样式 */

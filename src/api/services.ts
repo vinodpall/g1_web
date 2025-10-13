@@ -488,10 +488,14 @@ export const guideApi = {
       console.log('点位名称API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('点位名称API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('点位名称API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -525,10 +529,14 @@ export const guideApi = {
       console.log('创建点位名称API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('创建点位名称API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('创建点位名称API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -560,12 +568,14 @@ export const guideApi = {
       console.log('删除点位名称API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('删除点位名称API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }).catch(() => {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('删除点位名称API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json().catch(() => ({})) // 如果响应体为空，返回空对象
     }).then(data => {
@@ -596,10 +606,14 @@ export const guideApi = {
       console.log('讲解对象API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('讲解对象API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('讲解对象API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -633,10 +647,14 @@ export const guideApi = {
       console.log('创建讲解对象API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('创建讲解对象API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('创建讲解对象API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -668,10 +686,14 @@ export const guideApi = {
       console.log('删除讲解对象API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('删除讲解对象API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('删除讲解对象API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       
       // DELETE请求可能返回空响应
@@ -708,10 +730,14 @@ export const guideApi = {
       console.log('讲解词API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('讲解词API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('讲解词API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -748,10 +774,15 @@ export const guideApi = {
       console.log('创建讲解词API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('创建讲解词API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('创建讲解词API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            // JSON解析失败时的处理
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -785,10 +816,14 @@ export const guideApi = {
       console.log('更新讲解词API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('更新讲解词API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('更新讲解词API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -820,10 +855,14 @@ export const guideApi = {
       console.log('删除讲解词API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('删除讲解词API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('删除讲解词API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       console.log('讲解词删除成功')
       return response.ok
@@ -1596,6 +1635,47 @@ export const navigationApi = {
       return data
     }).catch(error => {
       console.error('暂停/恢复导航API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 删除数据包接口
+  deleteDataPackage: (token: string, params: { sn: string, data_name: string, timeout?: number }) => {
+    const baseUrl = buildApiUrl('/navigation/data/delete')
+    const url = new URL(baseUrl)
+    
+    // 添加参数到URL
+    url.searchParams.append('sn', params.sn)
+    url.searchParams.append('data_name', params.data_name)
+    url.searchParams.append('timeout', (params.timeout || 20).toString())
+    
+    console.log('navigationApi.deleteDataPackage 被调用')
+    console.log('请求URL:', url.toString())
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('删除数据包参数:', params)
+    
+    return fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('删除数据包API响应状态:', response.status)
+      console.log('删除数据包API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('删除数据包API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('删除数据包API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('删除数据包API请求失败:', error)
       throw error
     })
   }

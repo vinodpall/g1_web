@@ -97,31 +97,32 @@
             </div>
             
             <!-- 讲解词列表 -->
-            <div v-else class="introduce-list-content">
-              <div class="introduce-list-table">
-                <div class="introduce-table-header">
-                  <div class="introduce-th introduce-th-index">序号</div>
-                  <div class="introduce-th introduce-th-point">点位名称</div>
-                  <div class="introduce-th introduce-th-content">讲解词内容</div>
-                  <div class="introduce-th introduce-th-time">创建时间</div>
-                  <div class="introduce-th introduce-th-actions">操作</div>
-                </div>
-                
-                <div class="introduce-table-body">
-                  <div 
-                    v-for="(item, index) in introduceContents" 
-                    :key="item.id"
-                    class="introduce-tr"
-                  >
-                    <div class="introduce-td introduce-td-index">{{ index + 1 }}</div>
-                    <div class="introduce-td introduce-td-point">{{ item.pointName }}</div>
-                    <div class="introduce-td introduce-td-content">
-                      <div class="content-preview" @click="showContentDetail(item.content)">
-                        {{ item.content }}
-                      </div>
+            <template v-else>
+              <div class="mission-table-header introduce-table-header">
+                <div class="mission-th introduce-col-index">序号</div>
+                <div class="mission-th introduce-col-point">点位名称</div>
+                <div class="mission-th introduce-col-content">讲解词内容</div>
+                <div class="mission-th introduce-col-actions">操作</div>
+              </div>
+              
+              <div class="mission-table-body">
+                <div 
+                  v-for="(item, index) in introduceContents" 
+                  :key="item.id"
+                  class="mission-tr"
+                >
+                  <div class="mission-td introduce-col-index">{{ index + 1 }}</div>
+                  <div class="mission-td introduce-col-point">{{ item.pointName }}</div>
+                  <div class="mission-td introduce-col-content">
+                    <div class="content-preview" @click="showContentDetail(item.content)">
+                      {{ item.content }}
                     </div>
-                    <div class="introduce-td introduce-td-time">{{ item.createTime }}</div>
-                    <div class="introduce-td introduce-td-actions">
+                  </div>
+                  <div class="mission-td introduce-col-actions">
+                    <div class="user-action-btns">
+                      <button class="icon-btn speak-btn" title="语音播报" @click="handleSpeakTest(item)">
+                        <img :src="speakIcon" />
+                      </button>
                       <button class="icon-btn" title="编辑" @click="editIntroduceContent(item)">
                         <img :src="editIcon" />
                       </button>
@@ -139,7 +140,7 @@
                   <div class="empty-desc">点击上方"添加讲解词"按钮添加第一条讲解词</div>
                 </div>
               </div>
-            </div>
+            </template>
           </div>
         </section>
       </div>
@@ -493,6 +494,7 @@ import { useUserManagementStore } from '../stores/userManagement'
 import { useUserStore } from '../stores/user'
 import { usePermissionStore } from '../stores/permission'
 import { useGuideStore } from '../stores/guide'
+import { useRobotStore } from '../stores/robot'
 import PermissionDenied from '../components/PermissionDenied.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import ResultDialog from '../components/ResultDialog.vue'
@@ -500,12 +502,14 @@ import userIcon from '@/assets/source_data/svg_data/user.svg'
 import introduceIcon from '@/assets/source_data/robot_source/introduce.svg'
 import editIcon from '@/assets/source_data/svg_data/edit.svg'
 import deleteIcon from '@/assets/source_data/svg_data/delete.svg'
+import speakIcon from '@/assets/source_data/robot_source/speak.svg'
 
 const router = useRouter()
 const route = useRoute()
 const userManagementStore = useUserManagementStore()
 const userStore = useUserStore()
 const guideStore = useGuideStore()
+const robotStore = useRobotStore()
 
 // 使用用户管理store中的数据
 const users = computed(() => userManagementStore.users || [])
@@ -1397,6 +1401,75 @@ const editIntroduceContent = (item: any) => {
 }
 
 // 显示删除讲解词确认弹窗
+// 处理语音播报测试
+const handleSpeakTest = async (item: any) => {
+  try {
+    // 获取机器人SN
+    let sn = ''
+    if (robotStore.selectedRobot && robotStore.selectedRobot.sn) {
+      sn = robotStore.selectedRobot.sn
+    } else {
+      // 如果没有选中机器人，尝试从localStorage获取
+      const selectedRobotId = localStorage.getItem('selectedRobotId')
+      if (selectedRobotId) {
+        const robots = JSON.parse(localStorage.getItem('robots') || '[]')
+        const robot = robots.find((r: any) => r.id === parseInt(selectedRobotId))
+        if (robot && robot.sn) {
+          sn = robot.sn
+        }
+      }
+    }
+    
+    if (!sn) {
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '语音播报失败',
+        message: '',
+        details: '未找到机器人设备，请先选择机器人'
+      }
+      return
+    }
+    
+    // 构建API URL
+    const text = encodeURIComponent(item.content)
+    const timeout = 5
+    const url = `/api/v1/speech/test?sn=${sn}&text=${text}&timeout=${timeout}`
+    
+    // 调用API
+    const token = userStore.token
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '已发送语音播报请求',
+      message: '',
+      details: ''
+    }
+  } catch (error) {
+    console.error('语音播报失败:', error)
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '语音播报失败',
+      message: '',
+      details: error instanceof Error ? error.message : '发送语音播报请求失败，请稍后重试'
+    }
+  }
+}
+
 const deleteIntroduceContent = (contentId: string) => {
   // 获取讲解词信息
   const content = introduceContents.value.find(c => c.id === contentId)
@@ -1691,7 +1764,7 @@ onMounted(async () => {
   cursor: pointer;
   display: flex;
   align-items: center;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 .icon-btn:hover {
   background: #223a5e44;
@@ -1701,6 +1774,20 @@ onMounted(async () => {
   width: 18px;
   height: 18px;
   object-fit: contain;
+  transition: filter 0.2s;
+}
+/* 语音播报按钮特殊样式 */
+.icon-btn.speak-btn {
+  /* padding 与其他按钮保持一致 */
+}
+.icon-btn.speak-btn img {
+  filter: brightness(1.5);
+}
+.icon-btn.speak-btn:hover {
+  background: rgba(81, 176, 138, 0.15);
+}
+.icon-btn.speak-btn:hover img {
+  filter: brightness(1.8);
 }
 .add-user-form {
   display: flex;
@@ -1868,6 +1955,11 @@ onMounted(async () => {
 .introduce-content {
   padding: 40px 20px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
 }
 
 .introduce-placeholder {
@@ -2037,125 +2129,53 @@ onMounted(async () => {
   background: rgba(103, 213, 253, 0.8);
 }
 
-/* 讲解词列表样式 */
-.introduce-list-content {
-  padding: 20px;
+/* 讲解词列表样式 - 使用标准mission-table样式 */
+/* 讲解词表格列宽度定义 */
+.introduce-table-header .introduce-col-index,
+.mission-tr .introduce-col-index {
+  flex: 0 0 80px;
+  max-width: 80px;
+  min-width: 80px;
+  text-align: center;
+  justify-content: center;
 }
 
-.introduce-list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(22, 65, 89, 0.5);
-}
-
-.introduce-list-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.target-name {
-  color: #67d5fd;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.target-desc {
-  color: #b6b6b6;
-  font-size: 16px;
-}
-
-.introduce-list-count {
-  color: #b6b6b6;
-  font-size: 14px;
-}
-
-.introduce-list-table {
-  background: rgba(22, 65, 89, 0.3);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.introduce-table-header {
-  display: grid;
-  grid-template-columns: 60px 120px 1fr 140px 100px;
-  background: rgba(22, 65, 89, 0.6);
-  padding: 12px 16px;
-  gap: 16px;
-}
-
-.introduce-th {
-  color: #67d5fd;
-  font-size: 14px;
-  font-weight: 600;
+.introduce-table-header .introduce-col-point,
+.mission-tr .introduce-col-point {
+  flex: 0 0 150px;
+  max-width: 150px;
+  min-width: 150px;
   text-align: left;
 }
 
-.introduce-th-actions {
+.introduce-table-header .introduce-col-content,
+.mission-tr .introduce-col-content {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.introduce-table-header .introduce-col-actions,
+.mission-tr .introduce-col-actions {
+  flex: 0 0 120px;
+  max-width: 120px;
+  min-width: 120px;
   text-align: center;
-}
-
-.introduce-table-body {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.introduce-tr {
-  display: grid;
-  grid-template-columns: 60px 120px 1fr 140px 100px;
-  padding: 12px 16px;
-  gap: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  transition: background 0.2s;
-}
-
-.introduce-tr:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.introduce-tr:last-child {
-  border-bottom: none;
-}
-
-.introduce-td {
-  color: #fff;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-}
-
-.introduce-td-index {
   justify-content: center;
-  color: #b6b6b6;
 }
 
-.introduce-td-content {
-  overflow: hidden;
-}
-
+/* 讲解词内容预览样式 */
 .content-preview {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
   cursor: pointer;
+  transition: color 0.2s;
 }
 
 .content-preview:hover {
   color: #67d5fd;
-}
-
-.introduce-td-time {
-  color: #b6b6b6;
-  font-size: 12px;
-}
-
-.introduce-td-actions {
-  justify-content: center;
-  gap: 8px;
 }
 
 .introduce-empty {
@@ -2186,24 +2206,6 @@ onMounted(async () => {
   line-height: 1.5;
 }
 
-/* 讲解词列表滚动条样式 */
-.introduce-table-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.introduce-table-body::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-
-.introduce-table-body::-webkit-scrollbar-thumb {
-  background: rgba(103, 213, 253, 0.6);
-  border-radius: 3px;
-}
-
-.introduce-table-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(103, 213, 253, 0.8);
-}
 
 /* 查看讲解词详情弹窗样式 */
 .content-detail-dialog {
@@ -2222,16 +2224,6 @@ onMounted(async () => {
   overflow-y: auto;
   word-wrap: break-word;
   white-space: pre-wrap;
-}
-
-/* 内容预览点击样式优化 */
-.content-preview {
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.content-preview:hover {
-  color: #67d5fd;
 }
 
 /* 内容详情文本滚动条样式 */

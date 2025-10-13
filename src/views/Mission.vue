@@ -575,36 +575,45 @@
         <div class="custom-dialog-title">生成展厅地图</div>
         <div class="custom-dialog-content">
           <div class="add-user-form">
-            <div class="add-user-form-row">
+            <div class="add-user-form-row data-package-row">
               <label>展厅数据包：</label>
-              <div class="custom-select-component">
-                <div class="custom-select-trigger" 
-                     :class="{ 'is-active': isDataPackageSelectActive }"
-                     @click.stop="toggleDataPackageSelect">
-                  <span class="custom-select-value">
-                    {{ generateMapForm.dataName ? processDataPackageName(generateMapForm.dataName) : '请选择数据包' }}
-                  </span>
-                  <span class="custom-select-arrow">
-                    <svg width="12" height="12" viewBox="0 0 12 12">
-                      <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
-                    </svg>
-                  </span>
-                </div>
-                <div v-show="isDataPackageSelectActive" class="custom-select-dropdown" @click.stop>
-                  <div class="custom-select-dropdown-list">
-                    <div 
-                      v-for="packageName in rawDataPackages" 
-                      :key="packageName"
-                      class="custom-select-dropdown-item"
-                      :class="{ 'is-selected': generateMapForm.dataName === packageName }"
-                      @click="selectDataPackage(packageName)">
-                      {{ processDataPackageName(packageName) }}
-                    </div>
-                    <div v-if="rawDataPackages.length === 0" class="custom-select-dropdown-item is-disabled">
-                      暂无数据包
+              <div class="data-package-wrapper">
+                <div class="custom-select-component">
+                  <div class="custom-select-trigger" 
+                       :class="{ 'is-active': isDataPackageSelectActive }"
+                       @click.stop="toggleDataPackageSelect">
+                    <span class="custom-select-value">
+                      {{ generateMapForm.dataName ? processDataPackageName(generateMapForm.dataName) : '请选择数据包' }}
+                    </span>
+                    <span class="custom-select-arrow">
+                      <svg width="12" height="12" viewBox="0 0 12 12">
+                        <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                      </svg>
+                    </span>
+                  </div>
+                  <div v-show="isDataPackageSelectActive" class="custom-select-dropdown" @click.stop>
+                    <div class="custom-select-dropdown-list">
+                      <div 
+                        v-for="packageName in rawDataPackages" 
+                        :key="packageName"
+                        class="custom-select-dropdown-item"
+                        :class="{ 'is-selected': generateMapForm.dataName === packageName }"
+                        @click="selectDataPackage(packageName)">
+                        {{ processDataPackageName(packageName) }}
+                      </div>
+                      <div v-if="rawDataPackages.length === 0" class="custom-select-dropdown-item is-disabled">
+                        暂无数据包
+                      </div>
                     </div>
                   </div>
                 </div>
+                <button 
+                  class="mission-btn-delete-package icon-btn" 
+                  @click="handleDeleteDataPackage"
+                  :disabled="!generateMapForm.dataName"
+                  title="删除选中的数据包">
+                  <img :src="deleteIcon" />
+                </button>
               </div>
             </div>
             <div class="add-user-form-row">
@@ -622,6 +631,25 @@
         <div class="custom-dialog-actions">
           <button class="mission-btn mission-btn-cancel" @click="handleCancelGenerateMap">取消</button>
           <button class="mission-btn mission-btn-pause" @click="handleConfirmGenerateMap">开始生成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除数据包确认弹窗 -->
+    <div v-if="showDeleteDataPackageDialog" class="custom-dialog-mask">
+      <div class="custom-dialog delete-confirm-dialog">
+        <div class="custom-dialog-title">删除确认</div>
+        <div class="custom-dialog-content">
+          <div class="delete-confirm-message">
+            <div class="delete-icon">⚠️</div>
+            <div class="delete-text">
+              确定要删除数据包"{{ processDataPackageName(dataPackageToDelete) }}"吗？删除后无法恢复，请谨慎操作。
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-stop" @click="confirmDeleteDataPackage">确认删除</button>
+          <button class="mission-btn mission-btn-cancel" @click="showDeleteDataPackageDialog = false">取消</button>
         </div>
       </div>
     </div>
@@ -677,6 +705,25 @@
         </div>
       </div>
     </div>
+
+    <!-- 通用确认弹窗 -->
+    <ConfirmDialog
+      :show="confirmDialogState.show"
+      :title="confirmDialogState.title"
+      :message="confirmDialogState.message"
+      @confirm="closeConfirmDialog(true)"
+      @cancel="closeConfirmDialog(false)"
+    />
+
+    <!-- 通用结果弹窗 -->
+    <ResultDialog
+      :show="resultDialogState.show"
+      :type="resultDialogState.type"
+      :title="resultDialogState.title"
+      :message="resultDialogState.message"
+      :details="resultDialogState.details"
+      @close="closeResultDialog"
+    />
   </div>
 </template>
 
@@ -731,6 +778,8 @@ import iconRightDown from '@/assets/source_data/svg_data/task_line_svg/right_dow
 import iconStartVideo from '@/assets/source_data/svg_data/task_line_svg/start_video.svg'
 import iconStopVideo from '@/assets/source_data/svg_data/task_line_svg/stop_video.svg'
 import iconTakePhoto from '@/assets/source_data/svg_data/task_line_svg/take_photo.svg'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ResultDialog from '@/components/ResultDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -864,6 +913,23 @@ const hasShownGridMapCompletionDialog = ref(false) // 标记是否已显示过�
 let mapCompletionTimer: ReturnType<typeof setTimeout> | null = null
 let gridMapCompletionTimer: ReturnType<typeof setTimeout> | null = null
 
+// 通用确认弹窗状态
+const confirmDialogState = ref({
+  show: false,
+  title: '',
+  message: '',
+  resolve: null as ((value: boolean) => void) | null
+})
+
+// 通用结果弹窗状态
+const resultDialogState = ref({
+  show: false,
+  type: 'info' as 'success' | 'error' | 'info',
+  title: '',
+  message: '',
+  details: '' as string | null
+})
+
 // 地图录制弹窗相关状态
 const showRecordingDialog = ref(false)
 const recordingForm = ref({
@@ -880,6 +946,10 @@ const generateMapForm = ref({
   mapName: ''
 })
 const isDataPackageSelectActive = ref(false)
+
+// 删除数据包确认弹窗状态
+const showDeleteDataPackageDialog = ref(false)
+const dataPackageToDelete = ref('')
 
 // 用户是否已提交生成请求（用于区分用户操作和系统状态）
 const hasSubmittedGeneration = ref(false)
@@ -1477,24 +1547,25 @@ const selectHall = (hallId: string) => {
 // 删除选中的展厅处理函数
 const deleteSelectedHall = async () => {
   if (!selectedHall.value) {
-    alert('请先选择要删除的展厅')
+    showErrorMessage('请先选择要删除的展厅')
     return
   }
   
   const selectedHallInfo = hallOptions.value.find(h => h.id === selectedHall.value)
   if (!selectedHallInfo) {
-    alert('未找到选中的展厅信息')
+    showErrorMessage('未找到选中的展厅信息')
     return
   }
   
-  if (!confirm(`确定要删除展厅"${selectedHallInfo.name}"吗？此操作将删除该展厅的地图数据，无法恢复。`)) {
+  const confirmed = await showConfirmDialog('删除确认', `确定要删除展厅"${selectedHallInfo.name}"吗？此操作将删除该展厅的地图数据，无法恢复。`)
+  if (!confirmed) {
     return
   }
   
   try {
     const token = userStore.token
     if (!token) {
-      alert('未找到认证token')
+      showErrorMessage('未找到认证token')
       return
     }
     
@@ -1530,11 +1601,11 @@ const deleteSelectedHall = async () => {
       hallStore.setSelectedHall('')
     }
     
-    alert(`展厅"${selectedHallInfo.name}"删除成功`)
+    showSuccessMessage(`展厅"${selectedHallInfo.name}"删除成功`)
     console.log('展厅删除成功:', selectedHallInfo.name)
   } catch (error) {
     console.error('删除展厅失败:', error)
-    alert(error instanceof Error ? error.message : '删除展厅失败')
+    showErrorMessage(error instanceof Error ? error.message : '删除展厅失败')
   }
 }
 
@@ -1572,14 +1643,15 @@ const handleSyncAfterPcdComplete = async () => {
 
 // 删除展厅处理函数（保留用于向后兼容）
 const deleteHall = async (hall: { id: string, name: string }) => {
-  if (!confirm(`确定要删除展厅"${hall.name}"吗？此操作将删除该展厅的地图数据，无法恢复。`)) {
+  const confirmed = await showConfirmDialog('删除确认', `确定要删除展厅"${hall.name}"吗？此操作将删除该展厅的地图数据，无法恢复。`)
+  if (!confirmed) {
     return
   }
   
   try {
     const token = userStore.token
     if (!token) {
-      alert('未找到认证token')
+      showErrorMessage('未找到认证token')
       return
     }
     
@@ -1617,11 +1689,11 @@ const deleteHall = async (hall: { id: string, name: string }) => {
       }
     }
     
-    alert(`展厅"${hall.name}"删除成功`)
+    showSuccessMessage(`展厅"${hall.name}"删除成功`)
     console.log('展厅删除成功:', hall.name)
   } catch (error) {
     console.error('删除展厅失败:', error)
-    alert(error instanceof Error ? error.message : '删除展厅失败')
+    showErrorMessage(error instanceof Error ? error.message : '删除展厅失败')
   }
 }
 const setTool = (tool: 'pen' | 'eraser') => { 
@@ -1933,7 +2005,7 @@ const stopHallRecording = async () => {
   try {
     const token = userStore.token
     if (!token) {
-      alert('未找到认证token')
+      showErrorMessage('未找到认证token')
       return
     }
 
@@ -1954,10 +2026,10 @@ const stopHallRecording = async () => {
     isRecording.value = false
     // 清空保存的数据包名称
     currentRecordingDataName.value = ''
-    alert('地图录制已停止')
+    showSuccessMessage('地图录制已停止')
   } catch (error) {
     console.error('停止地图录制失败:', error)
-    alert(error instanceof Error ? error.message : '停止地图录制失败')
+    showErrorMessage(error instanceof Error ? error.message : '停止地图录制失败')
   } finally {
     // 确保加载状态被清除
     recordingLoading.value = false
@@ -1967,7 +2039,7 @@ const stopHallRecording = async () => {
 // 确认开始录制
 const handleConfirmStartRecording = async () => {
   if (!recordingForm.value.dataName.trim()) {
-    alert('请输入展厅数据包名称')
+    showErrorMessage('请输入展厅数据包名称')
     return
   }
 
@@ -1979,7 +2051,7 @@ const handleConfirmStartRecording = async () => {
   try {
     const token = userStore.token
     if (!token) {
-      alert('未找到认证token')
+      showErrorMessage('未找到认证token')
       return
     }
 
@@ -2001,10 +2073,10 @@ const handleConfirmStartRecording = async () => {
     // 保存当前录制的数据包名称
     currentRecordingDataName.value = recordingForm.value.dataName.trim()
     showRecordingDialog.value = false
-    alert(`地图录制已开始\n数据包名称：${recordingForm.value.dataName}`)
+    showSuccessMessage(`地图录制已开始\n数据包名称：${recordingForm.value.dataName}`)
   } catch (error) {
     console.error('开始地图录制失败:', error)
-    alert(error instanceof Error ? error.message : '开始地图录制失败')
+    showErrorMessage(error instanceof Error ? error.message : '开始地图录制失败')
   } finally {
     // 确保加载状态被清除
     recordingLoading.value = false
@@ -2057,7 +2129,7 @@ const stopGenerateHallMap = async () => {
   try {
     const token = userStore.token
     if (!token) {
-      alert('未找到认证token')
+      showErrorMessage('未找到认证token')
       return
     }
 
@@ -2076,7 +2148,7 @@ const stopGenerateHallMap = async () => {
     await navigationApi.generateMap(token, mapData)
     hasSubmittedGeneration.value = false
     isMapGenerationActive.value = false // 主动标记生成已停止
-    alert('地图生成已停止')
+    showErrorMessage('地图生成已停止')
     console.log('手动停止地图生成，重置hasSubmittedGeneration为false')
   } catch (error) {
     console.error('停止地图生成失败:', error)
@@ -2090,12 +2162,12 @@ const stopGenerateHallMap = async () => {
 // 确认开始生成地图
 const handleConfirmGenerateMap = async () => {
   if (!generateMapForm.value.dataName.trim()) {
-    alert('暂无可用的展厅数据包')
+    showErrorMessage('暂无可用的展厅数据包')
     return
   }
   
   if (!generateMapForm.value.mapName.trim()) {
-    alert('请输入地图名称')
+    showErrorMessage('请输入地图名称')
     return
   }
 
@@ -2107,7 +2179,7 @@ const handleConfirmGenerateMap = async () => {
   try {
     const token = userStore.token
     if (!token) {
-      alert('未找到认证token')
+      showErrorMessage('未找到认证token')
       return
     }
 
@@ -2130,11 +2202,11 @@ const handleConfirmGenerateMap = async () => {
     hasShownCompletionDialog.value = false // 重置完成弹窗标记
     hasShownGridMapCompletionDialog.value = false // 重置栅格图完成弹窗标记
     showGenerateMapDialog.value = false
-    alert(`地图生成已开始\n数据包：${processDataPackageName(generateMapForm.value.dataName)}\n地图名称：${generateMapForm.value.mapName}`)
+    showSuccessMessage(`地图生成已开始\n数据包：${processDataPackageName(generateMapForm.value.dataName)}\n地图名称：${generateMapForm.value.mapName}`)
     console.log('生成地图请求已提交，设置hasSubmittedGeneration为true')
   } catch (error) {
     console.error('开始地图生成失败:', error)
-    alert(error instanceof Error ? error.message : '开始地图生成失败')
+    showErrorMessage(error instanceof Error ? error.message : '开始地图生成失败')
   } finally {
     // 确保加载状态被清除
     generateMapLoading.value = false
@@ -2157,6 +2229,58 @@ const toggleDataPackageSelect = () => {
 const selectDataPackage = (packageName: string) => {
   generateMapForm.value.dataName = packageName
   isDataPackageSelectActive.value = false
+}
+
+// 删除数据包
+const handleDeleteDataPackage = () => {
+  if (!generateMapForm.value.dataName) {
+    showErrorMessage('请先选择要删除的数据包')
+    return
+  }
+
+  // 保存要删除的数据包名称并显示确认弹窗
+  dataPackageToDelete.value = generateMapForm.value.dataName
+  showDeleteDataPackageDialog.value = true
+}
+
+// 确认删除数据包
+const confirmDeleteDataPackage = async () => {
+  try {
+    const token = userStore.token
+    if (!token) {
+      showErrorMessage('未找到认证token')
+      showDeleteDataPackageDialog.value = false
+      return
+    }
+
+    // 关闭确认弹窗
+    showDeleteDataPackageDialog.value = false
+    
+    // 显示发送请求提示
+    showSuccessMessage('已发送删除请求，请稍等...')
+
+    // 调用删除接口
+    const response = await navigationApi.deleteDataPackage(token, {
+      sn: getWebSocketSn(),
+      data_name: processDataPackageName(dataPackageToDelete.value),
+      timeout: 20
+    })
+
+    if (response.error_code === 0) {
+      showSuccessMessage('数据包删除成功')
+      // 清空选中的数据包
+      generateMapForm.value.dataName = ''
+      // 重新加载数据包列表
+      await loadDataPackages()
+    } else {
+      showErrorMessage(response.error_msg || '删除数据包失败')
+    }
+  } catch (error) {
+    console.error('删除数据包失败:', error)
+    showErrorMessage(error instanceof Error ? error.message : '删除数据包失败')
+  } finally {
+    dataPackageToDelete.value = ''
+  }
 }
 
 // 关闭地图生成完成提示弹窗
@@ -2304,14 +2428,14 @@ const formatLocalDateTime = (date: Date) => {
   // 获取当前选中的航线信息
   const currentWayline = waylineFiles.value.find(f => f.wayline_id === selectedTrack.value)
   if (!currentWayline) {
-    alert('请先选择一个航线')
+    showErrorMessage('请先选择一个航线')
     return
   }
   
   // 获取缓存的设备序列号
   const deviceSns = getCachedDeviceSns()
   if (!deviceSns.dockSns || deviceSns.dockSns.length === 0) {
-    alert('未找到可用的设备')
+    showErrorMessage('未找到可用的设备')
     return
   }
   
@@ -2327,7 +2451,7 @@ const formatLocalDateTime = (date: Date) => {
     ? Math.round(droneStatus.value.batteryPercent as number)
     : null
   if (currentBatteryPercent !== null && currentBatteryPercent < 30) {
-    const confirmContinue = window.confirm(`当前电量为${currentBatteryPercent}%，低于30%，不建议飞行。是否继续下发任务？`)
+    const confirmContinue = await showConfirmDialog('电量警告', `当前电量为${currentBatteryPercent}%，低于30%，不建议飞行。是否继续下发任务？`)
     if (!confirmContinue) {
       return
     }
@@ -2363,12 +2487,12 @@ const formatLocalDateTime = (date: Date) => {
   
   // 验证必填字段
   if (!form.name.trim()) {
-    alert('请输入任务名称')
+    showErrorMessage('请输入任务名称')
     return
   }
   
   if (form.task_type === 1 && !form.begin_time) {
-    alert('定时任务需要设置开始时间')
+    showErrorMessage('定时任务需要设置开始时间')
     return
   }
   
@@ -2378,7 +2502,7 @@ const formatLocalDateTime = (date: Date) => {
     const currentTime = new Date()
     const minTime = new Date(currentTime.getTime() + 4 * 60 * 1000)
     if (selectedTime < minTime) {
-      alert('定时任务的开始时间必须在当前时间4分钟及以后')
+      showErrorMessage('定时任务的开始时间必须在当前时间4分钟及以后')
       return
     }
   }
@@ -2386,7 +2510,7 @@ const formatLocalDateTime = (date: Date) => {
   // 验证周期任务的日期
   if (form.task_type === 1 && form.enable_recurrence) {
     if (!form.recurrence_start_date || !form.recurrence_end_date) {
-      alert('周期任务需要设置开始日期和结束日期')
+      showErrorMessage('周期任务需要设置开始日期和结束日期')
       return
     }
     
@@ -2396,12 +2520,12 @@ const formatLocalDateTime = (date: Date) => {
     today.setHours(0, 0, 0, 0)
     
     if (startDate < today || endDate < today) {
-      alert('周期任务的开始日期和结束日期不能早于今天')
+      showErrorMessage('周期任务的开始日期和结束日期不能早于今天')
       return
     }
     
     if (startDate > endDate) {
-      alert('开始日期不能晚于结束日期')
+      showErrorMessage('开始日期不能晚于结束日期')
       return
     }
   }
@@ -2412,7 +2536,7 @@ const formatLocalDateTime = (date: Date) => {
   try {
     const workspaceId = getCachedWorkspaceId()
     if (!workspaceId) {
-      alert('未找到workspace_id')
+      showErrorMessage('未找到workspace_id')
       return
     }
     
@@ -2459,23 +2583,23 @@ const formatLocalDateTime = (date: Date) => {
             vision_algorithms: form.vision_algorithms,
             vision_threshold: form.vision_threshold
           })
-          alert('立即任务创建并执行成功')
+          showErrorMessage('立即任务创建并执行成功')
         } catch (executeErr) {
           console.error('任务执行失败:', executeErr)
-          alert('立即任务创建成功，但执行失败')
+          showErrorMessage('立即任务创建成功，但执行失败')
         }
       } else {
         // 定时任务不调用execute接口
-        alert('定时任务创建成功')
+        showErrorMessage('定时任务创建成功')
       }
     } else {
-      alert('任务创建成功，但未获取到任务ID')
+      showErrorMessage('任务创建成功，但未获取到任务ID')
     }
     
     dispatchTaskDialog.value.visible = false
   } catch (err) {
     console.error('任务下发失败:', err)
-    alert('任务下发失败')
+    showErrorMessage('任务下发失败')
   }
 */
 
@@ -3375,38 +3499,43 @@ watch(navMode, () => {
   setupCanvasEditEvents()
 })
 
-// 确认对话框
+// 确认对话框（使用自定义弹窗）
 const showConfirmDialog = (title: string, message: string): Promise<boolean> => {
   return new Promise((resolve) => {
-    const result = window.confirm(`${title}\n\n${message}`)
-    resolve(result)
+    confirmDialogState.value = {
+      show: true,
+      title,
+      message,
+      resolve
+    }
   })
 }
 
-// 成功消息提示
+// 关闭确认弹窗
+const closeConfirmDialog = (confirmed: boolean) => {
+  if (confirmDialogState.value.resolve) {
+    confirmDialogState.value.resolve(confirmed)
+  }
+  confirmDialogState.value = {
+    show: false,
+    title: '',
+    message: '',
+    resolve: null
+  }
+}
+
+// 成功消息提示（使用自定义弹窗）
 const showSuccessMessage = (message: string) => {
-  // 创建临时提示元素
-  const toast = document.createElement('div')
-  toast.textContent = message
-  toast.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(103, 213, 253, 0.9);
-    color: #172233;
-    padding: 12px 24px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    z-index: 10000;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  `
-  document.body.appendChild(toast)
-  
-  // 2秒后自动移除
+  resultDialogState.value = {
+    show: true,
+    type: 'success',
+    title: '操作成功',
+    message,
+    details: null
+  }
+  // 2秒后自动关闭
   setTimeout(() => {
-    document.body.removeChild(toast)
+    resultDialogState.value.show = false
   }, 2000)
 }
 
@@ -3461,7 +3590,8 @@ const handleDeleteArea = async () => {
   const area = areaList.value.find(a => a.id === selectedAreaId.value)
   if (!area) return
   
-  if (confirm(`确定要删除展区"${area.name}"吗？删除后该展区下的所有任务点也将被删除。`)) {
+  const confirmed = await showConfirmDialog('删除确认', `确定要删除展区"${area.name}"吗？删除后该展区下的所有任务点也将被删除。`)
+  if (confirmed) {
     try {
       const zoneId = parseInt(selectedAreaId.value)
       console.log('删除展区:', area.name, 'ID:', zoneId)
@@ -3485,10 +3615,10 @@ const handleDeleteArea = async () => {
         console.log('删除展区后，没有可选展区了')
       }
       
-      alert(`展区"${area.name}"删除成功`)
+      showSuccessMessage(`展区"${area.name}"删除成功`)
     } catch (error) {
       console.error('❌ 删除展区失败:', error)
-      alert(error instanceof Error ? error.message : '删除展区失败')
+      showErrorMessage(error instanceof Error ? error.message : '删除展区失败')
     }
   }
 }
@@ -3548,13 +3678,13 @@ const handleAddTaskPoint = async () => {
 // 确认新增展区
 const handleConfirmAddArea = async () => {
   if (!addAreaForm.value.name.trim()) {
-    alert('请输入展区名称')
+    showErrorMessage('请输入展区名称')
     return
   }
   
   // 获取当前选中的展厅ID
   if (!selectedHall.value) {
-    alert('未选择有效的展厅')
+    showErrorMessage('未选择有效的展厅')
     return
   }
   
@@ -3563,7 +3693,7 @@ const handleConfirmAddArea = async () => {
   
   if (editingArea.value) {
     // 编辑模式 - 暂时不支持，因为没有提供更新接口
-    alert('暂不支持编辑展区')
+    showErrorMessage('暂不支持编辑展区')
     return
   } else {
     // 新增模式 - 调用API创建展区
@@ -3577,10 +3707,10 @@ const handleConfirmAddArea = async () => {
       // 自动选中新创建的展区
       selectedAreaId.value = newZone.id.toString()
       
-      alert(`展区添加成功：${newZone.name}`)
+      showSuccessMessage(`展区添加成功：${newZone.name}`)
     } catch (error) {
       console.error('创建展区失败:', error)
-      alert(error instanceof Error ? error.message : '创建展区失败')
+      showErrorMessage(error instanceof Error ? error.message : '创建展区失败')
       return
     }
   }
@@ -3598,13 +3728,13 @@ const handleCancelAddArea = () => {
 const handleConfirmAddTaskPoint = async () => {
   // 验证必填字段
   if (!addTaskPointForm.value.name.trim()) {
-    alert('请输入任务点名称')
+    showErrorMessage('请输入任务点名称')
     return
   }
   
   // 只有选择讲解点时才需要验证讲解点位
   if (addTaskPointForm.value.pointType === '讲解点' && !addTaskPointForm.value.pointNameId) {
-    alert('请选择讲解点位')
+    showErrorMessage('请选择讲解点位')
     return
   }
   
@@ -3615,7 +3745,7 @@ const handleConfirmAddTaskPoint = async () => {
   // }
   
   if (!selectedAreaId.value) {
-    alert('未选择展区')
+    showErrorMessage('未选择展区')
     return
   }
   
@@ -3650,10 +3780,10 @@ const handleConfirmAddTaskPoint = async () => {
       console.log('更新任务点:', editingTaskPoint.value.id, pointData)
       const updatedPoint = await pointStore.updatePoint(parseInt(editingTaskPoint.value.id), pointData)
       
-      alert(`任务点更新成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(updatedPoint.point_name_id)?.name || '未知点位'}`)
+      showSuccessMessage(`任务点更新成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(updatedPoint.point_name_id)?.name || '未知点位'}`)
     } catch (error) {
       console.error('更新任务点失败:', error)
-      alert(error instanceof Error ? error.message : '更新任务点失败')
+      showErrorMessage(error instanceof Error ? error.message : '更新任务点失败')
       return
     }
   } else {
@@ -3688,10 +3818,10 @@ const handleConfirmAddTaskPoint = async () => {
       console.log('创建任务点:', pointData)
       const newPoint = await pointStore.createPoint(pointData)
       
-      alert(`任务点创建成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(newPoint.point_name_id)?.name || '未知点位'}`)
+      showSuccessMessage(`任务点创建成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(newPoint.point_name_id)?.name || '未知点位'}`)
     } catch (error) {
       console.error('创建任务点失败:', error)
-      alert(error instanceof Error ? error.message : '创建任务点失败')
+      showErrorMessage(error instanceof Error ? error.message : '创建任务点失败')
       return
     }
   }
@@ -3726,15 +3856,16 @@ const onClickEditTaskPoint = (point: TaskPoint) => {
 
 // 删除任务点
 const onClickDeleteTaskPoint = async (point: TaskPoint) => {
-  if (confirm(`确定要删除任务点"${point.name}"吗？`)) {
+  const confirmed = await showConfirmDialog('删除确认', `确定要删除任务点"${point.name}"吗？`)
+  if (confirmed) {
     try {
       console.log('删除任务点:', point.id)
       await pointStore.deletePoint(parseInt(point.id))
       
-      alert(`任务点删除成功：${point.name}`)
+      showSuccessMessage(`任务点删除成功：${point.name}`)
     } catch (error) {
       console.error('删除任务点失败:', error)
-      alert(error instanceof Error ? error.message : '删除任务点失败')
+      showErrorMessage(error instanceof Error ? error.message : '删除任务点失败')
     }
   }
 }
@@ -3824,16 +3955,17 @@ const handleDeleteHallTask = async () => {
   const preset = tourStore.getTourPresetById(presetId)
   const presetName = preset ? preset.name : '未知任务'
   
-  if (confirm(`确定要删除展厅任务"${presetName}"吗？`)) {
+  const confirmed = await showConfirmDialog('删除确认', `确定要删除展厅任务"${presetName}"吗？`)
+  if (confirmed) {
     try {
       // 调用删除 API
       await tourStore.deleteTourPreset(presetId)
       
       // 删除成功后，watch 会自动处理选中第一个任务的逻辑
-      alert('展厅任务删除成功')
+      showSuccessMessage('展厅任务删除成功')
     } catch (error) {
       console.error('删除展厅任务失败:', error)
-      alert('删除展厅任务失败: ' + (error instanceof Error ? error.message : '未知错误'))
+      showErrorMessage('删除展厅任务失败: ' + (error instanceof Error ? error.message : '未知错误'))
     }
   }
 }
@@ -3880,7 +4012,7 @@ const handleStartTask = async () => {
     console.log('讲解对象数据加载完成')
   } catch (error) {
     console.error('获取讲解对象数据失败:', error)
-    alert('获取讲解对象数据失败，请稍后重试')
+    showErrorMessage('获取讲解对象数据失败，请稍后重试')
     return
   }
   
@@ -3939,7 +4071,7 @@ const handlePauseTask = async () => {
     
   } catch (error) {
     console.error('❌ 暂停/恢复导航失败:', error)
-    alert('操作失败，请重试')
+    showErrorMessage('操作失败，请重试')
   }
 }
 
@@ -3950,19 +4082,19 @@ const handleCancelStartTask = () => {
 
 const handleConfirmStartTask = async () => {
   if (!selectedVisitorType.value) {
-    alert('暂无可用的讲解对象')
+    showErrorMessage('暂无可用的讲解对象')
     return
   }
   
   if (!selectedHallTaskList.value) {
-    alert('请选择展厅任务')
+    showErrorMessage('请选择展厅任务')
     return
   }
   
   try {
     const token = userStore.token
     if (!token) {
-      alert('未找到认证token')
+      showErrorMessage('未找到认证token')
       return
     }
     
@@ -3998,10 +4130,10 @@ const handleConfirmStartTask = async () => {
     taskRunning.value = true
     showVisitorTypeDialog.value = false
     
-    alert(`任务已开始\n讲解对象：${audienceName}\n任务ID：${presetId}`)
+    showSuccessMessage(`任务已开始\n讲解对象：${audienceName}\n任务ID：${presetId}`)
   } catch (error) {
     console.error('开始展厅任务失败:', error)
-    alert(error instanceof Error ? error.message : '开始展厅任务失败')
+    showErrorMessage(error instanceof Error ? error.message : '开始展厅任务失败')
   }
 }
 
@@ -4015,13 +4147,13 @@ const handleCancelAddHallTask = () => {
 
 const handleConfirmAddHallTask = async () => {
   if (!addHallTaskForm.value.name.trim()) {
-    alert('请输入展厅任务名称')
+    showErrorMessage('请输入展厅任务名称')
     return
   }
   
   // 获取当前选中的展厅ID
   if (!selectedHall.value) {
-    alert('未选择有效的展厅')
+    showErrorMessage('未选择有效的展厅')
     return
   }
   
@@ -4042,10 +4174,10 @@ const handleConfirmAddHallTask = async () => {
     // 自动选中新创建的任务预设
     selectedHallTaskList.value = newTourPreset.id.toString()
     
-    alert(`展厅任务创建成功：${newTourPreset.name}`)
+    showSuccessMessage(`展厅任务创建成功：${newTourPreset.name}`)
   } catch (error) {
     console.error('创建展厅任务失败:', error)
-    alert(error instanceof Error ? error.message : '创建展厅任务失败')
+    showErrorMessage(error instanceof Error ? error.message : '创建展厅任务失败')
     return
   }
   
@@ -4063,12 +4195,12 @@ const handleCancelAddAreaTask = () => {
 
 const handleConfirmAddAreaTask = async () => {
   if (!selectedAreaForTask.value) {
-    alert('请选择展区')
+    showErrorMessage('请选择展区')
     return
   }
   
   if (!selectedHallTaskList.value) {
-    alert('请先选择展厅任务')
+    showErrorMessage('请先选择展厅任务')
     return
   }
   
@@ -4084,21 +4216,22 @@ const handleConfirmAddAreaTask = async () => {
     const hallName = getCurrentHallName()
     const areaName = currentHallZones.value.find(area => area.id.toString() === selectedAreaForTask.value)?.name || ''
     
-    alert(`展区任务添加成功\n展厅：${hallName}\n展区：${areaName}`)
+    showSuccessMessage(`展区任务添加成功\n展厅：${hallName}\n展区：${areaName}`)
   
   showAddAreaTaskDialog.value = false
   selectedAreaForTask.value = ''
   } catch (error) {
     console.error('添加展区任务失败:', error)
-    alert(error instanceof Error ? error.message : '添加展区任务失败')
+    showErrorMessage(error instanceof Error ? error.message : '添加展区任务失败')
   }
 }
 
-const onClickExecuteTask = (task: MultiTask) => {
-  if (confirm(`确定要执行任务"${task.name}"吗？`)) {
+const onClickExecuteTask = async (task: MultiTask) => {
+  const confirmed = await showConfirmDialog('确认执行', `确定要执行任务"${task.name}"吗？`)
+  if (confirmed) {
     task.status = 'running'
     task.executeTime = new Date().toLocaleString()
-    alert('任务开始执行')
+    showSuccessMessage('任务开始执行')
   }
 }
 
@@ -4108,7 +4241,13 @@ const onClickViewTaskDetails = (task: TaskPresetDisplay) => {
     return `${getPointDisplayName(point)} (${point.type === 'explain' ? '讲解点' : '辅助点'})`
   }).join(', ')
   
-  alert(`展区：${task.zoneName}\n任务点总数：${task.pointsCount}\n启用点数：${task.enabledPointsCount}\n任务点详情：${pointDetails}`)
+  resultDialogState.value = {
+    show: true,
+    type: 'info',
+    title: '任务详情',
+    message: `展区：${task.zoneName}`,
+    details: `任务点总数：${task.pointsCount}\n启用点数：${task.enabledPointsCount}\n任务点详情：${pointDetails}`
+  }
 }
 
 const onClickEditMultiTask = (task: TaskPresetDisplay) => {
@@ -4116,19 +4255,21 @@ const onClickEditMultiTask = (task: TaskPresetDisplay) => {
   onClickViewTaskDetails(task)
 }
 
-const onClickDeleteTaskPreset = (task: TaskPresetDisplay) => {
-  if (confirm(`确定要删除展区"${task.zoneName}"的任务吗？`)) {
+const onClickDeleteTaskPreset = async (task: TaskPresetDisplay) => {
+  const confirmed = await showConfirmDialog('删除确认', `确定要删除展区"${task.zoneName}"的任务吗？`)
+  if (confirmed) {
     // 这里可以调用API来删除任务预设项
-    alert(`删除任务：${task.zoneName}`)
+    showSuccessMessage(`删除任务：${task.zoneName}`)
   }
 }
 
-const onClickDeleteMultiTask = (task: MultiTask) => {
-  if (confirm(`确定要删除任务"${task.name}"吗？`)) {
+const onClickDeleteMultiTask = async (task: MultiTask) => {
+  const confirmed = await showConfirmDialog('删除确认', `确定要删除任务"${task.name}"吗？`)
+  if (confirmed) {
     const index = multiTaskList.value.findIndex(t => t.id === task.id)
     if (index !== -1) {
       multiTaskList.value.splice(index, 1)
-      alert('任务删除成功')
+      showSuccessMessage('任务删除成功')
     }
   }
 }
@@ -4136,37 +4277,32 @@ const onClickDeleteMultiTask = (task: MultiTask) => {
 // 上移和下移方法
 const onClickMoveUp = (task: TaskPresetDisplay, index: number) => {
   // 任务排序功能，这里可以调用API来更新任务顺序
-  alert(`上移任务：${task.zoneName}`)
+  showSuccessMessage(`上移任务：${task.zoneName}`)
 }
 
 const onClickMoveDown = (task: TaskPresetDisplay, index: number) => {
   // 任务排序功能，这里可以调用API来更新任务顺序
-  alert(`下移任务：${task.zoneName}`)
+  showSuccessMessage(`下移任务：${task.zoneName}`)
 }
 
-// 错误消息提示
+// 错误消息提示（使用自定义弹窗）
 const showErrorMessage = (message: string) => {
-  const toast = document.createElement('div')
-  toast.textContent = message
-  toast.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(255, 59, 48, 0.9);
-    color: #fff;
-    padding: 12px 24px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    z-index: 10000;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  `
-  document.body.appendChild(toast)
-  
+  resultDialogState.value = {
+    show: true,
+    type: 'error',
+    title: '操作失败',
+    message,
+    details: null
+  }
+  // 3秒后自动关闭
   setTimeout(() => {
-    document.body.removeChild(toast)
+    resultDialogState.value.show = false
   }, 3000)
+}
+
+// 关闭结果弹窗
+const closeResultDialog = () => {
+  resultDialogState.value.show = false
 }
 </script>
 
@@ -6079,6 +6215,93 @@ const showErrorMessage = (message: string) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 弹窗按钮统一宽度 */
+.custom-dialog-actions .mission-btn {
+  min-width: 100px;
+}
+
+/* 删除确认弹窗样式 */
+.delete-confirm-dialog {
+  min-width: 380px;
+  max-width: 420px;
+}
+
+.delete-confirm-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  text-align: left;
+}
+
+.delete-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.delete-text {
+  color: #b6b6b6;
+  font-size: 15px;
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* 数据包行布局 */
+.data-package-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px; /* 减小间距，让下拉框更宽 */
+}
+
+.data-package-wrapper .custom-select-component {
+  flex: 1;
+  min-width: 0; /* 确保flex能正常工作 */
+}
+
+.data-package-wrapper .mission-btn-delete-package {
+  flex-shrink: 0;
+  margin-left: 4px; /* 增加一点额外间距 */
+}
+
+/* 删除数据包按钮样式 */
+.mission-btn-delete-package {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 77, 79, 0.3);
+  background: rgba(255, 77, 79, 0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mission-btn-delete-package img {
+  width: 16px;
+  height: 16px;
+  filter: brightness(0) saturate(100%) invert(42%) sepia(95%) saturate(3000%) hue-rotate(340deg) brightness(100%) contrast(105%);
+}
+
+.mission-btn-delete-package:hover:not(:disabled) {
+  background: rgba(255, 77, 79, 0.2);
+  border-color: rgba(255, 77, 79, 0.5);
+  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.2);
+}
+
+.mission-btn-delete-package:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(255, 77, 79, 0.05);
+  border-color: rgba(255, 77, 79, 0.1);
+}
+
+.mission-btn-delete-package:disabled img {
+  filter: brightness(0) saturate(100%) invert(42%) sepia(95%) saturate(3000%) hue-rotate(340deg) brightness(100%) contrast(105%) opacity(50%);
 }
 
 </style>
