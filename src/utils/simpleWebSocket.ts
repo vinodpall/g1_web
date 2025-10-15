@@ -117,9 +117,9 @@ export class SimpleWebSocketClient {
         
         if (parsedMessage) {
           // 只对 tour 相关消息显示详细日志
-          if (parsedMessage.channel.includes('tours:')) {
-            console.log('✅ 收到 tours 消息:', parsedMessage.channel, parsedMessage.data)
-          }
+          // if (parsedMessage.channel.includes('tours:')) {
+          //   console.log('✅ 收到 tours 消息:', parsedMessage.channel, parsedMessage.data)
+          // }
           this.handleMessage(parsedMessage)
         } else {
           // console.warn('⚠️ WebSocket 消息解析失败，尝试旧格式处理:', rawMessage)

@@ -150,7 +150,8 @@ export const usePointStore = defineStore('point', () => {
     pose_theta: number,
     action_code?: string,
     action_params?: string,
-    robot_sn: string
+    robot_sn: string,
+    screen_video_id?: number
   }) => {
     const userStore = useUserStore()
     const token = userStore.token
@@ -181,7 +182,7 @@ export const usePointStore = defineStore('point', () => {
       error.value = null
 
       // 准备请求数据
-      const requestData = {
+      const requestData: any = {
         zone_id: pointData.zone_id,
         type: pointData.type,
         point_name_id: pointData.point_name_id,
@@ -193,6 +194,11 @@ export const usePointStore = defineStore('point', () => {
         action_code: pointData.action_code || '',
         action_params: pointData.action_params || '',
         robot_sn: pointData.robot_sn
+      }
+      
+      // 如果提供了screen_video_id，添加到请求数据中
+      if (pointData.screen_video_id !== undefined) {
+        requestData.screen_video_id = pointData.screen_video_id
       }
 
       console.log('创建任务点:', requestData)
@@ -223,7 +229,8 @@ export const usePointStore = defineStore('point', () => {
     pose_theta?: number,
     action_code?: string,
     action_params?: string,
-    robot_sn?: string
+    robot_sn?: string,
+    screen_video_id?: number
   }) => {
     const userStore = useUserStore()
     const token = userStore.token
@@ -249,6 +256,11 @@ export const usePointStore = defineStore('point', () => {
       if (pointData.action_code) requestData.action_code = pointData.action_code
       if (pointData.action_params !== undefined) requestData.action_params = pointData.action_params
       if (pointData.robot_sn) requestData.robot_sn = pointData.robot_sn
+      
+      // 如果提供了screen_video_id，添加到请求数据中
+      if (pointData.screen_video_id !== undefined) {
+        requestData.screen_video_id = pointData.screen_video_id
+      }
 
       console.log('更新任务点:', pointId, requestData)
       const response = await pointApi.updatePoint(token, pointId, requestData)

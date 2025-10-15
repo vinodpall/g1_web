@@ -129,8 +129,18 @@
                       <input v-model="robotForm.firmware_version" class="add-device-input" placeholder="请输入固件版本" />
                     </div>
                     <div class="add-device-row">
-                      <label>IP地址：</label>
-                      <input v-model="robotForm.ip_address" class="add-device-input" placeholder="请输入IP地址" />
+                      <label><span class="required">*</span>IP地址：</label>
+                      <input 
+                        v-model="robotForm.ip_address" 
+                        class="add-device-input" 
+                        :class="{ 'error': formErrors.ip_address }"
+                        placeholder="请输入IP地址（必填）" 
+                      />
+                      <div v-if="formErrors.ip_address" class="error-message">{{ formErrors.ip_address }}</div>
+                    </div>
+                    <div class="add-device-row">
+                      <label>语音IP：</label>
+                      <input v-model="robotForm.voice_ip" class="add-device-input" placeholder="请输入语音IP地址" />
                     </div>
                     <div class="add-device-row">
                       <label>MAC地址：</label>
@@ -278,6 +288,16 @@
         </section>
       </div>
     </main>
+
+    <!-- ResultDialog 结果弹窗 -->
+    <ResultDialog
+      :show="resultDialog.show"
+      :type="resultDialog.type"
+      :title="resultDialog.title"
+      :message="resultDialog.message"
+      :details="resultDialog.details"
+      @close="closeResultDialog"
+    />
   </div>
 </template>
 
@@ -293,6 +313,7 @@ import g1CompStandImg from '@/assets/source_data/robot_source/g1_comp_stand.png'
 import rubbishIcon from '@/assets/source_data/svg_data/rubbish.svg'
 import videoIcon from '@/assets/source_data/svg_data/video.svg'
 import editIcon from '@/assets/source_data/svg_data/edit.svg'
+import ResultDialog from '@/components/ResultDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -405,6 +426,7 @@ const robotForm = ref({
   model: '',
   firmware_version: '',
   ip_address: '',
+  voice_ip: '',
   mac_address: '',
   location: '',
   status: 'inactive',
@@ -418,8 +440,22 @@ const robotForm = ref({
 // 表单验证错误
 const formErrors = ref({
   sn: '',
-  name: ''
+  name: '',
+  ip_address: ''
 })
+
+// ResultDialog 状态
+const resultDialog = ref({
+  show: false,
+  type: 'info' as 'success' | 'error' | 'info',
+  title: '',
+  message: '',
+  details: '' as string | null
+})
+
+const closeResultDialog = () => {
+  resultDialog.value.show = false
+}
 
 const handleAddRobot = () => {
   showAddRobotModal.value = true
@@ -430,6 +466,7 @@ const handleAddRobot = () => {
     model: '',
     firmware_version: '',
     ip_address: '',
+    voice_ip: '',
     mac_address: '',
     location: '',
     status: 'inactive',
@@ -442,7 +479,8 @@ const handleAddRobot = () => {
   // 重置表单验证错误
   Object.assign(formErrors.value, {
     sn: '',
-    name: ''
+    name: '',
+    ip_address: ''
   })
 }
 
@@ -479,6 +517,7 @@ const validateForm = () => {
   // 重置错误信息
   formErrors.value.sn = ''
   formErrors.value.name = ''
+  formErrors.value.ip_address = ''
   
   // 验证SN（必填）
   if (!robotForm.value.sn.trim()) {
@@ -489,6 +528,12 @@ const validateForm = () => {
   // 验证名称（必填）
   if (!robotForm.value.name.trim()) {
     formErrors.value.name = '名称是必填项'
+    isValid = false
+  }
+  
+  // 验证IP地址（必填）
+  if (!robotForm.value.ip_address.trim()) {
+    formErrors.value.ip_address = 'IP地址是必填项'
     isValid = false
   }
   
@@ -504,7 +549,13 @@ const handleAddRobotSubmit = async () => {
   try {
     const token = userStore.token
     if (!token) {
-      alert('用户未登录，请先登录')
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '操作失败',
+        message: '',
+        details: '用户未登录，请先登录'
+      }
       return
     }
     
@@ -514,7 +565,8 @@ const handleAddRobotSubmit = async () => {
       name: robotForm.value.name.trim(),
       model: robotForm.value.model || '',
       firmware_version: robotForm.value.firmware_version || '',
-      ip_address: robotForm.value.ip_address || '',
+      ip_address: robotForm.value.ip_address.trim(),
+      voice_ip: robotForm.value.voice_ip || '',
       mac_address: robotForm.value.mac_address || '',
       location: robotForm.value.location || '',
       status: robotForm.value.status || 'inactive',
@@ -531,11 +583,38 @@ const handleAddRobotSubmit = async () => {
     showAddRobotModal.value = false
     
     console.log('机器人创建成功:', robotData)
-    alert('机器人创建成功！')
     
-  } catch (error) {
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '创建成功',
+      message: '',
+      details: '机器人创建成功！'
+    }
+    
+  } catch (error: any) {
     console.error('创建机器人失败:', error)
-    alert('创建机器人失败，请稍后重试')
+    
+    // 从错误对象中提取 detail 字段
+    let errorMessage = '创建机器人失败，请稍后重试'
+    if (error && typeof error === 'object') {
+      if (error.detail) {
+        errorMessage = error.detail
+      } else if (error.message) {
+        errorMessage = error.message
+      } else if (error.response && error.response.data && error.response.data.detail) {
+        errorMessage = error.response.data.detail
+      }
+    }
+    
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '创建失败',
+      message: '',
+      details: errorMessage
+    }
   }
 }
 

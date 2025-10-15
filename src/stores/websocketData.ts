@@ -104,7 +104,7 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       })
     }, 1000) as unknown as number // 每秒检测一次
     
-    console.log('✅ 机器人在线状态检测已启动')
+    // console.log('✅ 机器人在线状态检测已启动')
   }
   
   // 停止在线状态检测
@@ -112,7 +112,7 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
     if (onlineCheckTimer) {
       clearInterval(onlineCheckTimer)
       onlineCheckTimer = null
-      console.log('⏹️ 机器人在线状态检测已停止')
+      // console.log('⏹️ 机器人在线状态检测已停止')
     }
   }
   
@@ -127,7 +127,6 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
   
   // 触发任务完成回调
   function triggerTaskCompletionCallbacks() {
-    console.log('🔔 触发任务完成回调，共', taskCompletionCallbacks.value.length, '个回调')
     taskCompletionCallbacks.value.forEach(callback => {
       try {
         callback()
@@ -144,12 +143,7 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
    */
   async function fetchTourRuns(token?: string): Promise<void> {
     try {
-      if (!token) {
-        console.warn('⚠️ 缺少 token，无法获取任务运行列表')
-        return
-      }
-      
-      console.log('🚀 开始获取任务运行列表')
+      if (!token) return
       
       const { tourApi } = await import('@/api/services')
       const response = await tourApi.getTourRuns(token)
@@ -178,10 +172,8 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
         currentTourRunId.value = null
         currentTourPresetId.value = null
         isTaskExecuting.value = false
-        tourPresetItems.value = [] // 清空任务点位
+        tourPresetItems.value = []
       }
-      
-      console.log('✅ 获取任务运行列表成功:', response)
     } catch (error) {
       console.error('❌ 获取任务运行列表异常:', error)
       tourRuns.value = []
@@ -212,11 +204,9 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       }
       
       const runId = currentTourRun.value.id
-      console.log(`🚀 开始停止任务 [运行ID: ${runId}]，来源：runs接口第一条数据`)
       
       const { stopTourRun } = await import('@/api/services')
       await stopTourRun(token, runId)
-      console.log(`✅ 任务 ${runId} 已发送停止指令`)
       
       // 停止成功后，更新本地状态
       if (currentTourRun.value) {
@@ -244,17 +234,14 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       
       // 防止重复调用同一个 runId
       if (fetchingRunIds.has(runId)) {
-        console.log(`⏳ API 调用进行中，跳过重复请求 [${runId}]`)
         return
       }
       
       fetchingRunIds.add(runId)
-      console.log(`🚀 开始获取任务详情 [${runId}]`)
       
       // 1. 先获取任务详情
       const { getTourRunDetails } = await import('@/api/services')
       const runDetails = await getTourRunDetails(token, runId)
-      console.log(`✅ 获取任务详情成功 [${runId}]:`, runDetails)
       
       // 2. 从任务详情中获取 preset_id
       const presetId = runDetails.preset_id
@@ -262,8 +249,6 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
         console.warn(`⚠️ 任务详情中没有preset_id [${runId}]`)
         return
       }
-      
-      console.log(`🚀 开始获取任务点数据，preset_id: ${presetId}`)
       
       // 3. 使用 preset_id 获取任务点数据
       await fetchTourPresetItems(presetId, token)
@@ -288,17 +273,14 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       
       // 防止重复调用同一个 runId
       if (fetchingRunIds.has(runId)) {
-        console.log(`⏳ API 调用进行中，跳过重复请求 [${runId}]`)
         return
       }
       
       fetchingRunIds.add(runId)
-      console.log(`🚀 开始获取 tour run points [${runId}]`)
       
       const { getTourRunPoints } = await import('@/api/services')
       const points = await getTourRunPoints(token, runId)
       tourRunPoints.value = points
-      console.log(`✅ 获取 tour run points 成功 [${runId}]:`, points)
     } catch (error) {
       console.error(`❌ 获取 tour run points 异常 [${runId}]:`, error)
     } finally {
@@ -319,12 +301,10 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       
       // 防止重复调用同一个 presetId
       if (fetchingRunIds.has(presetId)) {
-        console.log(`⏳ API 调用进行中，跳过重复请求 preset [${presetId}]`)
         return
       }
       
       fetchingRunIds.add(presetId)
-      console.log(`🚀 开始获取 tour preset items [${presetId}]`)
       
       const { tourApi } = await import('@/api/services')
       const items = await tourApi.getTourPresetItems(token, presetId)
@@ -341,8 +321,7 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
                 zone_name: zone.zone_name,
                 hall_id: zone.hall_id,
                 hall_alias: zone.hall_alias,
-                status: 'pending', // 初始状态为待执行
-                // 为UI显示添加更多字段
+                status: 'pending',
                 name: point.custom_name || `点位 ${point.id}`,
                 x: point.pose_x,
                 y: point.pose_y,
@@ -359,8 +338,6 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       tourPresetItems.value = flattenedPoints
       // 为了向后兼容，也更新 tourRunPoints
       tourRunPoints.value = flattenedPoints
-      console.log(`✅ 获取 tour preset items 成功 [${presetId}]:`, items)
-      console.log(`🔄 展平后的点位数据:`, flattenedPoints)
     } catch (error) {
       console.error(`❌ 获取 tour preset items 异常 [${presetId}]:`, error)
     } finally {
@@ -381,8 +358,6 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
    */
   async function startTourWithPreset(presetId: number, token?: string): Promise<void> {
     currentTourPresetId.value = presetId
-    console.log(`🎯 设置当前任务预设ID: ${presetId}`)
-    
     // 获取预设的点位数据
     await fetchTourPresetItems(presetId, token || authToken.value)
   }
@@ -435,19 +410,6 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       
       const { channel, data } = message
       
-      // 特别关注tour相关的消息
-      if (channel.startsWith('tours:')) {
-        console.log('🔔 收到tours消息:', channel, data)
-        // 特别关注finished事件
-        if (data && data.event === 'finished') {
-          console.log('🎉 检测到finished事件在原始消息中:', {
-            channel,
-            event: data.event,
-            data
-          })
-        }
-      }
-      
       const parsed = parseChannel(channel)
       
       if (!parsed.isValid) {
@@ -461,8 +423,6 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
         // 对于tours频道，暂时不返回，让它继续处理
         if (!channel.startsWith('tours:')) {
           return
-        } else {
-          console.log('🔧 强制处理tours数据，跳过验证:', channel, data)
         }
       }
       
@@ -525,32 +485,12 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
    * 处理任务数据
    */
   function handleTourData(parsed: any, data: TourEvent, token?: string): void {
-    console.log('🎯 处理tour数据:', {
-      category: parsed.category,
-      runId: parsed.runId,
-      sn: parsed.sn,
-      event: data.event,
-      data: data
-    })
-    
-    // 特别关注finished事件
+    // 处理 finished 事件
     if (data.event === 'finished') {
-      console.log('🚨 收到finished事件！详细信息:', {
-        event: data.event,
-        run_id: (data as any).run_id,
-        status: (data as any).status,
-        authToken: !!token,
-        category: parsed.category,
-        runId: parsed.runId
-      })
-      
-      // 无论频道格式如何，都处理finished事件
-      console.log('🏁 任务完成（全局处理） - run_id:', (data as any).run_id)
       tourRunStatus.value = 'finished'
       isTaskExecuting.value = false
       
       // 任务完成后清空任务相关数据
-      console.log('🧹 清空任务完成后的数据')
       tourPresetItems.value = []
       tourRunPoints.value = []
       currentTourRunId.value = null
@@ -563,59 +503,56 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       triggerTaskCompletionCallbacks()
       
       // 任务完成后自动刷新任务运行列表状态
-      console.log('🔄 准备自动刷新任务状态（全局），authToken存在:', !!authToken.value)
       const tokenToUse = token || authToken.value
       if (tokenToUse) {
         setTimeout(async () => {
           try {
-            console.log('🚀 开始执行任务完成后的自动刷新（全局）...')
             await fetchTourRuns(tokenToUse)
-            console.log('✅ 任务完成后自动刷新任务列表成功（全局）')
           } catch (error) {
-            console.warn('❌ 任务完成后刷新任务列表失败（全局）:', error)
+            console.warn('❌ 任务完成后刷新任务列表失败:', error)
           }
-        }, 1000) // 延迟1秒刷新，确保后端状态已更新
-      } else {
-        console.warn('⚠️ 无法自动刷新（全局）：缺少token')
+        }, 1000)
       }
     }
     
     if (parsed.category === 'run' && parsed.runId !== undefined) {
-      console.log(`📍 tour_run [${parsed.runId}] - 事件: ${data.event}`, data)
-      
       // 处理 started 事件
       if (data.event === 'started') {
-        console.log('🚀 任务开始 - run_id:', (data as any).run_id)
         currentTourRunId.value = (data as any).run_id
         tourRunStatus.value = 'running'
         isTaskExecuting.value = true
-        // 首先获取任务详情，然后获取任务点数据
-        fetchTourRunDetailsAndPoints((data as any).run_id, token)
+        
+        // 收到 started 事件后，检查是否有点位数据
+        const tokenToUse = token || authToken.value
+        if (tourPresetItems.value.length === 0 && tokenToUse) {
+          fetchTourRuns(tokenToUse)
+        }
       }
       
       // 处理 point 事件（任务点状态更新）
       if (data.event === 'point') {
-        console.log('📍 任务点状态更新 (run频道):', data)
-        
         // 更新进度信息
         if ((data as any).progress) {
           currentTaskProgress.value = (data as any).progress
-          console.log('📊 更新任务进度 (run频道):', currentTaskProgress.value)
         }
         
         // 更新当前点状态和备注
         currentPointStatus.value = (data as any).status || ''
         currentPointNote.value = (data as any).note || ''
+        
+        // 收到 point 事件后，如果没有点位数据，也要加载
+        const tokenToUse = token || authToken.value
+        if (tourPresetItems.value.length === 0 && tokenToUse) {
+          fetchTourRuns(tokenToUse)
+        }
       }
       
       // 处理 finished 事件
       if (data.event === 'finished') {
-        console.log('🏁 任务完成 - run_id:', (data as any).run_id)
         tourRunStatus.value = 'finished'
         isTaskExecuting.value = false
         
-        // 任务完成后清空任务相关数据（run频道处理）
-        console.log('🧹 清空任务完成后的数据（run频道）')
+        // 任务完成后清空任务相关数据
         tourPresetItems.value = []
         tourRunPoints.value = []
         currentTourRunId.value = null
@@ -624,23 +561,18 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
         currentPointStatus.value = ''
         currentPointNote.value = ''
         
-        // 触发任务完成回调（用于清空栅格图等UI更新）
+        // 触发任务完成回调
         triggerTaskCompletionCallbacks()
         
         // 任务完成后自动刷新任务运行列表状态
-        console.log('🔄 准备自动刷新任务状态，authToken存在:', !!authToken.value)
         if (authToken.value) {
           setTimeout(async () => {
             try {
-              console.log('🚀 开始执行任务完成后的自动刷新...')
               await fetchTourRuns(authToken.value)
-              console.log('✅ 任务完成后自动刷新任务列表成功')
             } catch (error) {
               console.warn('❌ 任务完成后刷新任务列表失败:', error)
             }
-          }, 1000) // 延迟1秒刷新，确保后端状态已更新
-        } else {
-          console.warn('⚠️ 无法自动刷新：缺少authToken')
+          }, 1000)
         }
       }
       
@@ -650,50 +582,41 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       }
       realtimeData.tours.runs[parsed.runId].push(data)
     } else if (parsed.category === 'robot' && parsed.sn) {
-      console.log(`🤖 tour_robot [${parsed.sn}] - 事件: ${data.event}`, data)
-      
-      // 处理 started 事件（无论是来自 run 还是 robot 频道）
+      // 处理 started 事件
       if (data.event === 'started') {
-        console.log('🚀 任务开始 - run_id:', (data as any).run_id)
         currentTourRunId.value = (data as any).run_id
         tourRunStatus.value = 'running'
         isTaskExecuting.value = true
         
-        // 不再调用 fetchTourRunPoints，因为点位数据已经通过 preset items 获取
-        console.log('📍 使用预设点位数据，跳过 run points 获取')
+        // 收到 started 事件后，检查是否有点位数据
+        const tokenToUse = token || authToken.value
+        if (tourPresetItems.value.length === 0 && tokenToUse) {
+          fetchTourRuns(tokenToUse)
+        }
       }
       
       // 处理 point 事件（任务点状态更新）
       if (data.event === 'point') {
-        console.log('📍 任务点状态更新 (robot频道):', data)
-        
         // 更新进度信息
         if ((data as any).progress) {
           currentTaskProgress.value = (data as any).progress
-          console.log('📊 更新任务进度 (robot频道):', currentTaskProgress.value)
         }
         
         // 更新当前点状态和备注
         currentPointStatus.value = (data as any).status || ''
         currentPointNote.value = (data as any).note || ''
         
-        console.log('📍 当前任务状态 (robot频道):', {
-          progress: currentTaskProgress.value,
-          status: currentPointStatus.value,
-          note: currentPointNote.value,
-          point_id: (data as any).point_id,
-          zone_id: (data as any).zone_id
-        })
+        // 收到 point 事件后，如果没有点位数据，也要加载
+        const tokenToUse = token || authToken.value
+        if (tourPresetItems.value.length === 0 && tokenToUse) {
+          fetchTourRuns(tokenToUse)
+        }
       }
       
-      // 处理 finished 事件（无论是来自 run 还是 robot 频道）
+      // 处理 finished 事件
       if (data.event === 'finished') {
-        console.log('🏁 任务完成 - run_id:', (data as any).run_id)
         tourRunStatus.value = 'finished'
         isTaskExecuting.value = false
-        // 清理当前任务数据（可选，根据需求决定）
-        // currentTourRunId.value = null
-        // tourRunPoints.value = []
       }
       
       // 按机器人SN存储
@@ -701,8 +624,6 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
         realtimeData.tours.robots[parsed.sn] = []
       }
       realtimeData.tours.robots[parsed.sn].push(data)
-    } else {
-      console.warn('⚠️ 未知tour数据格式:', parsed, data)
     }
   }
   

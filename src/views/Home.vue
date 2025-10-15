@@ -69,8 +69,14 @@
             </div>
             <div class="task-dynamic-container">
               <!-- 任务点列表 -->
-              <div class="task-points-list">
-                <div class="task-point-item" v-for="(point, index) in displayTaskPoints" :key="index">
+              <div class="task-points-list" :class="{ 'fullscreen-mode': isFullscreen }" ref="taskPointsListRef">
+                <div 
+                  class="task-point-item" 
+                  v-for="(point, index) in displayTaskPoints" 
+                  :key="index"
+                  :ref="el => setTaskPointItemRef(el, index)"
+                  :class="{ 'current-executing': isCurrentTaskPoint(index) }"
+                >
                   <div class="task-point-info">
                     <div class="task-point-details">
                       <span class="task-detail-item">
@@ -1382,7 +1388,7 @@ watch(() => {
   if (newBattery !== null && newBattery !== uiBatteryPercent.value) {
     uiBatteryPercent.value = newBattery
     localStorage.setItem(BATTERY_STORAGE_KEY, newBattery.toString())
-    console.log(`电量已更新: ${newBattery}%`)
+    // console.log(`电量已更新: ${newBattery}%`)
   }
 })
 
@@ -1651,12 +1657,10 @@ const handleTaskControlClick = async () => {
     try {
       const token = userStore.token || localStorage.getItem('token') || ''
       await websocketDataStore.stopCurrentTourRun(token)
-      console.log('✅ 任务已停止')
       
       // 任务停止成功后，刷新任务运行列表状态
       try {
         await websocketDataStore.fetchTourRuns(token)
-        console.log('✅ 任务停止后刷新任务列表成功')
       } catch (error) {
         console.warn('❌ 刷新任务列表失败:', error)
       }
@@ -1671,8 +1675,6 @@ const handleTaskControlClick = async () => {
 }
 // 处理开始执行任务按钮点击
 const handleStartTaskClick = async () => {
-  console.log('=== 开始执行任务按钮被点击 ===')
-  
   // 检查导航是否开启
   if (!navEnabled.value) {
     errorMessageText.value = '请先开启导航后再执行任务'
@@ -1747,7 +1749,6 @@ const handleConfirmStartTask = async () => {
     if (token) {
       try {
         await websocketDataStore.fetchTourRuns(token)
-        console.log('✅ 任务开始后刷新任务列表成功')
       } catch (error) {
         console.warn('❌ 刷新任务列表失败:', error)
       }
@@ -1878,14 +1879,25 @@ watch(() => hallStore.selectedHallId, (newHallId) => {
 // 监听导航状态和当前地图，自动同步展厅选择
 watch([navEnabled, () => robotCurrentMap.value?.map_name, hallOptions], ([isNavEnabled, mapName, halls]) => {
   console.log(`首页导航状态变化: navEnabled=${isNavEnabled}, currentMapName=${mapName}`)
+  console.log('当前展厅列表:', halls.map(h => ({ id: h.id, name: h.name })))
   
-  if (isNavEnabled && mapName) {
-    // 当导航启用且有当前地图时，查找对应的展厅
+  // 当有地图名称时，查找对应的展厅（不再要求必须导航开启）
+  if (mapName && halls.length > 0) {
+    console.log(`正在查找地图名称为 "${mapName}" 的展厅...`)
     const matchingHall = halls.find(hall => hall.name === mapName)
-    if (matchingHall && selectedHallId.value !== matchingHall.id) {
-      console.log(`首页自动选择展厅: ${matchingHall.name} (${matchingHall.id})`)
-      hallStore.setSelectedHall(matchingHall.id)
+    if (matchingHall) {
+      console.log(`找到匹配的展厅:`, matchingHall)
+      if (selectedHallId.value !== matchingHall.id) {
+        console.log(`首页自动选择展厅: ${matchingHall.name} (${matchingHall.id})`)
+        hallStore.setSelectedHall(matchingHall.id)
+      } else {
+        console.log(`展厅已经是当前选中的，无需切换`)
+      }
+    } else {
+      console.warn(`❌ 未找到地图名称为 "${mapName}" 的展厅！可用的展厅名称:`, halls.map(h => h.name))
     }
+  } else {
+    console.log(`跳过展厅匹配: mapName=${mapName}, halls.length=${halls.length}`)
   }
 }, { immediate: true })
 
@@ -1922,40 +1934,22 @@ const stopRobotPositionUpdate = () => {
 // 检查任务执行状态并加载任务数据
 const checkAndLoadTaskData = async () => {
   try {
-    console.log('🔍 检查任务执行状态...')
-    
-    // 检查按钮是否显示"停止执行任务"（即任务正在执行中）
     if (isTaskExecuting.value) {
-      console.log('✅ 检测到任务正在执行，开始加载任务点位数据...')
-      
-      // 获取当前的token
       const token = userStore.token || localStorage.getItem('token') || ''
       if (!token) {
         console.warn('⚠️ 缺少认证token，无法加载任务数据')
         return
       }
 
-      // 获取当前预设ID（如果有的话）
       const currentPresetId = websocketDataStore.currentTourPresetId
       if (currentPresetId) {
-        console.log(`🚀 开始获取任务预设数据 [presetId: ${currentPresetId}]`)
-        
-        // 调用fetchTourPresetItems获取任务点位数据
         await websocketDataStore.fetchTourPresetItems(currentPresetId, token)
-        
-        console.log('✅ 任务点位数据加载完成，栅格图将显示任务点位')
-        
-        // 强制重新渲染栅格图以显示任务点位
         nextTick(() => {
           setTimeout(() => {
             loadAndRenderPGM()
           }, 100)
         })
-      } else {
-        console.log('ℹ️ 任务正在执行但未找到当前预设ID')
       }
-    } else {
-      console.log('ℹ️ 当前没有执行中的任务')
     }
   } catch (error) {
     console.error('❌ 检查任务状态失败:', error)
@@ -2133,54 +2127,28 @@ const waylineJobDetail = computed(() => taskProgressStore.waylineJobDetail)
 
 // 监听任务状态变化，确保UI同步更新
 watch(() => websocketDataStore.currentTourRun, async (newTourRun, oldTourRun) => {
-  console.log('🔄 任务状态变化:', {
-    newTourRun,
-    oldTourRun,
-    status: newTourRun?.status,
-    isTaskExecuting: isTaskExecuting.value,
-    presetItemsCount: websocketDataStore.tourPresetItems.length
-  })
-  
-  // 检测任务从非运行状态变为运行状态（任务启动）
   const isTaskStarting = (
     newTourRun?.status === 'running' && 
-    oldTourRun?.status !== 'running' &&
-    websocketDataStore.tourPresetItems.length === 0 // 还没有点位数据
+    oldTourRun?.status !== 'running'
   )
   
-  // 检测任务ID变化（说明是新任务）
   const isNewTask = (
     newTourRun?.status === 'running' &&
     newTourRun?.run_id !== oldTourRun?.run_id
   )
   
-  // 当检测到任务启动或新任务时，自动加载点位数据
   if (isTaskStarting || isNewTask) {
-    console.log('🚀 检测到任务启动，自动加载点位数据...')
     await checkAndLoadTaskData()
   }
 }, { deep: true })
 
 // 监听预设ID变化，当任务开始执行时自动加载点位数据
 watch(() => websocketDataStore.currentTourPresetId, async (newPresetId, oldPresetId) => {
-  console.log('🔄 预设ID变化:', {
-    newPresetId,
-    oldPresetId,
-    currentTourRunStatus: websocketDataStore.currentTourRun?.status,
-    presetItemsCount: websocketDataStore.tourPresetItems.length,
-    isTaskExecuting: isTaskExecuting.value
-  })
-  
-  // 当预设ID变化，且当前任务正在运行时，自动加载点位数据
-  // 放宽条件：即使已有数据也重新加载，因为可能是新任务
   if (newPresetId && newPresetId !== oldPresetId && isTaskExecuting.value) {
-    console.log('🚀 检测到新的预设ID且任务正在执行，自动加载点位数据...')
     const token = userStore.token || localStorage.getItem('token') || ''
     if (token) {
       try {
         await websocketDataStore.fetchTourPresetItems(newPresetId, token)
-        console.log('✅ 点位数据加载成功，点位数量:', websocketDataStore.tourPresetItems.length)
-        // 强制重新渲染栅格图
         nextTick(() => {
           setTimeout(() => {
             loadAndRenderPGM()
@@ -2194,14 +2162,6 @@ watch(() => websocketDataStore.currentTourPresetId, async (newPresetId, oldPrese
     }
   }
 })
-
-// 监听tourPresetItems变化，输出调试信息
-watch(() => websocketDataStore.tourPresetItems, (newItems) => {
-  console.log('📊 tourPresetItems 数据变化，新的点位数量:', newItems.length)
-  if (newItems.length > 0) {
-    console.log('📋 点位详情（前3个）:', newItems.slice(0, 3))
-  }
-}, { deep: true })
 
 
 // 飞行统计数据
@@ -2278,8 +2238,8 @@ const isCurrentTaskPoint = (displayIndex: number): boolean => {
     const { current } = websocketDataStore.currentTaskProgress
     // current 表示当前正在执行的点位序号（从1开始），转换为数组索引（从0开始）
     const actualIndex = current - 1
-    // 检查当前执行的点位是否在显示的前3个中
-    return displayIndex === actualIndex && actualIndex < 3
+    // 检查当前执行的点位，不限制显示范围
+    return displayIndex === actualIndex
   }
   
   // 如果没有实时进度数据，回退到根据status判断
@@ -2288,8 +2248,8 @@ const isCurrentTaskPoint = (displayIndex: number): boolean => {
   
   // 找到第一个状态为'arriving'的点位
   const arrivingIndex = points.findIndex(p => p.status === 'arriving')
-  // 检查arriving点位是否在显示的前3个中
-  return displayIndex === arrivingIndex && arrivingIndex < 3
+  // 检查arriving点位，不限制显示范围
+  return displayIndex === arrivingIndex
 }
 
 // 获取当前执行任务点的展区名称
@@ -2325,19 +2285,77 @@ const isTaskExecuting = computed(() => {
   return websocketDataStore.currentTourRun?.status === 'running'
 })
 
+// 全屏状态
+const isFullscreen = ref(false)
+
+// 全屏状态变化处理函数
+const handleFullscreenChange = () => {
+  isFullscreen.value = !!(
+    document.fullscreenElement ||
+    (document as any).webkitFullscreenElement ||
+    (document as any).mozFullScreenElement ||
+    (document as any).msFullscreenElement
+  )
+  // console.log('全屏状态变化:', isFullscreen.value)
+}
+
+// 任务点列表和任务点项的ref
+const taskPointsListRef = ref<HTMLElement | null>(null)
+const taskPointItemRefs = new Map<number, HTMLElement>()
+
+// 设置任务点项的ref
+const setTaskPointItemRef = (el: any, index: number) => {
+  if (el) {
+    taskPointItemRefs.set(index, el as HTMLElement)
+  } else {
+    taskPointItemRefs.delete(index)
+  }
+}
+
+// 自动滚动到当前执行的任务点
+const scrollToCurrentTaskPoint = () => {
+  // 获取当前执行的任务点索引
+  let currentIndex = -1
+  
+  if (websocketDataStore.currentTaskProgress) {
+    const { current } = websocketDataStore.currentTaskProgress
+    currentIndex = current - 1
+  } else {
+    const points = websocketDataStore.tourRunPoints
+    if (points && points.length > 0) {
+      currentIndex = points.findIndex(p => p.status === 'arriving')
+    }
+  }
+  
+  // 如果找到了当前任务点，滚动到该位置
+  if (currentIndex >= 0 && taskPointsListRef.value) {
+    nextTick(() => {
+      const currentElement = taskPointItemRefs.get(currentIndex)
+      if (currentElement) {
+        currentElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'nearest'
+        })
+      }
+    })
+  }
+}
+
+// 监听当前任务进度变化，自动滚动
+watch(
+  () => websocketDataStore.currentTaskProgress?.current,
+  (newCurrent, oldCurrent) => {
+    if (newCurrent !== oldCurrent && newCurrent !== undefined) {
+      // console.log('当前任务点变化:', newCurrent)
+      scrollToCurrentTaskPoint()
+    }
+  }
+)
+
 // 监听任务执行状态变化，确保点位数据及时加载
 watch(isTaskExecuting, async (executing, wasExecuting) => {
-  console.log('🎯 任务执行状态变化:', {
-    executing,
-    wasExecuting,
-    currentPresetId: websocketDataStore.currentTourPresetId,
-    presetItemsCount: websocketDataStore.tourPresetItems.length
-  })
-  
-  // 当任务从未执行变为执行中时
   if (executing && !wasExecuting) {
-    console.log('🚀 任务开始执行，检查并加载点位数据...')
-    // 等待一小段时间，确保presetId已经更新
     await nextTick()
     setTimeout(async () => {
       await checkAndLoadTaskData()
@@ -2368,7 +2386,6 @@ const toggleTaskExecution = async () => {
   
   // 检查是否有正在执行的任务
   if (!isTaskExecuting.value) {
-    console.log('ℹ️ 当前没有正在执行的任务')
     return
   }
   
@@ -3672,6 +3689,96 @@ const drawRobotSVGIcon = async (ctx: CanvasRenderingContext2D, x: number, y: num
   ctx.restore()
 }
 
+// 绘制已走过的路径连线
+const drawTaskPathLines = async (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+  // 只有当前任务存在且状态为running时，才绘制路径
+  if (!websocketDataStore.currentTourRun || websocketDataStore.currentTourRun.status !== 'running') {
+    return
+  }
+  
+  // 获取任务点数据
+  const taskPoints = websocketDataStore.tourRunPoints
+  if (!taskPoints || taskPoints.length === 0 || !currentMapOriginInfo) {
+    return
+  }
+
+  // 获取当前执行的任务点索引
+  let currentIndex = -1
+  if (websocketDataStore.currentTaskProgress) {
+    currentIndex = websocketDataStore.currentTaskProgress.current - 1
+  } else {
+    // 如果没有实时进度数据，通过status判断
+    currentIndex = taskPoints.findIndex(p => p.status === 'arriving')
+  }
+
+  // 如果没有当前执行的任务点，不需要绘制路径
+  if (currentIndex < 0) {
+    return
+  }
+
+  // 获取当前缩放比例
+  const currentScale = canvas.clientWidth / canvas.width
+
+  ctx.save()
+  
+  // 启用抗锯齿
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
+  // 设置路径线样式
+  ctx.strokeStyle = '#00BCD4' // 青色路径线
+  ctx.lineWidth = Math.max(1.5, 2 / currentScale) // 稍粗的线条
+  ctx.lineCap = 'round' // 圆形线帽
+  ctx.lineJoin = 'round' // 圆形连接
+  
+  // 添加发光效果
+  ctx.shadowColor = 'rgba(0, 188, 212, 0.6)'
+  ctx.shadowBlur = 4 / currentScale
+
+  // 收集所有有效的已走过的点位（从第一个到当前点，包括当前点）
+  const validPoints: Array<{x: number, y: number}> = []
+  
+  for (let i = 0; i <= currentIndex; i++) {
+    const point = taskPoints[i]
+    // 检查点位是否有有效的坐标
+    if (typeof point.x !== 'number' || typeof point.y !== 'number') {
+      continue
+    }
+
+    // 转换世界坐标到像素坐标
+    const pixelPos = worldToPixel(
+      point.x,
+      point.y,
+      currentMapOriginInfo!,
+      canvas.width,
+      canvas.height
+    )
+
+    // 检查是否在画布范围内
+    if (pixelPos.x >= 0 && pixelPos.x < canvas.width && pixelPos.y >= 0 && pixelPos.y < canvas.height) {
+      validPoints.push(pixelPos)
+    }
+  }
+
+  // 绘制连线
+  if (validPoints.length >= 2) {
+    ctx.beginPath()
+    ctx.moveTo(validPoints[0].x, validPoints[0].y)
+    
+    for (let i = 1; i < validPoints.length; i++) {
+      ctx.lineTo(validPoints[i].x, validPoints[i].y)
+    }
+    
+    ctx.stroke()
+  }
+
+  // 清除阴影设置
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+
+  ctx.restore()
+}
+
 // 绘制任务点位
 const drawTaskPoints = async (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
   // 只有当前任务存在且状态为running时，才绘制任务点
@@ -3791,6 +3898,9 @@ const drawRobotPosition = async () => {
 
   // 绘制机器人位置 - 使用高清SVG图标
   await drawRobotSVGIcon(ctx, pixelPos.x, pixelPos.y, robotPose.theta, canvas)
+  
+  // 绘制已走过的路径连线（在任务点之前绘制，这样点会在线的上面）
+  // await drawTaskPathLines(ctx, canvas)
   
   // 绘制任务点位
   await drawTaskPoints(ctx, canvas)
@@ -4953,10 +5063,9 @@ onMounted(async () => {
   
   // 注册任务完成回调，用于清空栅格图上的任务点
   handleTaskCompletion = () => {
-    console.log('🎯 任务完成回调被触发，重新渲染栅格图清空任务点')
     setTimeout(() => {
       loadAndRenderPGM()
-    }, 100) // 稍微延迟以确保数据已清空
+    }, 100)
   }
   websocketDataStore.onTaskCompletion(handleTaskCompletion)
   
@@ -5032,6 +5141,14 @@ onMounted(async () => {
     lineChart?.resize()
   })
 
+  // 监听全屏状态变化
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
+  document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+  document.addEventListener('msfullscreenchange', handleFullscreenChange)
+  // 初始化全屏状态
+  handleFullscreenChange()
+
   // 开始初始化地图
   
   // 初始化地图
@@ -5104,6 +5221,12 @@ onUnmounted(() => {
   }
   // 移除全局点击事件监听器
   document.removeEventListener('click', handleGlobalClick)
+  
+  // 移除全屏状态监听器
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
+  document.removeEventListener('msfullscreenchange', handleFullscreenChange)
   
   // 移除任务完成回调
   if (handleTaskCompletion) {
@@ -5180,6 +5303,9 @@ onActivated(async () => {
     try {
       await websocketDataStore.fetchTourRuns(token)
       console.log('✅ 页面激活时刷新任务状态成功')
+      
+      // 刷新任务状态后，检查并加载任务数据
+      await checkAndLoadTaskData()
     } catch (error) {
       console.warn('❌ 页面激活时刷新任务状态失败:', error)
     }
@@ -6124,9 +6250,15 @@ const centerToDroneMarker = () => {
   flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
-  max-height: 168px; /* 限制高度，最多显示3个任务点 (3个任务点56px + 2个gap 8px) */
+  max-height: 144px; /* 限制高度，严格显示3个任务点 */
   overflow-y: auto; /* 添加垂直滚动条 */
   padding-right: 4px; /* 为滚动条留出空间 */
+  transition: max-height 0.3s ease; /* 平滑过渡效果 */
+}
+
+/* 全屏模式下显示4条 */
+.task-points-list.fullscreen-mode {
+  max-height: 208px; /* 4个任务点的高度 (4 × 40px + 3 × 8px gap = 184px，留些余量208px) */
 }
 
 /* 滚动条样式 */
@@ -6163,6 +6295,13 @@ const centerToDroneMarker = () => {
 .task-point-item:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(0, 188, 212, 0.4);
+}
+
+/* 当前正在执行的任务点高亮样式 */
+.task-point-item.current-executing {
+  background: rgba(0, 188, 212, 0.15);
+  border-color: rgba(0, 188, 212, 0.6);
+  box-shadow: 0 0 10px rgba(0, 188, 212, 0.3);
 }
 
 .task-point-info {

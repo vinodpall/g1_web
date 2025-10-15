@@ -139,12 +139,19 @@ export function validateCmdStatus(data: any): data is CmdStatus {
  * 验证当前地图数据
  */
 export function validateCurrentMap(data: any): data is CurrentMap {
-  return (
+  if (
     typeof data === 'object' &&
     data !== null &&
-    typeof data.map_name === 'string' &&
     typeof data.ts === 'number'
-  )
+  ) {
+    // map_name 可能是字符串或数字，统一转换为字符串
+    if (data.map_name !== undefined && data.map_name !== null) {
+      // 自动转换为字符串
+      data.map_name = String(data.map_name)
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -170,20 +177,20 @@ export function validateRobotSpeed(data: any): data is RobotSpeed {
  * 验证任务事件数据
  */
 export function validateTourEvent(data: any): data is TourEvent {
-  console.log('🔍 验证tour事件数据:', data)
+  // console.log('🔍 验证tour事件数据:', data)
   
   if (typeof data !== 'object' || data === null) {
-    console.warn('⚠️ tour数据不是对象或为null:', data)
+    // console.warn('⚠️ tour数据不是对象或为null:', data)
     return false
   }
   
   if (typeof data.event !== 'string') {
-    console.warn('⚠️ tour数据缺少event字段或event不是字符串:', data)
+    // console.warn('⚠️ tour数据缺少event字段或event不是字符串:', data)
     return false
   }
   
   // 临时显示所有tour事件，不过滤任何类型
-  console.log('✅ 收到有效tour事件:', data.event, data)
+  // console.log('✅ 收到有效tour事件:', data.event, data)
   
   // 基本验证：确保有event字段即可
   return true

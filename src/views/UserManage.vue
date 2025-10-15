@@ -444,7 +444,7 @@
             <div class="add-user-form-row">
               <label>选择点位：</label>
               <div class="custom-select-wrapper">
-                <select v-model="editIntroduceContentForm.pointId" class="user-select">
+                <select v-model="editIntroduceContentForm.pointId" class="user-select" disabled>
                   <option value="">请选择点位</option>
                   <option v-for="point in pointNames" :key="point.id" :value="point.id">
                     {{ point.name }}
@@ -1259,12 +1259,24 @@ const confirmAddIntroduceContent = async () => {
     }
   } catch (error) {
     console.error('添加讲解词失败:', error)
+    
+    // 错误消息映射
+    let errorMessage = '添加讲解词失败，请稍后重试'
+    if (error instanceof Error) {
+      const msg = error.message
+      if (msg.includes('Script already exists for this audience and point name')) {
+        errorMessage = '该讲解对象和点位名称的讲解词已存在，请勿重复添加'
+      } else {
+        errorMessage = msg
+      }
+    }
+    
     resultDialog.value = {
       show: true,
       type: 'error',
       title: '添加失败',
       message: '',
-      details: error instanceof Error ? error.message : '添加讲解词失败，请稍后重试'
+      details: errorMessage
     }
   }
 }
@@ -1433,7 +1445,7 @@ const handleSpeakTest = async (item: any) => {
     
     // 构建API URL
     const text = encodeURIComponent(item.content)
-    const timeout = 5
+    const timeout = 30  // 30秒超时时间，适应较长的讲解词
     const url = `/api/v1/speech/test?sn=${sn}&text=${text}&timeout=${timeout}`
     
     // 调用API
@@ -1576,12 +1588,24 @@ const confirmEditIntroduceContent = async () => {
     }
   } catch (error) {
     console.error('编辑讲解词失败:', error)
+    
+    // 错误消息映射
+    let errorMessage = '编辑讲解词失败，请稍后重试'
+    if (error instanceof Error) {
+      const msg = error.message
+      if (msg.includes('Script already exists for this audience and point name')) {
+        errorMessage = '该讲解对象和点位名称的讲解词已存在，请勿重复添加'
+      } else {
+        errorMessage = msg
+      }
+    }
+    
     resultDialog.value = {
       show: true,
       type: 'error',
       title: '编辑失败',
       message: '',
-      details: error instanceof Error ? error.message : '编辑讲解词失败，请稍后重试'
+      details: errorMessage
     }
   }
 }
@@ -1711,6 +1735,13 @@ onMounted(async () => {
   -moz-appearance: none;
   background-image: none;
   position: relative;
+}
+.user-select:disabled {
+  background: #1a2b3d;
+  color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(38, 131, 182, 0.3);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 .user-select option {
   background: #172233;

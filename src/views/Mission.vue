@@ -77,6 +77,9 @@
                   <button class="toolbar-btn" :class="{ active: isEditMode }" @click="toggleEditMode">
                     <img :src="mapEditIcon" alt="编辑" class="btn-icon-img" />
                   </button>
+                  <button class="toolbar-btn" :class="{ active: isRelocMode }" @click="toggleRelocMode" title="重定位">
+                    <img :src="positionIcon" alt="重定位" class="btn-icon-img" />
+                  </button>
                   <button class="toolbar-btn" @click="onUploadGrid">
                     <img :src="mapUploadIcon" alt="上传" class="btn-icon-img" />
                   </button>
@@ -374,7 +377,7 @@
                 v-model="addTaskPointForm.name" 
                 class="user-input" 
                 placeholder="请输入任务点名称"
-                maxlength="8"
+                maxlength="20"
               />
             </div>
             <div class="add-user-form-row">
@@ -422,6 +425,7 @@
               <label>机器人动作：</label>
               <div class="custom-select-wrapper">
                 <select v-model="addTaskPointForm.robotAction" class="user-select robot-action-select" :disabled="loadingRobotActions">
+                  <option value="none">无</option>
                   <option 
                     v-for="action in robotActions" 
                     :key="action.id" 
@@ -448,6 +452,40 @@
                   <input type="radio" v-model="addTaskPointForm.robotDirection" value="后退" />
                   <span class="radio-label">后退</span>
                 </label>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>任务等待：</label>
+              <div class="input-with-unit">
+                <input 
+                  v-model.number="addTaskPointForm.waitTime" 
+                  type="number" 
+                  step="1" 
+                  min="0"
+                  class="user-input no-spinners" 
+                  placeholder="请输入等待时长"
+                />
+                <span class="input-unit">秒</span>
+              </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>视频选择：</label>
+              <div class="custom-select-wrapper">
+                <select v-model="addTaskPointForm.videoId" class="user-select" :disabled="loadingVideos">
+                  <option value="">无</option>
+                  <option 
+                    v-for="video in videoList" 
+                    :key="video.id" 
+                    :value="video.id.toString()"
+                  >
+                    {{ video.label }}
+                  </option>
+                </select>
+                <span class="custom-select-arrow">
+                  <svg width="12" height="12" viewBox="0 0 12 12">
+                    <polygon points="2,4 6,8 10,4" fill="#67d5fd"/>
+                  </svg>
+                </span>
               </div>
             </div>
           </div>
@@ -763,6 +801,7 @@ import mapMagnifyIcon from '@/assets/source_data/robot_source/map_magnify.svg'
 import mapReduceIcon from '@/assets/source_data/robot_source/map_reduce.svg'
 import mapInitIcon from '@/assets/source_data/robot_source/map_init.svg'
 import mapRollbackIcon from '@/assets/source_data/robot_source/map_rollback.svg'
+import positionIcon from '@/assets/source_data/robot_source/position.svg'
 // import { useWaylineJobs, useDevices } from '../composables/useApi'
 // import { waylineApi } from '@/api/services'
 // import { useDeviceStatus } from '../composables/useDeviceStatus'
@@ -1215,6 +1254,12 @@ const brushSize = ref(5)
 const brushColor = ref('#000000') // 黑色表示障碍物
 const navMode = ref<'edit' | 'pan'>('pan') // 导航模式：编辑或拖动，默认为拖动模式
 
+// 重定位模式相关
+const isRelocMode = ref(false)
+const relocStartPoint = ref<{ x: number, y: number } | null>(null)
+const relocCurrentMouse = ref<{ x: number, y: number } | null>(null)
+const relocResult = ref<{ x: number, y: number, worldX: number, worldY: number, angle: number } | null>(null)
+
 // 展区管理相关状态
 interface Area {
   id: string
@@ -1317,6 +1362,25 @@ const parseRobotDirection = (actionParams: string | null): string => {
   }
 }
 
+// 从action_params中解析任务等待时间
+const parseWaitTime = (actionParams: string | null): number => {
+  if (!actionParams) return 0 // 默认值
+  
+  try {
+    const params = JSON.parse(actionParams)
+    return params.wait_time || 0
+  } catch (error) {
+    console.warn('解析任务等待时间失败:', error)
+    return 0 // 解析失败时使用默认值
+  }
+}
+
+// 从Point对象中获取视频ID
+const getVideoIdFromPoint = (screenVideoId: number | null | undefined): string => {
+  if (!screenVideoId) return '' // 默认值
+  return screenVideoId.toString()
+}
+
 // 从API获取的任务点列表，根据当前选中的展区筛选
 const selectedAreaId = ref<string>('') // 默认选择第一个展区
 const currentTaskPoints = computed(() => {
@@ -1359,6 +1423,23 @@ const addAreaForm = ref({
   name: ''
 })
 
+// 视频字典数据接口
+interface VideoDict {
+  category: string
+  code: string
+  label: string
+  value: string
+  description: string
+  sort: number
+  is_active: boolean
+  id: number
+  created_at: string
+}
+
+// 视频列表状态
+const videoList = ref<VideoDict[]>([])
+const loadingVideos = ref(false)
+
 const addTaskPointForm = ref({
   name: '', // 任务点名称
   pointNameId: '', // 讲解点位ID
@@ -1366,8 +1447,10 @@ const addTaskPointForm = ref({
   y: 0,
   angle: 0,
   pointType: '讲解点',
-  robotAction: '',
-  robotDirection: '前进'
+  robotAction: 'none', // 默认为"无"
+  robotDirection: '前进',
+  waitTime: 0, // 任务等待，默认0秒
+  videoId: '' // 视频选择，默认为空（无）
 })
 
 // 机器人动作列表
@@ -1415,10 +1498,46 @@ const fetchRobotActions = async (showError: boolean = true) => {
 
 // 根据动作 code 获取中文名称
 const getRobotActionName = (actionCode?: string): string => {
-  if (!actionCode) return '默认动作'
+  if (!actionCode || actionCode === 'none') return '无'
   
   const action = robotActions.value.find(a => a.code === actionCode)
   return action?.name || actionCode // 如果找不到名称，返回code
+}
+
+// 获取视频字典列表
+const fetchVideoList = async () => {
+  if (loadingVideos.value) return
+  
+  try {
+    loadingVideos.value = true
+    const token = userStore.token
+    if (!token) {
+      throw new Error('用户未登录')
+    }
+    
+    const baseUrl = API_BASE_URL.startsWith('http') ? API_BASE_URL : `${window.location.origin}${API_BASE_URL}`
+    const response = await fetch(`${baseUrl}/guide/dicts`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`获取视频列表失败: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    // 只保留category为video的数据
+    videoList.value = data.filter((item: VideoDict) => item.category === 'video' && item.is_active)
+    
+    console.log('✅ 获取视频列表成功:', videoList.value)
+  } catch (error) {
+    console.error('❌ 获取视频列表失败:', error)
+  } finally {
+    loadingVideos.value = false
+  }
 }
 
 // 监听点位类型变化，当选择辅助点时清空讲解点位选择
@@ -1536,7 +1655,33 @@ const selectedAreaForTask = ref<string>('')
 
 const toggleEditMode = () => { 
   isEditMode.value = !isEditMode.value
+  // 切换到编辑模式时，关闭重定位模式
+  if (isEditMode.value && isRelocMode.value) {
+    isRelocMode.value = false
+    resetRelocState()
+  }
   setupCanvasEditEvents()
+}
+
+// 切换重定位模式
+const toggleRelocMode = () => {
+  isRelocMode.value = !isRelocMode.value
+  // 切换到重定位模式时，关闭编辑模式
+  if (isRelocMode.value && isEditMode.value) {
+    isEditMode.value = false
+  }
+  resetRelocState()
+  setupCanvasEditEvents()
+}
+
+// 重置重定位状态
+const resetRelocState = () => {
+  relocStartPoint.value = null
+  relocCurrentMouse.value = null
+  // 重新渲染以清除箭头（只在有数据的情况下）
+  if (missionGridImageData && hallGridCanvas.value) {
+    drawMissionRobotPosition()
+  }
 }
 
 // 展厅选择处理函数
@@ -1773,8 +1918,15 @@ const onUploadGrid = async () => {
       return
     }
     
-    // 将canvas转换为PGM格式的二进制数据
-    const pgmData = await canvasToPGM(canvas, ctx)
+    // 使用保存的ImageData而不是从canvas读取，避免将机器人图标当作障碍物
+    const imageDataToUpload = gridImageData || missionGridImageData
+    if (!imageDataToUpload) {
+      showErrorMessage('无法获取栅格图数据')
+      return
+    }
+    
+    // 将ImageData转换为PGM格式的二进制数据
+    const pgmData = await canvasToPGM(canvas, imageDataToUpload)
     console.log('PGM数据生成完成，大小:', pgmData.length)
     
     try {
@@ -1824,11 +1976,10 @@ const onUploadGrid = async () => {
   }
 }
 
-// 将canvas转换为PGM格式的二进制数据
-const canvasToPGM = async (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): Promise<Uint8Array> => {
+// 将ImageData转换为PGM格式的二进制数据
+const canvasToPGM = async (canvas: HTMLCanvasElement, imageData: ImageData): Promise<Uint8Array> => {
   const width = canvas.width
   const height = canvas.height
-  const imageData = ctx.getImageData(0, 0, width, height)
   
   // PGM文件头
   const header = `P5\n${width} ${height}\n255\n`
@@ -2263,7 +2414,7 @@ const confirmDeleteDataPackage = async () => {
     const response = await navigationApi.deleteDataPackage(token, {
       sn: getWebSocketSn(),
       data_name: processDataPackageName(dataPackageToDelete.value),
-      timeout: 20
+      timeout: 30
     })
 
     if (response.error_code === 0) {
@@ -2853,7 +3004,15 @@ const loadAndRenderHallPGM = async () => {
       if (!canvas || !ctx) return
       
       if (!gridImageData) {
-        gridImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        // 从原始数据复制，而不是从canvas获取，避免将机器人图标保存到编辑数据中
+        if (missionGridImageData) {
+          // 创建新的ImageData并复制数据
+          gridImageData = ctx.createImageData(missionGridImageData.width, missionGridImageData.height)
+          gridImageData.data.set(missionGridImageData.data)
+        } else {
+          // 如果原始数据不存在，才从canvas获取
+          gridImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        }
       }
       
       const radius = Math.floor(brushSize.value / 2)
@@ -2922,7 +3081,42 @@ const loadAndRenderHallPGM = async () => {
       currentScale = Math.max(0.2, Math.min(5, currentScale * delta))
       applyTransform()
     }
-    const onMouseDown = (e: MouseEvent) => { 
+    const onMouseDown = (e: MouseEvent) => {
+      // 重定位模式下的左键点击
+      if (isRelocMode.value && e.button === 0 && !e.ctrlKey) {
+        const coords = getCanvasCoords(e)
+        
+        if (!relocStartPoint.value) {
+          // 第一次点击：设置起点
+          relocStartPoint.value = { x: coords.x, y: coords.y }
+          e.preventDefault()
+          return
+        } else {
+          // 第二次点击：确认并调用重定位接口
+          const angle = calculateAngle(relocStartPoint.value.x, relocStartPoint.value.y, coords.x, coords.y)
+          
+          // 将像素坐标转换为世界坐标
+          const worldPos = pixelToWorld(relocStartPoint.value.x, relocStartPoint.value.y)
+          
+          // 保存结果
+          relocResult.value = {
+            x: relocStartPoint.value.x,
+            y: relocStartPoint.value.y,
+            worldX: worldPos.x,
+            worldY: worldPos.y,
+            angle: angle
+          }
+          
+          // 调用重定位接口
+          callReloposeApi(worldPos.x, worldPos.y, angle)
+          
+          // 重置重定位状态
+          resetRelocState()
+          e.preventDefault()
+          return
+        }
+      }
+      
       // 编辑模式下且为编辑导航模式的左键编辑
       if (isEditMode.value && navMode.value === 'edit' && e.button === 0 && !e.ctrlKey) {
         // 开始编辑前保存当前状态到历史记录（仅在新的编辑操作开始时保存）
@@ -2938,8 +3132,8 @@ const loadAndRenderHallPGM = async () => {
         return
       }
       
-      // 拖动：拖动模式、右键、Ctrl+左键、或非编辑模式的左键
-      if (navMode.value === 'pan' || e.button === 2 || e.ctrlKey || !isEditMode.value) {
+      // 拖动：拖动模式、右键、Ctrl+左键、或非编辑和非重定位模式的左键
+      if (navMode.value === 'pan' || e.button === 2 || e.ctrlKey || (!isEditMode.value && !isRelocMode.value)) {
         isDragging = true; 
         lastX = e.clientX; 
         lastY = e.clientY
@@ -2948,6 +3142,15 @@ const loadAndRenderHallPGM = async () => {
       }
     }
     const onMouseMove = (e: MouseEvent) => {
+      // 重定位模式下鼠标移动时显示箭头
+      if (isRelocMode.value && relocStartPoint.value) {
+        const coords = getCanvasCoords(e)
+        relocCurrentMouse.value = { x: coords.x, y: coords.y }
+        // 重新绘制以显示箭头
+        drawMissionRobotPosition()
+        return
+      }
+      
       // 处理编辑绘制
       if (drawing && isEditMode.value) {
         const coords = getCanvasCoords(e)
@@ -2968,7 +3171,9 @@ const loadAndRenderHallPGM = async () => {
     const endDrag = () => { 
       isDragging = false
       drawing = false
-      if (isEditMode.value) {
+      if (isRelocMode.value) {
+        canvas.style.cursor = 'crosshair'
+      } else if (isEditMode.value) {
         canvas.style.cursor = activeTool.value === 'pen' ? 'crosshair' : 'pointer'
       } else {
         canvas.style.cursor = 'grab'
@@ -3211,8 +3416,106 @@ const drawMissionRobotPosition = async () => {
   // 绘制机器人位置 - 使用高清SVG图标（与首页一致）
   await drawMissionRobotSVGIcon(ctx, pixelPos.x, pixelPos.y, robotPose.theta, canvas)
   
+  // 绘制已走过的路径连线（在任务点之前绘制，这样点会在线的上面）
+  // await drawMissionTaskPathLines(ctx, canvas)
+  
   // 绘制任务点位
   await drawMissionTaskPoints(ctx, canvas)
+  
+  // 绘制重定位箭头（如果在重定位模式）
+  if (isRelocMode.value && relocStartPoint.value && relocCurrentMouse.value) {
+    drawRelocArrow(ctx, relocStartPoint.value, relocCurrentMouse.value, canvas)
+  }
+}
+
+// 绘制Mission页面已走过的路径连线
+const drawMissionTaskPathLines = async (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+  // 只有当前任务存在且状态为running时，才绘制路径
+  if (!websocketDataStore.currentTourRun || websocketDataStore.currentTourRun.status !== 'running') {
+    return
+  }
+  
+  // 获取任务点数据
+  const taskPoints = websocketDataStore.tourRunPoints
+  if (!taskPoints || taskPoints.length === 0 || !currentMapOriginInfo) {
+    return
+  }
+
+  // 获取当前执行的任务点索引
+  let currentIndex = -1
+  if (websocketDataStore.currentTaskProgress) {
+    currentIndex = websocketDataStore.currentTaskProgress.current - 1
+  } else {
+    // 如果没有实时进度数据，通过status判断
+    currentIndex = taskPoints.findIndex(p => p.status === 'arriving')
+  }
+
+  // 如果没有当前执行的任务点，不需要绘制路径
+  if (currentIndex < 0) {
+    return
+  }
+
+  // 获取当前缩放比例
+  const currentScale = canvas.clientWidth / canvas.width
+
+  ctx.save()
+  
+  // 启用抗锯齿
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
+  // 设置路径线样式
+  ctx.strokeStyle = '#00BCD4' // 青色路径线
+  ctx.lineWidth = Math.max(1.5, 2 / currentScale) // 稍粗的线条
+  ctx.lineCap = 'round' // 圆形线帽
+  ctx.lineJoin = 'round' // 圆形连接
+  
+  // 添加发光效果
+  ctx.shadowColor = 'rgba(0, 188, 212, 0.6)'
+  ctx.shadowBlur = 4 / currentScale
+
+  // 收集所有有效的已走过的点位（从第一个到当前点，包括当前点）
+  const validPoints: Array<{x: number, y: number}> = []
+  
+  for (let i = 0; i <= currentIndex; i++) {
+    const point = taskPoints[i]
+    // 检查点位是否有有效的坐标
+    if (typeof point.x !== 'number' || typeof point.y !== 'number') {
+      continue
+    }
+
+    // 转换世界坐标到像素坐标
+    const pixelPos = worldToPixel(
+      point.x,
+      point.y,
+      currentMapOriginInfo!,
+      canvas.width,
+      canvas.height
+    )
+
+    // 检查是否在画布范围内
+    if (pixelPos.x >= 0 && pixelPos.x < canvas.width && pixelPos.y >= 0 && pixelPos.y < canvas.height) {
+      validPoints.push(pixelPos)
+    }
+  }
+
+  // 绘制连线
+  if (validPoints.length >= 2) {
+    ctx.beginPath()
+    ctx.moveTo(validPoints[0].x, validPoints[0].y)
+    
+    for (let i = 1; i < validPoints.length; i++) {
+      ctx.lineTo(validPoints[i].x, validPoints[i].y)
+    }
+    
+    ctx.stroke()
+  }
+
+  // 清除阴影设置
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+
+  ctx.restore()
 }
 
 // 绘制Mission页面任务点位
@@ -3414,12 +3717,92 @@ let gridImageData: ImageData | null = null
 const editHistory = ref<ImageData[]>([]) // 编辑历史记录
 const canUndo = computed(() => editHistory.value.length > 0)
 
+// 计算两点之间的角度（弧度）
+const calculateAngle = (x1: number, y1: number, x2: number, y2: number): number => {
+  const dx = x2 - x1
+  const dy = y2 - y1
+  // 使用atan2计算角度，返回范围为 -π 到 π
+  return Math.atan2(dy, dx)
+}
+
+// 将像素坐标转换为世界坐标
+const pixelToWorld = (pixelX: number, pixelY: number): { x: number, y: number } => {
+  if (!currentMapOriginInfo) {
+    return { x: 0, y: 0 }
+  }
+  
+  const canvas = hallGridCanvas.value
+  if (!canvas) {
+    return { x: 0, y: 0 }
+  }
+  
+  const { origin, resolution } = currentMapOriginInfo
+  const height = canvas.height
+  
+  // PGM图像坐标系转换为世界坐标系
+  const worldX = pixelX * resolution + origin[0]
+  const worldY = (height - pixelY) * resolution + origin[1]
+  
+  return { x: worldX, y: worldY }
+}
+
+// 绘制重定位箭头
+const drawRelocArrow = (
+  ctx: CanvasRenderingContext2D, 
+  start: { x: number, y: number }, 
+  end: { x: number, y: number },
+  canvas: HTMLCanvasElement
+) => {
+  const currentScale = canvas.clientWidth / canvas.width
+  
+  ctx.save()
+  
+  // 绘制箭头线
+  ctx.strokeStyle = '#FF9800' // 橙色
+  ctx.lineWidth = Math.max(2, 3 / currentScale)
+  ctx.lineCap = 'round'
+  
+  ctx.beginPath()
+  ctx.moveTo(start.x, start.y)
+  ctx.lineTo(end.x, end.y)
+  ctx.stroke()
+  
+  // 绘制箭头头部
+  const angle = calculateAngle(start.x, start.y, end.x, end.y)
+  const arrowLength = Math.max(10, 15 / currentScale)
+  const arrowAngle = Math.PI / 6 // 30度
+  
+  ctx.fillStyle = '#FF9800'
+  ctx.beginPath()
+  ctx.moveTo(end.x, end.y)
+  ctx.lineTo(
+    end.x - arrowLength * Math.cos(angle - arrowAngle),
+    end.y - arrowLength * Math.sin(angle - arrowAngle)
+  )
+  ctx.lineTo(
+    end.x - arrowLength * Math.cos(angle + arrowAngle),
+    end.y - arrowLength * Math.sin(angle + arrowAngle)
+  )
+  ctx.closePath()
+  ctx.fill()
+  
+  // 绘制起点标记
+  ctx.fillStyle = '#4CAF50' // 绿色
+  ctx.beginPath()
+  ctx.arc(start.x, start.y, Math.max(4, 6 / currentScale), 0, Math.PI * 2)
+  ctx.fill()
+  
+  ctx.restore()
+}
+
 const setupCanvasEditEvents = () => {
   const canvas = hallGridCanvas.value
   if (!canvas) return
   
   // 更新光标样式
-  if (isEditMode.value) {
+  if (isRelocMode.value) {
+    canvas.style.cursor = 'crosshair'
+  } else if (isEditMode.value) {
     if (navMode.value === 'pan') {
       canvas.style.cursor = 'grab'
     } else {
@@ -3437,11 +3820,22 @@ const saveToHistory = () => {
   const ctx = canvas?.getContext('2d')
   if (!canvas || !ctx) return
   
-  const currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  // 优先从gridImageData保存，如果不存在则从missionGridImageData保存
+  // 避免保存包含机器人图标和任务点的canvas内容
+  let sourceData: ImageData | null = null
+  if (gridImageData) {
+    sourceData = gridImageData
+  } else if (missionGridImageData) {
+    sourceData = missionGridImageData
+  } else {
+    // 如果都不存在，才从canvas获取
+    sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  }
+  
   const historyData = new ImageData(
-    new Uint8ClampedArray(currentImageData.data),
-    currentImageData.width,
-    currentImageData.height
+    new Uint8ClampedArray(sourceData.data),
+    sourceData.width,
+    sourceData.height
   )
   
   editHistory.value.push(historyData)
@@ -3461,8 +3855,11 @@ const undoEdit = () => {
   
   const previousState = editHistory.value.pop()
   if (previousState) {
+    // 恢复历史记录的状态
     ctx.putImageData(previousState, 0, 0)
-    gridImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    // 复制数据到gridImageData，避免直接引用
+    gridImageData = ctx.createImageData(previousState.width, previousState.height)
+    gridImageData.data.set(previousState.data)
   }
 }
 
@@ -3479,15 +3876,12 @@ watch(activeTool, () => {
 
 watch(isEditMode, (newValue, oldValue) => {
   setupCanvasEditEvents()
-  // 当退出编辑模式时，保存当前编辑内容，然后重新绘制机器人位置
+  // 当退出编辑模式时，重新绘制机器人位置
   if (oldValue && !newValue) {
-    // 退出编辑模式前，保存当前canvas内容到gridImageData
-    const canvas = hallGridCanvas.value
-    const ctx = canvas?.getContext('2d')
-    if (canvas && ctx) {
-      gridImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      console.log('退出编辑模式，保存当前编辑内容')
-    }
+    // 注意：不需要在这里保存canvas内容到gridImageData
+    // 因为在编辑过程中，gridImageData已经被editGridPixel函数实时更新了
+    // 如果从canvas获取数据，可能会包含一些临时绘制的内容
+    console.log('退出编辑模式，重新绘制机器人位置')
     
     setTimeout(() => {
       drawMissionRobotPosition()
@@ -3537,6 +3931,46 @@ const showSuccessMessage = (message: string) => {
   setTimeout(() => {
     resultDialogState.value.show = false
   }, 2000)
+}
+
+// 调用重定位接口
+const callReloposeApi = async (poseX: number, poseY: number, theta: number) => {
+  try {
+    const token = userStore.token
+    if (!token) {
+      showErrorMessage('未找到认证token，请重新登录')
+      return
+    }
+    
+    // 获取当前机器人SN
+    const currentSn = getWebSocketSn()
+    if (!currentSn || currentSn === 'broadcast') {
+      showErrorMessage('未找到有效的机器人SN')
+      return
+    }
+    
+    console.log('调用重定位接口:', { sn: currentSn, pos_x: poseX, pos_y: poseY, theta })
+    
+    // 调用API
+    await navigationApi.setRelopose(token, {
+      sn: currentSn,
+      pos_x: poseX,
+      pos_y: poseY,
+      theta: theta,
+      timeout: 10
+    })
+    
+    // 成功提示
+    showSuccessMessage('原点重定位成功')
+    
+    // 退出重定位模式
+    isRelocMode.value = false
+    setupCanvasEditEvents()
+    
+  } catch (error) {
+    console.error('重定位失败:', error)
+    showErrorMessage(error instanceof Error ? error.message : '重定位失败，请重试')
+  }
 }
 
 // 保存当前栅格图（下载到本地）
@@ -3658,7 +4092,14 @@ const handleAddTaskPoint = async () => {
     }
   }
   
-  // 选择默认动作
+  // 每次打开对话框时都刷新视频列表
+  try {
+    await fetchVideoList()
+  } catch (error) {
+    console.warn('获取视频列表失败，将使用空列表')
+  }
+  
+  // 选择默认动作 - 默认为"无"
   const defaultAction = robotActions.value.find(action => action.recommended)
   
   editingTaskPoint.value = null
@@ -3669,8 +4110,10 @@ const handleAddTaskPoint = async () => {
     y: defaultY, 
     angle: defaultAngle, 
     pointType: '讲解点', 
-    robotAction: defaultAction?.code || '',
-    robotDirection: '前进'
+    robotAction: 'none', // 默认为"无"
+    robotDirection: '前进',
+    waitTime: 0, // 任务等待，默认0秒
+    videoId: '' // 视频选择，默认为空（无）
   }
   showAddTaskPointDialog.value = true
 }
@@ -3755,15 +4198,17 @@ const handleConfirmAddTaskPoint = async () => {
       // 获取当前机器人的SN
       const currentSn = getWebSocketSn()
       
-      // 根据机器人朝向生成 action_params
+      // 根据机器人朝向和任务等待生成 action_params
       const navMode = addTaskPointForm.value.robotDirection === '前进' ? 1 : -1
       const actionParams = JSON.stringify({
         hold: 1.5,
         auto_release: true,
-        nav_mode: navMode
+        nav_mode: navMode,
+        wait_time: addTaskPointForm.value.waitTime || 0 // 添加任务等待时间
       })
       
-      const pointData = {
+      // 构建基本的pointData
+      const pointData: any = {
         type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
         point_name_id: addTaskPointForm.value.pointType === '讲解点' && addTaskPointForm.value.pointNameId 
           ? parseInt(addTaskPointForm.value.pointNameId) 
@@ -3772,12 +4217,19 @@ const handleConfirmAddTaskPoint = async () => {
         pose_x: addTaskPointForm.value.x,
         pose_y: addTaskPointForm.value.y,
         pose_theta: addTaskPointForm.value.angle, // 直接使用原始值
-        action_code: addTaskPointForm.value.robotAction,
+        action_code: addTaskPointForm.value.robotAction === 'none' ? '' : addTaskPointForm.value.robotAction, // 如果选择"无"，则保存为空字符串
         action_params: actionParams,
         robot_sn: currentSn // 使用当前机器人的SN
       }
       
-      console.log('更新任务点:', editingTaskPoint.value.id, pointData)
+      // 如果选择了视频（不是"无"），添加screen_video_id字段
+      const selectedVideoId = addTaskPointForm.value.videoId
+      if (selectedVideoId && selectedVideoId !== '') {
+        const videoIdNum = parseInt(selectedVideoId)
+        if (!isNaN(videoIdNum)) {
+          pointData.screen_video_id = videoIdNum
+        }
+      }
       const updatedPoint = await pointStore.updatePoint(parseInt(editingTaskPoint.value.id), pointData)
       
       showSuccessMessage(`任务点更新成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(updatedPoint.point_name_id)?.name || '未知点位'}`)
@@ -3792,15 +4244,17 @@ const handleConfirmAddTaskPoint = async () => {
       // 获取当前机器人的SN
       const currentSn = getWebSocketSn()
       
-      // 根据机器人朝向生成 action_params
+      // 根据机器人朝向和任务等待生成 action_params
       const navMode = addTaskPointForm.value.robotDirection === '前进' ? 1 : -1
       const actionParams = JSON.stringify({
         hold: 1.5,
         auto_release: true,
-        nav_mode: navMode
+        nav_mode: navMode,
+        wait_time: addTaskPointForm.value.waitTime || 0 // 添加任务等待时间
       })
       
-      const pointData = {
+      // 构建基本的pointData
+      const pointData: any = {
         zone_id: parseInt(selectedAreaId.value),
         type: addTaskPointForm.value.pointType === '讲解点' ? 'explain' as const : 'action' as const,
         point_name_id: addTaskPointForm.value.pointType === '讲解点' && addTaskPointForm.value.pointNameId 
@@ -3810,12 +4264,19 @@ const handleConfirmAddTaskPoint = async () => {
         pose_x: addTaskPointForm.value.x,
         pose_y: addTaskPointForm.value.y,
         pose_theta: addTaskPointForm.value.angle, // 直接使用原始值
-        action_code: addTaskPointForm.value.robotAction,
+        action_code: addTaskPointForm.value.robotAction === 'none' ? '' : addTaskPointForm.value.robotAction, // 如果选择"无"，则保存为空字符串
         action_params: actionParams,
         robot_sn: currentSn // 使用当前机器人的SN
       }
       
-      console.log('创建任务点:', pointData)
+      // 如果选择了视频（不是"无"），添加screen_video_id字段
+      const selectedVideoId = addTaskPointForm.value.videoId
+      if (selectedVideoId && selectedVideoId !== '') {
+        const videoIdNum = parseInt(selectedVideoId)
+        if (!isNaN(videoIdNum)) {
+          pointData.screen_video_id = videoIdNum
+        }
+      }
       const newPoint = await pointStore.createPoint(pointData)
       
       showSuccessMessage(`任务点创建成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(newPoint.point_name_id)?.name || '未知点位'}`)
@@ -3836,7 +4297,14 @@ const handleCancelAddTaskPoint = () => {
 }
 
 // 编辑任务点
-const onClickEditTaskPoint = (point: TaskPoint) => {
+const onClickEditTaskPoint = async (point: TaskPoint) => {
+  // 每次打开编辑对话框时都刷新视频列表
+  try {
+    await fetchVideoList()
+  } catch (error) {
+    console.warn('获取视频列表失败，将使用空列表')
+  }
+  
   editingTaskPoint.value = point
   // 从point的实际数据中获取原始Point数据
   const originalPoint = pointStore.getPointById(parseInt(point.id))
@@ -3848,8 +4316,10 @@ const onClickEditTaskPoint = (point: TaskPoint) => {
     y: point.y,
     angle: point.angle,
     pointType: point.pointType,
-    robotAction: originalPoint?.action_code || '', // 使用原始的 action_code
-    robotDirection: parseRobotDirection(originalPoint?.action_params || null) // 从action_params解析机器人朝向
+    robotAction: originalPoint?.action_code ? originalPoint.action_code : 'none', // 使用原始的 action_code，如果为空则为"无"
+    robotDirection: parseRobotDirection(originalPoint?.action_params || null), // 从action_params解析机器人朝向
+    waitTime: parseWaitTime(originalPoint?.action_params || null), // 从action_params解析任务等待时间
+    videoId: getVideoIdFromPoint((originalPoint as any)?.screen_video_id) // 直接从Point对象获取视频ID
   }
   showAddTaskPointDialog.value = true
 }
@@ -4001,6 +4471,12 @@ const isTaskPaused = computed(() => {
 
 // 任务控制相关方法
 const handleStartTask = async () => {
+  // 检查导航是否开启
+  if (!isNavEnabled.value) {
+    showErrorMessage('请先开启导航后再执行任务')
+    return
+  }
+  
   if (!selectedHallTaskList.value) {
     return
   }
@@ -4016,12 +4492,14 @@ const handleStartTask = async () => {
     return
   }
   
-  // 默认选择第一个讲解对象
-  if (availableAudiences.value.length > 0) {
-    selectedVisitorType.value = availableAudiences.value[0].id.toString()
-  } else {
-    selectedVisitorType.value = ''
+  // 检查是否有讲解对象
+  if (!availableAudiences.value.length) {
+    showErrorMessage('暂无可用的讲解对象')
+    return
   }
+  
+  // 默认选择第一个讲解对象
+  selectedVisitorType.value = availableAudiences.value[0].id.toString()
   
   // 显示讲解对象选择弹窗
   showVisitorTypeDialog.value = true
@@ -4092,12 +4570,6 @@ const handleConfirmStartTask = async () => {
   }
   
   try {
-    const token = userStore.token
-    if (!token) {
-      showErrorMessage('未找到认证token')
-      return
-    }
-    
     const presetId = parseInt(selectedHallTaskList.value)
     const audienceId = parseInt(selectedVisitorType.value)
     
@@ -4108,22 +4580,22 @@ const handleConfirmStartTask = async () => {
     // 获取当前机器人的SN
     const currentSn = getWebSocketSn()
     
-    // 调用开始任务API
-    const startData = {
+    // 调用开始任务接口（使用 tourStore，与首页保持一致）
+    await tourStore.startTourPreset(presetId, {
       audience_id: audienceId,
       robot_sn: currentSn,
       prefer_current_pose: true
-    }
-    
-    console.log('开始展厅任务, preset_id:', presetId, 'start_data:', startData)
-    await tourApi.startTourPreset(token, presetId, startData)
+    })
     
     // 任务开始成功后，刷新任务运行列表状态
-    try {
-      await websocketDataStore.fetchTourRuns(token)
-      console.log('✅ 任务开始后刷新任务列表成功')
-    } catch (error) {
-      console.warn('❌ 刷新任务列表失败:', error)
+    const token = userStore.token || localStorage.getItem('token') || ''
+    if (token) {
+      try {
+        await websocketDataStore.fetchTourRuns(token)
+        console.log('✅ 任务开始后刷新任务列表成功')
+      } catch (error) {
+        console.warn('❌ 刷新任务列表失败:', error)
+      }
     }
     
     // 开始任务成功
@@ -5700,6 +6172,25 @@ const closeResultDialog = () => {
   min-height: 80px;
   font-family: inherit;
   line-height: 1.4;
+}
+
+/* 带单位的输入框样式 */
+.add-user-form .input-with-unit {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-user-form .input-with-unit .user-input {
+  flex: 1;
+}
+
+.add-user-form .input-with-unit .input-unit {
+  color: #67d5fd;
+  font-size: 14px;
+  flex-shrink: 0;
+  min-width: fit-content;
 }
 
 /* 展区名称输入组合样式 */

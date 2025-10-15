@@ -175,6 +175,7 @@ export const robotApi = {
     model: string
     firmware_version: string
     ip_address: string
+    voice_ip: string
     mac_address: string
     location: string
     status: string
@@ -315,10 +316,14 @@ export const userApi = {
       console.log('用户API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('用户API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('用户API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -348,9 +353,13 @@ export const userApi = {
       body: JSON.stringify(userData)
     }).then(response => {
       if (!response.ok) {
-        return response.json().then(errorData => {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     })
@@ -385,10 +394,14 @@ export const userApi = {
       console.log('更新用户API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('更新用户API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('更新用户API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -419,10 +432,14 @@ export const userApi = {
       console.log('获取当前用户API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('获取当前用户API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('获取当前用户API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -453,10 +470,14 @@ export const userApi = {
       console.log('删除用户API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('删除用户API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('删除用户API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       console.log('用户删除成功')
       return response.ok
@@ -894,10 +915,14 @@ export const hallApi = {
       console.log('展厅API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('展厅API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('展厅API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -935,10 +960,14 @@ export const zoneApi = {
       console.log('展区API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('展区API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('展区API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -971,10 +1000,14 @@ export const zoneApi = {
       console.log('创建展区API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('创建展区API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('创建展区API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -1006,10 +1039,14 @@ export const zoneApi = {
       console.log('删除展区API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('删除展区API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('删除展区API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       // 删除操作通常返回空响应或成功消息
       return response.status === 204 ? { success: true } : response.json()
@@ -1044,10 +1081,14 @@ export const tourApi = {
       console.log('任务运行列表API响应OK:', response.ok)
       
       if (!response.ok) {
-        return response.json().then(errorData => {
-          console.error('任务运行列表API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
-        })
+        return response.json()
+          .then(errorData => {
+            console.error('任务运行列表API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
       }
       return response.json()
     }).then(data => {
@@ -1676,6 +1717,54 @@ export const navigationApi = {
       return data
     }).catch(error => {
       console.error('删除数据包API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 设置重定位位姿接口
+  setRelopose: (token: string, params: { sn: string, pos_x: number, pos_y: number, theta: number, timeout?: number }) => {
+    const baseUrl = buildApiUrl('/navigation/nav/relo')
+    const url = new URL(baseUrl)
+    
+    // 添加timeout参数到URL，默认值为10
+    const timeoutValue = params.timeout || 10
+    url.searchParams.append('timeout', timeoutValue.toString())
+    
+    // 处理SN参数从body移到URL
+    const { url: finalUrl, data } = processSnParams(url.toString(), params)
+    
+    console.log('navigationApi.setRelopose 被调用')
+    console.log('原始URL:', baseUrl)
+    console.log('修改后URL:', finalUrl)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('原始重定位参数:', params)
+    console.log('修改后重定位参数:', data)
+    
+    return fetch(finalUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    }).then(response => {
+      console.log('重定位API响应状态:', response.status)
+      console.log('重定位API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('重定位API错误响应:', errorData)
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }).catch(() => {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('重定位API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('重定位API请求失败:', error)
       throw error
     })
   }

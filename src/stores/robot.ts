@@ -170,6 +170,7 @@ export const useRobotStore = defineStore('robot', () => {
     model: string
     firmware_version: string
     ip_address: string
+    voice_ip: string
     mac_address: string
     location: string
     status: string
@@ -275,7 +276,7 @@ export const useRobotStore = defineStore('robot', () => {
       // 更新缓存
       localStorage.setItem('robots', JSON.stringify(robots.value))
       localStorage.setItem('robots_cache_time', Date.now().toString())
-      console.log(`机器人 ${robot.name} (SN: ${sn}) 状态更新为: ${online ? '在线' : '离线'}`)
+      // console.log(`机器人 ${robot.name} (SN: ${sn}) 状态更新为: ${online ? '在线' : '离线'}`)
     }
   }
 
