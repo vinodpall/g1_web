@@ -103,14 +103,40 @@
               <div class="task-progress-section">
                 <div class="progress-info">
                   <span class="progress-label">任务执行进度: {{ taskProgress }}%</span>
-                  <button 
-                    class="pause-resume-btn" 
-                    :class="{ 'disabled': !navEnabled || !isTaskExecuting }" 
-                    :disabled="!navEnabled || !isTaskExecuting"
-                    @click="toggleTaskExecution"
-                  >
-                    {{ isTaskPaused ? '恢复' : '暂停' }}
-                  </button>
+                  <div class="control-buttons-group">
+                    <button 
+                      class="pause-resume-btn" 
+                      :class="{ 'disabled': !navEnabled || !isTaskExecuting }" 
+                      :disabled="!navEnabled || !isTaskExecuting"
+                      @click="toggleTaskExecution"
+                    >
+                      {{ isTaskPaused ? '恢复任务' : '暂停任务' }}
+                    </button>
+                    <button 
+                      class="speech-control-btn" 
+                      :class="{ 'disabled': !isTaskExecuting }" 
+                      :disabled="!isTaskExecuting"
+                      @click="toggleSpeechPause"
+                    >
+                      {{ isSpeechPaused ? '恢复播报' : '暂停播报' }}
+                    </button>
+                    <button 
+                      class="speech-control-btn" 
+                      :class="{ 'disabled': !isTaskExecuting }" 
+                      :disabled="!isTaskExecuting"
+                      @click="handleReplaySpeech"
+                    >
+                      重播
+                    </button>
+                    <button 
+                      class="speech-control-btn" 
+                      :class="{ 'disabled': !isTaskExecuting }" 
+                      :disabled="!isTaskExecuting"
+                      @click="handleSkipSpeech"
+                    >
+                      跳过
+                    </button>
+                  </div>
                 </div>
                 <div class="progress-bar-container">
                   <div class="progress-bar">
@@ -1051,7 +1077,7 @@ import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } f
 import { useRouter } from 'vue-router'
 // import { useHmsAlerts, useDevices, useWaylineJobs } from '../composables/useApi' // API已移除，等待重新对接
 // import { controlApi, waylineApi, livestreamApi } from '../api/services' // API已移除
-import { navigationApi } from '../api/services'
+import { navigationApi, pauseSpeech, resumeSpeech, replaySpeech, skipSpeech } from '../api/services'
 // 兼容性占位，避免构建错误，后续将替换为新接口
 const waylineApi: any = { getFlightStatistics: async (_workspaceId: any, _days: number) => ({ code: 0, data: {} }) }
 const livestreamApi: any = { setQuality: async (_dockSn: string, _payload: any) => ({}) }
@@ -2423,6 +2449,136 @@ const toggleTaskExecution = async () => {
   }
 }
 
+// 语音播报暂停状态
+const isSpeechPaused = ref(false)
+
+// 暂停/恢复语音播报
+const toggleSpeechPause = async () => {
+  console.log('🎯 toggleSpeechPause 函数被调用')
+  console.log('当前任务执行状态:', isTaskExecuting.value)
+  console.log('当前任务数据:', websocketDataStore.currentTourRun)
+  
+  if (!isTaskExecuting.value) {
+    console.warn('⚠️ 没有正在执行的任务，无法操作语音播报')
+    alert('没有正在执行的任务，无法操作语音播报')
+    return
+  }
+  
+  const currentTourRun = websocketDataStore.currentTourRun
+  if (!currentTourRun || !currentTourRun.id) {
+    console.error('❌ 无法获取当前任务的id')
+    console.error('currentTourRun:', currentTourRun)
+    alert('无法获取当前任务的id')
+    return
+  }
+  
+  try {
+    const token = userStore.token || localStorage.getItem('token') || ''
+    if (!token) {
+      console.error('❌ 未登录或token已过期')
+      alert('未登录或token已过期')
+      return
+    }
+    
+    if (isSpeechPaused.value) {
+      console.log('▶️ 恢复语音播报, runId:', currentTourRun.id)
+      await resumeSpeech(token, currentTourRun.id)
+      isSpeechPaused.value = false
+      console.log('✅ 语音播报已恢复')
+    } else {
+      console.log('⏸️ 暂停语音播报, runId:', currentTourRun.id)
+      await pauseSpeech(token, currentTourRun.id)
+      isSpeechPaused.value = true
+      console.log('✅ 语音播报已暂停')
+    }
+  } catch (error) {
+    console.error('❌ 语音播报暂停/恢复失败:', error)
+    alert('操作失败，请重试')
+  }
+}
+
+// 重播语音
+const handleReplaySpeech = async () => {
+  console.log('🎯 handleReplaySpeech 函数被调用')
+  console.log('当前任务执行状态:', isTaskExecuting.value)
+  console.log('当前任务数据:', websocketDataStore.currentTourRun)
+  
+  if (!isTaskExecuting.value) {
+    console.warn('⚠️ 没有正在执行的任务，无法重播语音')
+    alert('没有正在执行的任务，无法重播语音')
+    return
+  }
+  
+  const currentTourRun = websocketDataStore.currentTourRun
+  if (!currentTourRun || !currentTourRun.id) {
+    console.error('❌ 无法获取当前任务的id')
+    console.error('currentTourRun:', currentTourRun)
+    alert('无法获取当前任务的id')
+    return
+  }
+  
+  try {
+    const token = userStore.token || localStorage.getItem('token') || ''
+    if (!token) {
+      console.error('❌ 未登录或token已过期')
+      alert('未登录或token已过期')
+      return
+    }
+    
+    console.log('🔁 重播语音, runId:', currentTourRun.id)
+    await replaySpeech(token, currentTourRun.id)
+    console.log('✅ 语音重播指令已发送')
+  } catch (error) {
+    console.error('❌ 重播语音失败:', error)
+    alert('操作失败，请重试')
+  }
+}
+
+// 跳过语音
+const handleSkipSpeech = async () => {
+  console.log('🎯 handleSkipSpeech 函数被调用')
+  console.log('当前任务执行状态:', isTaskExecuting.value)
+  console.log('当前任务数据:', websocketDataStore.currentTourRun)
+  
+  if (!isTaskExecuting.value) {
+    console.warn('⚠️ 没有正在执行的任务，无法跳过语音')
+    alert('没有正在执行的任务，无法跳过语音')
+    return
+  }
+  
+  const currentTourRun = websocketDataStore.currentTourRun
+  if (!currentTourRun || !currentTourRun.id) {
+    console.error('❌ 无法获取当前任务的id')
+    console.error('currentTourRun:', currentTourRun)
+    alert('无法获取当前任务的id')
+    return
+  }
+  
+  try {
+    const token = userStore.token || localStorage.getItem('token') || ''
+    if (!token) {
+      console.error('❌ 未登录或token已过期')
+      alert('未登录或token已过期')
+      return
+    }
+    
+    console.log('⏭️ 跳过当前语音, runId:', currentTourRun.id)
+    await skipSpeech(token, currentTourRun.id)
+    console.log('✅ 跳过语音指令已发送')
+  } catch (error) {
+    console.error('❌ 跳过语音失败:', error)
+    alert('操作失败，请重试')
+  }
+}
+
+// 监听任务状态变化，重置语音播报状态
+watch(() => websocketDataStore.currentTourRun?.status, (newStatus, oldStatus) => {
+  // 当任务停止或完成时，重置语音播报状态
+  if (oldStatus === 'running' && newStatus !== 'running') {
+    isSpeechPaused.value = false
+  }
+})
+
 // 启动任务并设置预设ID的方法
 const startTourWithPreset = async (presetId: number) => {
   try {
@@ -3561,6 +3717,11 @@ const loadAndRenderPGM = async () => {
       }
     }
     ctx.putImageData(imageData, 0, 0)
+    
+    // 保存原始栅格图数据（必须在绘制到canvas之后立即保存，避免残留上一张图）
+    gridImageData = ctx.createImageData(width, height)
+    gridImageData.data.set(imageData.data)
+    
     // 栅格图交互状态
     let scale = 1
     let offsetX = 0
@@ -3620,11 +3781,112 @@ const loadAndRenderPGM = async () => {
       isDragging = false
     })
 
+    // 触控事件支持（iPad/手机）
+    let lastTouchDistance = 0
+    let isTouching = false
+
+    // 计算两个触点之间的距离
+    const getTouchDistance = (touches: TouchList) => {
+      if (touches.length < 2) return 0
+      const dx = touches[0].clientX - touches[1].clientX
+      const dy = touches[0].clientY - touches[1].clientY
+      return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    // 获取触点中心位置
+    const getTouchCenter = (touches: TouchList) => {
+      if (touches.length === 1) {
+        return { x: touches[0].clientX, y: touches[0].clientY }
+      }
+      const x = (touches[0].clientX + touches[1].clientX) / 2
+      const y = (touches[0].clientY + touches[1].clientY) / 2
+      return { x, y }
+    }
+
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault()
+      isTouching = true
+      
+      if (e.touches.length === 1) {
+        // 单指拖动
+        isDragging = true
+        lastX = e.touches[0].clientX
+        lastY = e.touches[0].clientY
+      } else if (e.touches.length === 2) {
+        // 双指缩放
+        isDragging = false
+        lastTouchDistance = getTouchDistance(e.touches)
+        const center = getTouchCenter(e.touches)
+        lastX = center.x
+        lastY = center.y
+      }
+    }, { passive: false })
+
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault()
+      if (!isTouching) return
+
+      if (e.touches.length === 1 && isDragging) {
+        // 单指拖动
+        const deltaX = e.touches[0].clientX - lastX
+        const deltaY = e.touches[0].clientY - lastY
+        offsetX += deltaX
+        offsetY += deltaY
+        canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+        lastX = e.touches[0].clientX
+        lastY = e.touches[0].clientY
+      } else if (e.touches.length === 2) {
+        // 双指缩放
+        const newDistance = getTouchDistance(e.touches)
+        const center = getTouchCenter(e.touches)
+        
+        if (lastTouchDistance > 0) {
+          // 计算缩放比例
+          const scaleDelta = newDistance / lastTouchDistance
+          const newScale = Math.max(0.1, Math.min(10, scale * scaleDelta))
+          
+          // 以触点中心为基准进行缩放
+          const scaleChange = newScale / scale
+          offsetX = center.x - (center.x - offsetX) * scaleChange
+          offsetY = center.y - (center.y - offsetY) * scaleChange
+          
+          scale = newScale
+          canvas.style.width = `${Math.floor(width * scale)}px`
+          canvas.style.height = `${Math.floor(height * scale)}px`
+          canvas.style.transform = `translate(${offsetX}px, ${offsetY}px)`
+        }
+        
+        lastTouchDistance = newDistance
+        lastX = center.x
+        lastY = center.y
+      }
+    }, { passive: false })
+
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault()
+      if (e.touches.length === 0) {
+        isTouching = false
+        isDragging = false
+        lastTouchDistance = 0
+      } else if (e.touches.length === 1) {
+        // 从双指变为单指，重置为拖动模式
+        isDragging = true
+        lastX = e.touches[0].clientX
+        lastY = e.touches[0].clientY
+        lastTouchDistance = 0
+      }
+    }, { passive: false })
+
+    canvas.addEventListener('touchcancel', () => {
+      isTouching = false
+      isDragging = false
+      lastTouchDistance = 0
+    })
+
     resize()
     window.addEventListener('resize', resize)
 
-    // 保存栅格图数据以便后续绘制机器人位置
-    gridImageData = ctx.getImageData(0, 0, width, height)
+    // 注意：原始栅格图数据已在前面保存（第3695行之后），这里不再重复保存
     
     // 绘制机器人位置
     drawRobotPosition().catch(err => console.warn('绘制机器人位置失败:', err))
@@ -5677,7 +5939,7 @@ const centerToDroneMarker = () => {
 }
 
 .top-area {
-  flex: 8;
+  flex: 1 1 auto;
   display: flex;
   gap: 16px;
   min-height: 0;
@@ -5693,19 +5955,26 @@ const centerToDroneMarker = () => {
 }
 
 .bottom-area {
-  flex: 2;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
 .top-left-card,
 .top-left-card-2,
-.top-right-card,
-.bottom-card {
+.top-right-card {
   background: rgba(10, 16, 28, 0.9);
   border: 1px solid rgba(0, 188, 212, 0.18);
   border-radius: 12px;
   padding: 10px;
   height: 100%;
+  overflow: hidden;
+}
+
+.bottom-card {
+  background: rgba(10, 16, 28, 0.9);
+  border: 1px solid rgba(0, 188, 212, 0.18);
+  border-radius: 12px;
+  padding: 10px;
   overflow: hidden;
 }
 
@@ -6064,7 +6333,16 @@ const centerToDroneMarker = () => {
   z-index: 3; 
   overflow: hidden; 
 }
-.grid-canvas { display: block; background: #fff; cursor: grab; user-select: none; transform-origin: 0 0; will-change: transform; }
+.grid-canvas { 
+  display: block; 
+  background: #fff; 
+  cursor: grab; 
+  user-select: none; 
+  transform-origin: 0 0; 
+  will-change: transform;
+  touch-action: none; /* 禁用浏览器默认触控行为，由自定义事件处理 */
+  -webkit-touch-callout: none; /* 禁用iOS长按菜单 */
+}
 .grid-canvas:active { cursor: grabbing; }
 .player_container { flex: 1; position: relative; min-height: 0; }
 .player_item { height: 100%; }
@@ -6506,6 +6784,53 @@ const centerToDroneMarker = () => {
 
 .pause-resume-btn.disabled:hover,
 .pause-resume-btn:disabled:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: none;
+  box-shadow: none;
+}
+
+.control-buttons-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.speech-control-btn {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+  white-space: nowrap;
+}
+
+.speech-control-btn:hover {
+  background: linear-gradient(135deg, #f57c00 0%, #e65100 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.4);
+}
+
+.speech-control-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+}
+
+.speech-control-btn.disabled,
+.speech-control-btn:disabled {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.4);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.speech-control-btn.disabled:hover,
+.speech-control-btn:disabled:hover {
   background: rgba(255, 255, 255, 0.1);
   transform: none;
   box-shadow: none;

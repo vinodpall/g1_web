@@ -1643,23 +1643,24 @@ export const navigationApi = {
     const timeoutValue = navData.timeout || 10
     url.searchParams.append('timeout', timeoutValue.toString())
     
-    // 处理SN参数从body移到URL
-    const { url: finalUrl, data } = processSnParams(url.toString(), navData)
+    // 添加action参数到URL
+    url.searchParams.append('action', navData.action.toString())
+    
+    // 添加sn参数到URL
+    url.searchParams.append('sn', navData.sn)
     
     console.log('navigationApi.pauseResumeNav 被调用')
     console.log('原始URL:', baseUrl)
-    console.log('修改后URL:', finalUrl)
+    console.log('最终URL:', url.toString())
     console.log('请求token:', token ? '存在' : '不存在')
     console.log('导航暂停/恢复数据:', navData)
-    console.log('修改后数据:', data)
     
-    return fetch(finalUrl, {
+    return fetch(url.toString(), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(data)
+      }
     }).then(response => {
       console.log('暂停/恢复导航API响应状态:', response.status)
       console.log('暂停/恢复导航API响应OK:', response.ok)
@@ -2045,6 +2046,119 @@ export async function stopTourRun(token: string, runId: number): Promise<any> {
     return data
   }).catch(error => {
     console.error(`停止任务运行 API 请求失败 [${runId}]:`, error)
+    throw error
+  })
+}
+
+// 语音播报控制接口
+export async function pauseSpeech(token: string, runId: number): Promise<any> {
+  const url = buildApiUrl(`/tours/runs/${runId}/speech/pause`)
+  
+  console.log('pauseSpeech 被调用')
+  console.log('请求URL:', url)
+  console.log('任务ID:', runId)
+  
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  }).then(response => {
+    console.log(`暂停语音播报 API 响应状态 [${runId}]:`, response.status)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    return response.json()
+  }).then(data => {
+    console.log(`暂停语音播报 API 响应数据 [${runId}]:`, data)
+    return data
+  }).catch(error => {
+    console.error(`暂停语音播报 API 请求失败 [${runId}]:`, error)
+    throw error
+  })
+}
+
+export async function resumeSpeech(token: string, runId: number): Promise<any> {
+  const url = buildApiUrl(`/tours/runs/${runId}/speech/resume`)
+  
+  console.log('resumeSpeech 被调用')
+  console.log('请求URL:', url)
+  console.log('任务ID:', runId)
+  
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  }).then(response => {
+    console.log(`恢复语音播报 API 响应状态 [${runId}]:`, response.status)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    return response.json()
+  }).then(data => {
+    console.log(`恢复语音播报 API 响应数据 [${runId}]:`, data)
+    return data
+  }).catch(error => {
+    console.error(`恢复语音播报 API 请求失败 [${runId}]:`, error)
+    throw error
+  })
+}
+
+export async function replaySpeech(token: string, runId: number): Promise<any> {
+  const url = buildApiUrl(`/tours/runs/${runId}/speech/replay`)
+  
+  console.log('replaySpeech 被调用')
+  console.log('请求URL:', url)
+  console.log('任务ID:', runId)
+  
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  }).then(response => {
+    console.log(`重播语音 API 响应状态 [${runId}]:`, response.status)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    return response.json()
+  }).then(data => {
+    console.log(`重播语音 API 响应数据 [${runId}]:`, data)
+    return data
+  }).catch(error => {
+    console.error(`重播语音 API 请求失败 [${runId}]:`, error)
+    throw error
+  })
+}
+
+export async function skipSpeech(token: string, runId: number): Promise<any> {
+  const url = buildApiUrl(`/tours/runs/${runId}/skip`)
+  
+  console.log('skipSpeech 被调用')
+  console.log('请求URL:', url)
+  console.log('任务ID:', runId)
+  
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }
+  }).then(response => {
+    console.log(`跳过语音 API 响应状态 [${runId}]:`, response.status)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    return response.json()
+  }).then(data => {
+    console.log(`跳过语音 API 响应数据 [${runId}]:`, data)
+    return data
+  }).catch(error => {
+    console.error(`跳过语音 API 请求失败 [${runId}]:`, error)
     throw error
   })
 }

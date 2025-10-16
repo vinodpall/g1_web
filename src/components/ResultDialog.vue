@@ -9,10 +9,11 @@
           <span v-else>ℹ</span>
         </div>
         <div class="result-title">
-          <span class="title-text">{{ headerText }}</span>
+          <span class="title-text">{{ titleText }}</span>
         </div>
       </div>
       <div class="result-content">
+        <div v-if="message" class="result-message">{{ message }}</div>
         <div v-if="details" class="result-details">
           <pre>{{ details }}</pre>
         </div>
@@ -46,11 +47,6 @@ const titleText = computed(() => {
   if (props.type === 'success') return '操作成功'
   if (props.type === 'error') return '操作失败'
   return '提示'
-})
-
-// 头部展示文案：优先 title，其次 message
-const headerText = computed(() => {
-  return props.title || props.message || titleText.value
 })
 
 const onClose = () => emit('close')
@@ -128,8 +124,11 @@ const onClose = () => emit('close')
   padding: 8px 24px 14px 24px;
 }
 .result-message {
-  font-size: 14px;
-  color: #d1d7e0;
+  font-size: 15px;
+  color: #e9f3ff;
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: 4px;
 }
 .result-details {
   margin-top: 10px;

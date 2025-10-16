@@ -253,7 +253,7 @@ export const usePointStore = defineStore('point', () => {
       if (pointData.pose_x !== undefined) requestData.pose_x = pointData.pose_x
       if (pointData.pose_y !== undefined) requestData.pose_y = pointData.pose_y
       if (pointData.pose_theta !== undefined) requestData.pose_theta = pointData.pose_theta
-      if (pointData.action_code) requestData.action_code = pointData.action_code
+      if (pointData.action_code !== undefined) requestData.action_code = pointData.action_code
       if (pointData.action_params !== undefined) requestData.action_params = pointData.action_params
       if (pointData.robot_sn) requestData.robot_sn = pointData.robot_sn
       

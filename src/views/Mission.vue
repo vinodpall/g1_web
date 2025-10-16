@@ -74,13 +74,13 @@
                   </div>
                 </div>
                 <div class="toolbar-right">
-                  <button class="toolbar-btn" :class="{ active: isEditMode }" @click="toggleEditMode">
+                  <button class="toolbar-btn" :class="{ active: isEditMode }" @click="toggleEditMode" title="栅格图编辑">
                     <img :src="mapEditIcon" alt="编辑" class="btn-icon-img" />
                   </button>
-                  <button class="toolbar-btn" :class="{ active: isRelocMode }" @click="toggleRelocMode" title="重定位">
+                  <button class="toolbar-btn" :class="{ active: isRelocMode }" :disabled="!isNavEnabled" @click="toggleRelocMode" title="重定位">
                     <img :src="positionIcon" alt="重定位" class="btn-icon-img" />
                   </button>
-                  <button class="toolbar-btn" @click="onUploadGrid">
+                  <button class="toolbar-btn" @click="onUploadGrid" title="上传">
                     <img :src="mapUploadIcon" alt="上传" class="btn-icon-img" />
                   </button>
                 </div>
@@ -123,13 +123,13 @@
                     </div>
                     <!-- 6. 撤销 -->
                     <div class="tool-actions">
-                      <button class="action-btn" @click="undoEdit" :disabled="!canUndo">
+                      <button class="action-btn" @click="undoEdit" :disabled="!canUndo" title="撤回">
                         <img :src="mapRollbackIcon" alt="撤回" class="action-icon-img" />
                       </button>
                     </div>
                     <!-- 7. 初始化 -->
                     <div class="tool-actions">
-                      <button class="action-btn" @click="clearGridEdit">
+                      <button class="action-btn" @click="clearGridEdit" title="初始化">
                         <img :src="mapInitIcon" alt="重置" class="action-icon-img" />
                       </button>
                     </div>
@@ -372,7 +372,7 @@
         <div class="custom-dialog-content">
           <div class="add-user-form">
             <div class="add-user-form-row">
-              <label>任务点名称：</label>
+              <label><span style="color: red;">*</span>任务点名称：</label>
               <input 
                 v-model="addTaskPointForm.name" 
                 class="user-input" 
@@ -1665,11 +1665,29 @@ const toggleEditMode = () => {
 
 // 切换重定位模式
 const toggleRelocMode = () => {
+  // 检查导航是否开启
+  if (!isNavEnabled.value) {
+    showErrorMessage('请先开启导航后再使用重定位功能')
+    return
+  }
+  
   isRelocMode.value = !isRelocMode.value
   // 切换到重定位模式时，关闭编辑模式
   if (isRelocMode.value && isEditMode.value) {
     isEditMode.value = false
   }
+  
+  // 开启重定位模式时显示操作提示
+  if (isRelocMode.value) {
+    resultDialogState.value = {
+      show: true,
+      type: 'info',
+      title: '重定位操作说明',
+      message: '',
+      details: '请按照以下步骤进行重定位操作：\n\n1. 请在开启导航的情况下操作\n\n2. 在地图上单击机器人当前的实际位置\n\n3. 然后朝一个方向移动鼠标\n\n4. 再次点击完成操作'
+    }
+  }
+  
   resetRelocState()
   setupCanvasEditEvents()
 }
@@ -2173,7 +2191,15 @@ const stopHallRecording = async () => {
       timeout: 10  // 添加timeout参数，默认10秒
     }
 
-    await navigationApi.slamControl(token, slamData)
+    const response = await navigationApi.slamControl(token, slamData)
+    
+    // 检查返回值的error_code
+    if (response.error_code !== 0) {
+      const errorMsg = response.error_msg || '停止录制失败'
+      showErrorMessage(errorMsg)
+      return
+    }
+    
     isRecording.value = false
     // 清空保存的数据包名称
     currentRecordingDataName.value = ''
@@ -2219,7 +2245,22 @@ const handleConfirmStartRecording = async () => {
       timeout: 10  // 添加timeout参数，默认10秒
     }
 
-    await navigationApi.slamControl(token, slamData)
+    const response = await navigationApi.slamControl(token, slamData)
+    
+    // 检查返回值的error_code
+    if (response.error_code !== 0) {
+      // 错误消息翻译映射
+      const errorMessageMap: Record<string, string> = {
+        'Directory with the same name already exists.': '数据包名称已存在，请使用其他名称',
+        'Recording is already in progress.': '录制已在进行中',
+        'Invalid data name.': '数据包名称无效'
+      }
+      
+      const errorMsg = errorMessageMap[response.error_msg] || response.error_msg || '地图录制失败'
+      showErrorMessage(errorMsg)
+      return
+    }
+    
     isRecording.value = true
     // 保存当前录制的数据包名称
     currentRecordingDataName.value = recordingForm.value.dataName.trim()
@@ -2296,10 +2337,18 @@ const stopGenerateHallMap = async () => {
       data_name: ''
     }
 
-    await navigationApi.generateMap(token, mapData)
+    const response = await navigationApi.generateMap(token, mapData)
+    
+    // 检查返回值的error_code
+    if (response.error_code !== 0) {
+      const errorMsg = response.error_msg || '停止生成地图失败'
+      showErrorMessage(errorMsg)
+      return
+    }
+    
     hasSubmittedGeneration.value = false
     isMapGenerationActive.value = false // 主动标记生成已停止
-    showErrorMessage('地图生成已停止')
+    showSuccessMessage('地图生成已停止')
     console.log('手动停止地图生成，重置hasSubmittedGeneration为false')
   } catch (error) {
     console.error('停止地图生成失败:', error)
@@ -2346,7 +2395,22 @@ const handleConfirmGenerateMap = async () => {
       data_name: processDataPackageName(generateMapForm.value.dataName.trim())
     }
 
-    await navigationApi.generateMap(token, mapData)
+    const response = await navigationApi.generateMap(token, mapData)
+    
+    // 检查返回值的error_code
+    if (response.error_code !== 0) {
+      // 错误消息翻译映射
+      const errorMessageMap: Record<string, string> = {
+        'Directory with the same name already exists.': '地图名称已存在，请使用其他名称',
+        'Data package not found.': '数据包不存在',
+        'Invalid map name.': '地图名称无效'
+      }
+      
+      const errorMsg = errorMessageMap[response.error_msg] || response.error_msg || '地图生成失败'
+      showErrorMessage(errorMsg)
+      return
+    }
+    
     hasSubmittedGeneration.value = true
     isMapGenerationActive.value = true // 主动标记生成已开始
     maxProgress.value = 0 // 重置进度
@@ -2974,6 +3038,10 @@ const loadAndRenderHallPGM = async () => {
     }
     ctx.putImageData(imageData, 0, 0)
     
+    // 保存原始栅格图数据（必须在绘制到canvas之后立即保存，避免残留上一张图）
+    missionGridImageData = ctx.createImageData(width, height)
+    missionGridImageData.data.set(imageData.data)
+    
     // 重置编辑数据
     gridImageData = null
     
@@ -3082,6 +3150,16 @@ const loadAndRenderHallPGM = async () => {
       applyTransform()
     }
     const onMouseDown = (e: MouseEvent) => {
+      // 重定位模式下的右键点击：取消操作
+      if (isRelocMode.value && e.button === 2) {
+        if (relocStartPoint.value) {
+          // 已经设置了起点，取消操作
+          resetRelocState()
+        }
+        e.preventDefault()
+        return
+      }
+      
       // 重定位模式下的左键点击
       if (isRelocMode.value && e.button === 0 && !e.ctrlKey) {
         const coords = getCanvasCoords(e)
@@ -3181,6 +3259,9 @@ const loadAndRenderHallPGM = async () => {
     }
 
     // 触摸事件处理（用于平板设备）
+    let lastTouchDistance = 0
+    let isTouching = false
+    
     const getTouchCanvasCoords = (touch: Touch) => {
       if (!canvas) return { x: 0, y: 0 }
       
@@ -3194,66 +3275,198 @@ const loadAndRenderHallPGM = async () => {
       }
     }
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return
-      
-      const touch = e.touches[0]
-      
-      // 编辑模式下且为编辑导航模式
-      if (isEditMode.value && navMode.value === 'edit') {
-        if (!drawing) {
-          saveToHistory()
-        }
-        drawing = true
-        const coords = getTouchCanvasCoords(touch)
-        editLastX = coords.x
-        editLastY = coords.y
-        editGridPixel(coords.x, coords.y)
-        e.preventDefault() // 阻止页面滚动
-        return
+    // 计算两个触点之间的距离
+    const getTouchDistance = (touches: TouchList) => {
+      if (touches.length < 2) return 0
+      const dx = touches[0].clientX - touches[1].clientX
+      const dy = touches[0].clientY - touches[1].clientY
+      return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    // 获取触点中心位置
+    const getTouchCenter = (touches: TouchList) => {
+      if (touches.length === 1) {
+        return { x: touches[0].clientX, y: touches[0].clientY }
       }
+      const x = (touches[0].clientX + touches[1].clientX) / 2
+      const y = (touches[0].clientY + touches[1].clientY) / 2
+      return { x, y }
+    }
+
+    const onTouchStart = (e: TouchEvent) => {
+      isTouching = true
       
-      // 拖动模式
-      if (navMode.value === 'pan' || !isEditMode.value) {
-        isDragging = true
-        lastX = touch.clientX
-        lastY = touch.clientY
-        canvas.style.cursor = 'grabbing'
-        e.preventDefault() // 阻止页面滚动
+      if (e.touches.length === 1) {
+        const touch = e.touches[0]
+        
+        // 重定位模式下的触摸点击
+        if (isRelocMode.value) {
+          const coords = getTouchCanvasCoords(touch)
+          
+          if (!relocStartPoint.value) {
+            // 第一次点击：设置起点
+            relocStartPoint.value = { x: coords.x, y: coords.y }
+            e.preventDefault()
+            return
+          } else {
+            // 第二次点击：确认并调用重定位接口
+            const angle = calculateAngle(relocStartPoint.value.x, relocStartPoint.value.y, coords.x, coords.y)
+            
+            // 将像素坐标转换为世界坐标
+            const worldPos = pixelToWorld(relocStartPoint.value.x, relocStartPoint.value.y)
+            
+            // 保存结果
+            relocResult.value = {
+              x: relocStartPoint.value.x,
+              y: relocStartPoint.value.y,
+              worldX: worldPos.x,
+              worldY: worldPos.y,
+              angle: angle
+            }
+            
+            // 调用重定位接口
+            callReloposeApi(worldPos.x, worldPos.y, angle)
+            
+            // 重置重定位状态
+            resetRelocState()
+            e.preventDefault()
+            return
+          }
+        }
+        
+        // 编辑模式下且为编辑导航模式
+        if (isEditMode.value && navMode.value === 'edit') {
+          if (!drawing) {
+            saveToHistory()
+          }
+          drawing = true
+          const coords = getTouchCanvasCoords(touch)
+          editLastX = coords.x
+          editLastY = coords.y
+          editGridPixel(coords.x, coords.y)
+          e.preventDefault() // 阻止页面滚动
+          return
+        }
+        
+        // 拖动模式（不在重定位模式和编辑模式下）
+        if (navMode.value === 'pan' || (!isEditMode.value && !isRelocMode.value)) {
+          isDragging = true
+          lastX = touch.clientX
+          lastY = touch.clientY
+          canvas.style.cursor = 'grabbing'
+          e.preventDefault() // 阻止页面滚动
+        }
+      } else if (e.touches.length === 2) {
+        // 双指缩放
+        isDragging = false
+        drawing = false
+        lastTouchDistance = getTouchDistance(e.touches)
+        const center = getTouchCenter(e.touches)
+        lastX = center.x
+        lastY = center.y
+        e.preventDefault()
       }
     }
 
     const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return
+      if (!isTouching) return
       
-      const touch = e.touches[0]
-      
-      // 处理编辑绘制
-      if (drawing && isEditMode.value) {
-        const coords = getTouchCanvasCoords(touch)
-        drawLine(editLastX, editLastY, coords.x, coords.y)
-        editLastX = coords.x
-        editLastY = coords.y
-        e.preventDefault() // 阻止页面滚动
-        return
-      }
-      
-      // 处理拖动
-      if (isDragging) {
-        const dx = touch.clientX - lastX
-        const dy = touch.clientY - lastY
-        currentOffsetX += dx
-        currentOffsetY += dy
-        applyTransform()
-        lastX = touch.clientX
-        lastY = touch.clientY
-        e.preventDefault() // 阻止页面滚动
+      if (e.touches.length === 1) {
+        const touch = e.touches[0]
+        
+        // 重定位模式下触摸移动时显示箭头
+        if (isRelocMode.value && relocStartPoint.value) {
+          const coords = getTouchCanvasCoords(touch)
+          relocCurrentMouse.value = { x: coords.x, y: coords.y }
+          // 重新绘制以显示箭头
+          drawMissionRobotPosition()
+          e.preventDefault()
+          return
+        }
+        
+        // 处理编辑绘制
+        if (drawing && isEditMode.value) {
+          const coords = getTouchCanvasCoords(touch)
+          drawLine(editLastX, editLastY, coords.x, coords.y)
+          editLastX = coords.x
+          editLastY = coords.y
+          e.preventDefault() // 阻止页面滚动
+          return
+        }
+        
+        // 处理拖动
+        if (isDragging) {
+          const dx = touch.clientX - lastX
+          const dy = touch.clientY - lastY
+          currentOffsetX += dx
+          currentOffsetY += dy
+          applyTransform()
+          lastX = touch.clientX
+          lastY = touch.clientY
+          e.preventDefault() // 阻止页面滚动
+        }
+      } else if (e.touches.length === 2) {
+        // 双指缩放
+        const newDistance = getTouchDistance(e.touches)
+        const center = getTouchCenter(e.touches)
+        
+        if (lastTouchDistance > 0) {
+          // 计算缩放比例
+          const scaleDelta = newDistance / lastTouchDistance
+          const newScale = Math.max(0.2, Math.min(5, currentScale * scaleDelta))
+          
+          // 以触点中心为基准进行缩放（保持触点中心位置不变）
+          // 注意：这里需要考虑当前的 baseScale，所以偏移量的计算要更复杂一些
+          const scaleChange = newScale / currentScale
+          
+          // 由于 applyTransform 会应用 baseScale，我们需要计算相对于屏幕的偏移
+          const parent = canvas.parentElement
+          if (parent) {
+            const containerWidth = parent.clientWidth
+            const containerHeight = parent.clientHeight
+            const baseScale = Math.min(containerWidth / canvas.width, containerHeight / canvas.height)
+            
+            // 计算中心点相对于容器的位置
+            const containerCenterX = center.x - parent.getBoundingClientRect().left
+            const containerCenterY = center.y - parent.getBoundingClientRect().top
+            
+            // 调整偏移量
+            currentOffsetX = containerCenterX - (containerCenterX - currentOffsetX) * scaleChange
+            currentOffsetY = containerCenterY - (containerCenterY - currentOffsetY) * scaleChange
+          }
+          
+          currentScale = newScale
+          applyTransform()
+        }
+        
+        lastTouchDistance = newDistance
+        lastX = center.x
+        lastY = center.y
+        e.preventDefault()
       }
     }
 
     const onTouchEnd = (e: TouchEvent) => {
-      endDrag()
+      if (e.touches.length === 0) {
+        isTouching = false
+        isDragging = false
+        drawing = false
+        lastTouchDistance = 0
+        endDrag()
+      } else if (e.touches.length === 1) {
+        // 从双指变为单指，重置为拖动模式
+        lastTouchDistance = 0
+        if (navMode.value === 'pan' || (!isEditMode.value && !isRelocMode.value)) {
+          isDragging = true
+          lastX = e.touches[0].clientX
+          lastY = e.touches[0].clientY
+        }
+      }
       e.preventDefault() // 阻止页面滚动
+    }
+
+    const onContextMenu = (e: Event) => {
+      e.preventDefault() // 禁用右键菜单
     }
 
     resize()
@@ -3263,7 +3476,7 @@ const loadAndRenderHallPGM = async () => {
     canvas.addEventListener('mousemove', onMouseMove)
     canvas.addEventListener('mouseup', endDrag)
     canvas.addEventListener('mouseleave', endDrag)
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault()) // 禁用右键菜单
+    canvas.addEventListener('contextmenu', onContextMenu) // 禁用右键菜单
     // 添加触摸事件监听（用于平板设备）
     canvas.addEventListener('touchstart', onTouchStart, { passive: false })
     canvas.addEventListener('touchmove', onTouchMove, { passive: false })
@@ -3278,7 +3491,7 @@ const loadAndRenderHallPGM = async () => {
       canvas.removeEventListener('mousemove', onMouseMove as any)
       canvas.removeEventListener('mouseup', endDrag as any)
       canvas.removeEventListener('mouseleave', endDrag as any)
-      canvas.removeEventListener('contextmenu', () => {})
+      canvas.removeEventListener('contextmenu', onContextMenu as any)
       // 移除触摸事件监听
       canvas.removeEventListener('touchstart', onTouchStart as any)
       canvas.removeEventListener('touchmove', onTouchMove as any)
@@ -3286,8 +3499,7 @@ const loadAndRenderHallPGM = async () => {
       canvas.removeEventListener('touchcancel', onTouchEnd as any)
     }
 
-    // 保存栅格图数据以便后续绘制机器人位置
-    missionGridImageData = ctx.getImageData(0, 0, width, height)
+    // 注意：原始栅格图数据已在前面保存（第3040行之后），这里不再重复保存
     
     // 绘制机器人位置
     drawMissionRobotPosition()
@@ -3934,43 +4146,42 @@ const showSuccessMessage = (message: string) => {
 }
 
 // 调用重定位接口
-const callReloposeApi = async (poseX: number, poseY: number, theta: number) => {
-  try {
-    const token = userStore.token
-    if (!token) {
-      showErrorMessage('未找到认证token，请重新登录')
-      return
-    }
-    
-    // 获取当前机器人SN
-    const currentSn = getWebSocketSn()
-    if (!currentSn || currentSn === 'broadcast') {
-      showErrorMessage('未找到有效的机器人SN')
-      return
-    }
-    
-    console.log('调用重定位接口:', { sn: currentSn, pos_x: poseX, pos_y: poseY, theta })
-    
-    // 调用API
-    await navigationApi.setRelopose(token, {
-      sn: currentSn,
-      pos_x: poseX,
-      pos_y: poseY,
-      theta: theta,
-      timeout: 10
-    })
-    
-    // 成功提示
-    showSuccessMessage('原点重定位成功')
-    
-    // 退出重定位模式
-    isRelocMode.value = false
-    setupCanvasEditEvents()
-    
-  } catch (error) {
-    console.error('重定位失败:', error)
-    showErrorMessage(error instanceof Error ? error.message : '重定位失败，请重试')
+const callReloposeApi = (poseX: number, poseY: number, theta: number) => {
+  const token = userStore.token
+  if (!token) {
+    showErrorMessage('未找到认证token，请重新登录')
+    return
   }
+  
+  // 获取当前机器人SN
+  const currentSn = getWebSocketSn()
+  if (!currentSn || currentSn === 'broadcast') {
+    showErrorMessage('未找到有效的机器人SN')
+    return
+  }
+  
+  console.log('调用重定位接口:', { sn: currentSn, pos_x: poseX, pos_y: poseY, theta })
+  
+  // 立即显示成功提示
+  showSuccessMessage('重定位成功')
+  
+  // 退出重定位模式
+  isRelocMode.value = false
+  setupCanvasEditEvents()
+  
+  // 在后台调用API，不等待结果
+  navigationApi.setRelopose(token, {
+    sn: currentSn,
+    pos_x: poseX,
+    pos_y: poseY,
+    theta: theta,
+    timeout: 10
+  }).then(() => {
+    console.log('重定位接口调用成功')
+  }).catch(error => {
+    console.error('重定位接口调用失败（后台）:', error)
+    // 不再显示错误提示，因为用户已经看到成功提示了
+  })
 }
 
 // 保存当前栅格图（下载到本地）
@@ -4170,7 +4381,7 @@ const handleCancelAddArea = () => {
 // 确认新增任务点
 const handleConfirmAddTaskPoint = async () => {
   // 验证必填字段
-  if (!addTaskPointForm.value.name.trim()) {
+  if (!addTaskPointForm.value.name || !addTaskPointForm.value.name.trim()) {
     showErrorMessage('请输入任务点名称')
     return
   }
@@ -5468,6 +5679,18 @@ const closeResultDialog = () => {
   border-color: #67d5fd;
   color: #172233;
   box-shadow: 0 0 10px rgba(103, 213, 253, 0.4);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(103, 213, 253, 0.05);
+  border-color: rgba(103, 213, 253, 0.15);
+}
+
+.toolbar-btn:disabled:hover {
+  background: rgba(103, 213, 253, 0.05);
+  border-color: rgba(103, 213, 253, 0.15);
 }
 
 .btn-icon {
