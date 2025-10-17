@@ -65,7 +65,7 @@ export interface CmdStatus extends TimestampData {
 }
 
 // 任务运行事件类型
-export type TourEventType = 'started' | 'point' | 'finished'
+export type TourEventType = 'started' | 'point' | 'finished' | 'speech_paused' | 'speech_resumed' | 'speech_stopped'
 
 // 点位状态
 export type PointStatus = 'pending' | 'arriving' | 'done' | 'failed'
@@ -97,8 +97,29 @@ export interface TourFinishedEvent {
   error?: string
 }
 
+// 语音暂停事件
+export interface TourSpeechPausedEvent {
+  event: 'speech_paused'
+  run_id?: number
+  robot_sn?: string
+}
+
+// 语音恢复事件
+export interface TourSpeechResumedEvent {
+  event: 'speech_resumed'
+  run_id?: number
+  robot_sn?: string
+}
+
+// 语音停止事件
+export interface TourSpeechStoppedEvent {
+  event: 'speech_stopped'
+  run_id?: number
+  robot_sn?: string
+}
+
 // 任务事件联合类型
-export type TourEvent = TourStartedEvent | TourPointEvent | TourFinishedEvent
+export type TourEvent = TourStartedEvent | TourPointEvent | TourFinishedEvent | TourSpeechPausedEvent | TourSpeechResumedEvent | TourSpeechStoppedEvent
 
 // WebSocket 频道类型
 export type ChannelType = 

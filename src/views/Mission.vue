@@ -441,6 +441,20 @@
                 </span>
               </div>
             </div>
+            <div v-if="addTaskPointForm.robotAction !== 'none'" class="add-user-form-row">
+              <label>动作持续：</label>
+              <div class="input-with-unit">
+                <input 
+                  v-model.number="addTaskPointForm.holdTime" 
+                  type="number" 
+                  step="0.1" 
+                  min="0"
+                  class="user-input no-spinners" 
+                  placeholder="请输入持续时长"
+                />
+                <span class="input-unit">秒</span>
+              </div>
+            </div>
             <div class="add-user-form-row">
               <label>机器人朝向：</label>
               <div class="radio-group">
@@ -1375,6 +1389,19 @@ const parseWaitTime = (actionParams: string | null): number => {
   }
 }
 
+// 从action_params中解析动作持续时间
+const parseHoldTime = (actionParams: string | null): number => {
+  if (!actionParams) return 1.5 // 默认值
+  
+  try {
+    const params = JSON.parse(actionParams)
+    return params.hold || 1.5
+  } catch (error) {
+    console.warn('解析动作持续时间失败:', error)
+    return 1.5 // 解析失败时使用默认值
+  }
+}
+
 // 从Point对象中获取视频ID
 const getVideoIdFromPoint = (screenVideoId: number | null | undefined): string => {
   if (!screenVideoId) return '' // 默认值
@@ -1448,6 +1475,7 @@ const addTaskPointForm = ref({
   angle: 0,
   pointType: '讲解点',
   robotAction: 'none', // 默认为"无"
+  holdTime: 1.5, // 动作持续，默认1.5秒
   robotDirection: '前进',
   waitTime: 0, // 任务等待，默认0秒
   videoId: '' // 视频选择，默认为空（无）
@@ -4322,6 +4350,7 @@ const handleAddTaskPoint = async () => {
     angle: defaultAngle, 
     pointType: '讲解点', 
     robotAction: 'none', // 默认为"无"
+    holdTime: 1.5, // 动作持续，默认1.5秒
     robotDirection: '前进',
     waitTime: 0, // 任务等待，默认0秒
     videoId: '' // 视频选择，默认为空（无）
@@ -4409,10 +4438,10 @@ const handleConfirmAddTaskPoint = async () => {
       // 获取当前机器人的SN
       const currentSn = getWebSocketSn()
       
-      // 根据机器人朝向和任务等待生成 action_params
+      // 根据机器人朝向、动作持续和任务等待生成 action_params
       const navMode = addTaskPointForm.value.robotDirection === '前进' ? 1 : -1
       const actionParams = JSON.stringify({
-        hold: 1.5,
+        hold: addTaskPointForm.value.holdTime || 1.5,
         auto_release: true,
         nav_mode: navMode,
         wait_time: addTaskPointForm.value.waitTime || 0 // 添加任务等待时间
@@ -4455,10 +4484,10 @@ const handleConfirmAddTaskPoint = async () => {
       // 获取当前机器人的SN
       const currentSn = getWebSocketSn()
       
-      // 根据机器人朝向和任务等待生成 action_params
+      // 根据机器人朝向、动作持续和任务等待生成 action_params
       const navMode = addTaskPointForm.value.robotDirection === '前进' ? 1 : -1
       const actionParams = JSON.stringify({
-        hold: 1.5,
+        hold: addTaskPointForm.value.holdTime || 1.5,
         auto_release: true,
         nav_mode: navMode,
         wait_time: addTaskPointForm.value.waitTime || 0 // 添加任务等待时间
@@ -4528,6 +4557,7 @@ const onClickEditTaskPoint = async (point: TaskPoint) => {
     angle: point.angle,
     pointType: point.pointType,
     robotAction: originalPoint?.action_code ? originalPoint.action_code : 'none', // 使用原始的 action_code，如果为空则为"无"
+    holdTime: parseHoldTime(originalPoint?.action_params || null), // 从action_params解析动作持续时间
     robotDirection: parseRobotDirection(originalPoint?.action_params || null), // 从action_params解析机器人朝向
     waitTime: parseWaitTime(originalPoint?.action_params || null), // 从action_params解析任务等待时间
     videoId: getVideoIdFromPoint((originalPoint as any)?.screen_video_id) // 直接从Point对象获取视频ID

@@ -58,6 +58,11 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
   const currentPointStatus = ref<string>('')
   const currentPointNote = ref<string>('')
   
+  // 语音播报状态管理 - 从localStorage恢复或默认为false
+  const isSpeechPaused = ref<boolean>(
+    localStorage.getItem('isSpeechPaused') === 'true'
+  )
+  
   // 认证 token
   const authToken = ref<string>('')
   
@@ -464,7 +469,18 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
         break
       case 'cmd_status':
         // console.log(`cmd_status [${sn}]`, data)
+        
+        // 保留当前的 cmdStatus 中的 nav_paused 字段（如果存在）
+        const previousNavPaused = robot.cmdStatus?.nav_paused
+        
+        // 更新 cmdStatus
         robot.cmdStatus = data as CmdStatus
+        
+        // 如果新数据中没有 nav_paused 字段，但之前有缓存值，则使用缓存值
+        if (typeof data.nav_paused !== 'number' && typeof previousNavPaused === 'number') {
+          robot.cmdStatus.nav_paused = previousNavPaused
+        }
+        
         // 更新最后接收cmd_status的时间
         updateRobotLastCmdStatusTime(sn)
         break
@@ -485,6 +501,17 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
    * 处理任务数据
    */
   function handleTourData(parsed: any, data: TourEvent, token?: string): void {
+    // 处理语音播报事件
+    if (data.event === 'speech_paused') {
+      console.log('🔇 收到语音暂停事件')
+      isSpeechPaused.value = true
+      localStorage.setItem('isSpeechPaused', 'true')
+    } else if (data.event === 'speech_resumed' || data.event === 'speech_stopped') {
+      console.log(`🔊 收到语音${data.event === 'speech_resumed' ? '恢复' : '停止'}事件`)
+      isSpeechPaused.value = false
+      localStorage.setItem('isSpeechPaused', 'false')
+    }
+    
     // 处理 finished 事件
     if (data.event === 'finished') {
       tourRunStatus.value = 'finished'
@@ -498,6 +525,10 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
       currentTaskProgress.value = null
       currentPointStatus.value = ''
       currentPointNote.value = ''
+      
+      // 任务完成后重置语音播报状态
+      isSpeechPaused.value = false
+      localStorage.setItem('isSpeechPaused', 'false')
       
       // 触发任务完成回调（用于清空栅格图等UI更新）
       triggerTaskCompletionCallbacks()
@@ -831,6 +862,9 @@ export const useWebSocketDataStore = defineStore('websocketData', () => {
     currentTaskProgress,
     currentPointStatus,
     currentPointNote,
+    
+    // 语音播报状态
+    isSpeechPaused,
     
     // 计算属性
     robotSNs,

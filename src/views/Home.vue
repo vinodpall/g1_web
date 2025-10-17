@@ -1061,6 +1061,16 @@
       @close="closeErrorMessage" 
     />
     
+    <!-- 结果对话框（用于任务开始等重要提示） -->
+    <ResultDialog
+      :show="resultDialogState.show"
+      :type="resultDialogState.type"
+      :title="resultDialogState.title"
+      :message="resultDialogState.message"
+      :details="resultDialogState.details"
+      @close="closeResultDialog"
+    />
+    
     <!-- 确认弹窗 -->
     <ConfirmDialog
       :show="confirmDialogState.show"
@@ -1098,6 +1108,46 @@ const showSuccessMessage = ref(false)
 const successMessageText = ref('')
 const showErrorMessage = ref(false)
 const errorMessageText = ref('')
+
+// ResultDialog 状态（用于任务开始等重要提示）
+const resultDialogState = ref({
+  show: false,
+  type: 'success' as 'success' | 'error' | 'info',
+  title: '',
+  message: '',
+  details: null as string | null
+})
+
+// 显示成功消息的辅助函数（使用 ResultDialog）
+const displaySuccessMessage = (message: string) => {
+  resultDialogState.value = {
+    show: true,
+    type: 'success',
+    title: '操作成功',
+    message,
+    details: null
+  }
+  // 2秒后自动关闭
+  setTimeout(() => {
+    resultDialogState.value.show = false
+  }, 2000)
+}
+
+// 显示错误消息的辅助函数（使用 ResultDialog）
+const displayErrorMessage = (message: string) => {
+  resultDialogState.value = {
+    show: true,
+    type: 'error',
+    title: '操作失败',
+    message,
+    details: null
+  }
+}
+
+// 关闭 ResultDialog
+const closeResultDialog = () => {
+  resultDialogState.value.show = false
+}
 
 // 确认弹窗状态
 const confirmDialogState = ref({
@@ -1293,6 +1343,7 @@ const taskProgressStore = useTaskProgressStore()
 import SuccessMessage from '../components/SuccessMessage.vue'
 import ErrorMessage from '../components/ErrorMessage.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import ResultDialog from '../components/ResultDialog.vue'
 
 // 使用机器人store
 import { useRobotStore } from '../stores/robot'
@@ -1692,7 +1743,7 @@ const handleTaskControlClick = async () => {
       }
     } catch (error) {
       console.error('❌ 停止任务失败:', error)
-      alert('停止任务失败，请重试')
+      displayErrorMessage('停止任务失败，请重试')
     }
   } else {
     // 如果没有执行任务，则开始任务
@@ -1723,13 +1774,13 @@ const handleStartTaskClick = async () => {
     // 检查是否有任务预设
     const presets = currentHallTourPresets.value
     if (!presets.length) {
-      alert('当前展厅暂无可用的任务预设')
+      displayErrorMessage('当前展厅暂无可用的任务预设')
       return
     }
     
     // 检查是否有讲解对象
     if (!availableAudiences.value.length) {
-      alert('暂无可用的讲解对象')
+      displayErrorMessage('暂无可用的讲解对象')
       return
     }
     
@@ -1741,18 +1792,18 @@ const handleStartTaskClick = async () => {
     showTaskSelectionDialog.value = true
   } catch (error) {
     console.error('加载任务数据失败:', error)
-    alert('加载任务数据失败，请重试')
+    displayErrorMessage('加载任务数据失败，请重试')
   }
 }
 // 确认开始任务
 const handleConfirmStartTask = async () => {
   if (!selectedTaskPresetId.value) {
-    alert('请选择任务预设')
+    displayErrorMessage('请选择任务预设')
     return
   }
   
   if (!selectedAudienceId.value) {
-    alert('请选择讲解对象')
+    displayErrorMessage('请选择讲解对象')
     return
   }
   
@@ -1780,11 +1831,11 @@ const handleConfirmStartTask = async () => {
       }
     }
     
-    alert('任务已成功开始')
+    displaySuccessMessage('任务已成功开始')
     showTaskSelectionDialog.value = false
   } catch (error) {
     console.error('开始任务失败:', error)
-    alert('开始任务失败，请重试')
+    displayErrorMessage('开始任务失败，请重试')
   }
 }
 
@@ -2449,8 +2500,8 @@ const toggleTaskExecution = async () => {
   }
 }
 
-// 语音播报暂停状态
-const isSpeechPaused = ref(false)
+// 语音播报暂停状态 - 使用websocketDataStore中的状态
+const isSpeechPaused = computed(() => websocketDataStore.isSpeechPaused)
 
 // 暂停/恢复语音播报
 const toggleSpeechPause = async () => {
@@ -2483,12 +2534,16 @@ const toggleSpeechPause = async () => {
     if (isSpeechPaused.value) {
       console.log('▶️ 恢复语音播报, runId:', currentTourRun.id)
       await resumeSpeech(token, currentTourRun.id)
-      isSpeechPaused.value = false
+      // 手动更新状态并保存到localStorage（websocket事件也会更新，但手动更新确保即时响应）
+      websocketDataStore.isSpeechPaused = false
+      localStorage.setItem('isSpeechPaused', 'false')
       console.log('✅ 语音播报已恢复')
     } else {
       console.log('⏸️ 暂停语音播报, runId:', currentTourRun.id)
       await pauseSpeech(token, currentTourRun.id)
-      isSpeechPaused.value = true
+      // 手动更新状态并保存到localStorage（websocket事件也会更新，但手动更新确保即时响应）
+      websocketDataStore.isSpeechPaused = true
+      localStorage.setItem('isSpeechPaused', 'true')
       console.log('✅ 语音播报已暂停')
     }
   } catch (error) {
@@ -2525,9 +2580,24 @@ const handleReplaySpeech = async () => {
       return
     }
     
+    // 保存当前的暂停状态
+    const wasPaused = isSpeechPaused.value
+    
     console.log('🔁 重播语音, runId:', currentTourRun.id)
     await replaySpeech(token, currentTourRun.id)
     console.log('✅ 语音重播指令已发送')
+    
+    // 重播后总是重置为正常播报状态（不暂停）
+    websocketDataStore.isSpeechPaused = false
+    localStorage.setItem('isSpeechPaused', 'false')
+    console.log('✅ 播报状态已重置为正常')
+    
+    // 如果之前是暂停状态，需要发送恢复指令
+    if (wasPaused) {
+      console.log('▶️ 检测到播报之前已暂停，发送恢复指令')
+      await resumeSpeech(token, currentTourRun.id)
+      console.log('✅ 播报恢复指令已发送')
+    }
   } catch (error) {
     console.error('❌ 重播语音失败:', error)
     alert('操作失败，请重试')
@@ -2565,6 +2635,15 @@ const handleSkipSpeech = async () => {
     console.log('⏭️ 跳过当前语音, runId:', currentTourRun.id)
     await skipSpeech(token, currentTourRun.id)
     console.log('✅ 跳过语音指令已发送')
+    
+    // 如果当前播报是暂停状态，自动恢复播报
+    if (isSpeechPaused.value) {
+      console.log('▶️ 检测到播报已暂停，自动恢复播报')
+      await resumeSpeech(token, currentTourRun.id)
+      websocketDataStore.isSpeechPaused = false
+      localStorage.setItem('isSpeechPaused', 'false')
+      console.log('✅ 播报已自动恢复')
+    }
   } catch (error) {
     console.error('❌ 跳过语音失败:', error)
     alert('操作失败，请重试')
@@ -2575,7 +2654,8 @@ const handleSkipSpeech = async () => {
 watch(() => websocketDataStore.currentTourRun?.status, (newStatus, oldStatus) => {
   // 当任务停止或完成时，重置语音播报状态
   if (oldStatus === 'running' && newStatus !== 'running') {
-    isSpeechPaused.value = false
+    websocketDataStore.isSpeechPaused = false
+    localStorage.setItem('isSpeechPaused', 'false')
   }
 })
 
@@ -6020,7 +6100,7 @@ const centerToDroneMarker = () => {
   flex-direction: column;
   padding: 20px;
   height: 100%;
-  justify-content: space-between; /* 让进度条靠底部显示 */
+  overflow: hidden; /* 防止内容溢出 */
 }
 
 /* 实时任务状态样式 */
@@ -6523,20 +6603,19 @@ const centerToDroneMarker = () => {
 
 /* 任务点列表样式 */
 .task-points-list {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 12px;
-  max-height: 144px; /* 限制高度，严格显示3个任务点 */
   overflow-y: auto; /* 添加垂直滚动条 */
   padding-right: 4px; /* 为滚动条留出空间 */
-  transition: max-height 0.3s ease; /* 平滑过渡效果 */
+  min-height: 0; /* 允许flex项缩小 */
+  margin-bottom: 12px; /* 与进度条之间的间距 */
 }
 
-/* 全屏模式下显示4条 */
+/* 全屏模式下显示更多内容 */
 .task-points-list.fullscreen-mode {
-  max-height: 208px; /* 4个任务点的高度 (4 × 40px + 3 × 8px gap = 184px，留些余量208px) */
+  flex: 1 1 auto;
 }
 
 /* 滚动条样式 */
@@ -6733,20 +6812,27 @@ const centerToDroneMarker = () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-top: 8px;
+  padding-top: 12px;
+  margin-top: auto; /* 自动推到底部 */
   border-top: 1px solid rgba(0, 188, 212, 0.3);
+  flex-shrink: 0; /* 防止进度区域被压缩 */
+  flex-grow: 0; /* 不允许增长 */
 }
 
 .progress-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px; /* 标签和按钮组之间的间距 */
+  flex-wrap: nowrap; /* 防止换行 */
 }
 
 .progress-label {
   color: #00bcd4;
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap; /* 防止文字换行 */
+  flex-shrink: 0; /* 防止标签被压缩 */
 }
 
 .pause-resume-btn {
@@ -6760,6 +6846,8 @@ const centerToDroneMarker = () => {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 188, 212, 0.3);
+  white-space: nowrap; /* 防止文字换行 */
+  flex-shrink: 0; /* 防止按钮被压缩 */
 }
 
 .pause-resume-btn:hover {
@@ -6793,6 +6881,8 @@ const centerToDroneMarker = () => {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: nowrap; /* 防止按钮换行 */
+  flex-shrink: 0; /* 防止按钮组被压缩 */
 }
 
 .speech-control-btn {
@@ -6807,6 +6897,7 @@ const centerToDroneMarker = () => {
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
   white-space: nowrap;
+  flex-shrink: 0; /* 防止按钮被压缩 */
 }
 
 .speech-control-btn:hover {

@@ -1157,7 +1157,11 @@ export const tourApi = {
       if (!response.ok) {
         return response.json().then(errorData => {
           console.error('创建展厅任务API错误响应:', errorData)
-          throw new Error(`HTTP error! status: ${response.status}`)
+          // 处理特定的错误信息
+          if (errorData.detail === 'Preset already exists') {
+            throw new Error('展厅任务名称已存在，请使用其他名称')
+          }
+          throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
         })
       }
       return response.json()
