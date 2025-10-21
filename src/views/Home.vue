@@ -2580,24 +2580,14 @@ const handleReplaySpeech = async () => {
       return
     }
     
-    // 保存当前的暂停状态
-    const wasPaused = isSpeechPaused.value
-    
     console.log('🔁 重播语音, runId:', currentTourRun.id)
     await replaySpeech(token, currentTourRun.id)
     console.log('✅ 语音重播指令已发送')
     
-    // 重播后总是重置为正常播报状态（不暂停）
+    // 重播后总是将按钮改为"暂停播报"状态（不调用resume接口）
     websocketDataStore.isSpeechPaused = false
     localStorage.setItem('isSpeechPaused', 'false')
-    console.log('✅ 播报状态已重置为正常')
-    
-    // 如果之前是暂停状态，需要发送恢复指令
-    if (wasPaused) {
-      console.log('▶️ 检测到播报之前已暂停，发送恢复指令')
-      await resumeSpeech(token, currentTourRun.id)
-      console.log('✅ 播报恢复指令已发送')
-    }
+    console.log('✅ 播报状态已设置为播放中（按钮显示"暂停播报"）')
   } catch (error) {
     console.error('❌ 重播语音失败:', error)
     alert('操作失败，请重试')

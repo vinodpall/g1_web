@@ -194,6 +194,23 @@ export const robotApi = {
     }).then(response => {
       if (!response.ok) {
         return response.json().then(errorData => {
+          console.error('创建机器人API错误响应:', errorData)
+          // 检查是否是 SN 格式错误
+          if (errorData.detail && typeof errorData.detail === 'string' && 
+              errorData.detail.includes('Invalid SN')) {
+            const error = new Error('SN格式错误：只能包含字母、数字、下划线、连字符，长度为3-32个字符') as any
+            error.detail = 'SN格式错误：只能包含字母、数字、下划线、连字符，长度为3-32个字符'
+            throw error
+          }
+          // 抛出包含 detail 的错误对象
+          const error = new Error(errorData.detail || `HTTP error! status: ${response.status}`) as any
+          error.detail = errorData.detail || `HTTP error! status: ${response.status}`
+          throw error
+        }).catch(parseError => {
+          // 如果响应不是JSON格式
+          if (parseError.detail) {
+            throw parseError // 重新抛出我们构造的错误
+          }
           throw new Error(`HTTP error! status: ${response.status}`)
         })
       }
@@ -239,6 +256,22 @@ export const robotApi = {
       if (!response.ok) {
         return response.json().then(errorData => {
           console.error('更新机器人API错误响应:', errorData)
+          // 检查是否是 SN 格式错误
+          if (errorData.detail && typeof errorData.detail === 'string' && 
+              errorData.detail.includes('Invalid SN')) {
+            const error = new Error('SN格式错误：只能包含字母、数字、下划线、连字符，长度为3-32个字符') as any
+            error.detail = 'SN格式错误：只能包含字母、数字、下划线、连字符，长度为3-32个字符'
+            throw error
+          }
+          // 抛出包含 detail 的错误对象
+          const error = new Error(errorData.detail || `HTTP error! status: ${response.status}`) as any
+          error.detail = errorData.detail || `HTTP error! status: ${response.status}`
+          throw error
+        }).catch(parseError => {
+          // 如果响应不是JSON格式
+          if (parseError.detail) {
+            throw parseError // 重新抛出我们构造的错误
+          }
           throw new Error(`HTTP error! status: ${response.status}`)
         })
       }
@@ -355,8 +388,21 @@ export const userApi = {
       if (!response.ok) {
         return response.json()
           .then(errorData => {
+            console.error('创建用户API错误响应:', errorData)
+            // 检查是否是用户名或邮箱重复错误
+            if (errorData.detail && typeof errorData.detail === 'string' && 
+                errorData.detail.includes('Username or email already registered')) {
+              const error = new Error('用户名或邮箱已被注册') as any
+              error.detail = '用户名或邮箱已被注册'
+              error.response = { data: { detail: '用户名或邮箱已被注册' } }
+              throw error
+            }
+            // 抛出包含 detail 的错误对象
             const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
-            throw new Error(errorMessage)
+            const error = new Error(errorMessage) as any
+            error.detail = errorMessage
+            error.response = { data: { detail: errorMessage } }
+            throw error
           }, () => {
             throw new Error(`HTTP error! status: ${response.status}`)
           })
@@ -1323,6 +1369,51 @@ export const tourApi = {
       return data
     }).catch(error => {
       console.error('删除展厅任务预设API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 删除展厅任务预设项（展区任务）
+  deleteTourPresetItem: (token: string, presetId: number, itemId: number) => {
+    const url = `${API_BASE_URL}/tours/presets/${presetId}/items/${itemId}`
+    
+    console.log('tourApi.deleteTourPresetItem 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('预设ID:', presetId)
+    console.log('任务项ID:', itemId)
+    
+    return fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('删除展厅任务预设项API响应状态:', response.status)
+      console.log('删除展厅任务预设项API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json().then(errorData => {
+          console.error('删除展厅任务预设项API错误响应:', errorData)
+          throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+        }).catch(() => {
+          // 如果JSON解析失败，使用默认错误信息
+          throw new Error(`HTTP error! status: ${response.status}`)
+        })
+      }
+      
+      // DELETE请求可能返回空响应
+      if (response.status === 204) {
+        return { success: true }
+      }
+      
+      return response.json()
+    }).then(data => {
+      console.log('删除展厅任务预设项API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('删除展厅任务预设项API请求失败:', error)
       throw error
     })
   }

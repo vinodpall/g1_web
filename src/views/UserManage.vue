@@ -162,7 +162,29 @@
             </div>
             <div class="add-user-form-row">
               <label><span class="required">*</span>密码：</label>
-              <input v-model="addUserForm.password" type="password" class="user-input" placeholder="请输入密码" />
+              <div class="password-input-wrapper">
+                <input 
+                  v-model="addUserForm.password" 
+                  :type="showAddUserPassword ? 'text' : 'password'" 
+                  class="user-input" 
+                  placeholder="请输入密码" 
+                />
+                <button 
+                  type="button"
+                  class="password-toggle-btn"
+                  @click="showAddUserPassword = !showAddUserPassword"
+                  :title="showAddUserPassword ? '隐藏密码' : '显示密码'"
+                >
+                  <svg v-if="!showAddUserPassword" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="add-user-form-row">
               <label>邮箱：</label>
@@ -215,7 +237,29 @@
             </div>
             <div class="add-user-form-row">
               <label>密码：</label>
-              <input v-model="editUserForm.password" type="password" class="user-input" placeholder="不修改请留空" />
+              <div class="password-input-wrapper">
+                <input 
+                  v-model="editUserForm.password" 
+                  :type="showEditUserPassword ? 'text' : 'password'" 
+                  class="user-input" 
+                  placeholder="不修改请留空" 
+                />
+                <button 
+                  type="button"
+                  class="password-toggle-btn"
+                  @click="showEditUserPassword = !showEditUserPassword"
+                  :title="showEditUserPassword ? '隐藏密码' : '显示密码'"
+                >
+                  <svg v-if="!showEditUserPassword" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="add-user-form-row">
               <label>邮箱：</label>
@@ -610,6 +654,8 @@ const loadUsers = async () => {
 
 const showAddUserDialog = ref(false)
 const showEditUserDialog = ref(false)
+const showAddUserPassword = ref(false)
+const showEditUserPassword = ref(false)
 const showDeleteUserDialog = ref(false)
 const showPermissionDenied = ref(false)
 const requiredPermission = ref('')
@@ -849,8 +895,27 @@ const onAddUserConfirm = async () => {
     let errorMsg = '创建用户失败，请稍后重试'
     
     if (err.response?.data?.detail) {
-      // 处理 {"detail":"该用户名的用户已存在"} 这种错误
-      errorMsg = err.response.data.detail
+      const detail = err.response.data.detail
+      
+      // 如果detail是数组（表单验证错误）
+      if (Array.isArray(detail)) {
+        const errors = detail.map((error: any) => {
+          // 处理邮箱验证错误
+          if (error.loc && error.loc.includes('email')) {
+            if (error.msg?.includes('not a valid email address') || 
+                error.msg?.includes('must have an @-sign')) {
+              return '邮箱地址格式不正确，请输入有效的邮箱地址'
+            }
+          }
+          // 其他验证错误保留原文或返回通用提示
+          return error.msg || '输入信息有误'
+        })
+        errorMsg = errors.join('；')
+      } 
+      // 如果detail是字符串（如用户名已存在等错误）
+      else if (typeof detail === 'string') {
+        errorMsg = detail
+      }
     } else if (err.message) {
       errorMsg = err.message
     }
@@ -946,7 +1011,27 @@ const onEditUserConfirm = async () => {
       let errorMsg = '更新用户失败，请稍后重试'
       
       if (err.response?.data?.detail) {
-        errorMsg = err.response.data.detail
+        const detail = err.response.data.detail
+        
+        // 如果detail是数组（表单验证错误）
+        if (Array.isArray(detail)) {
+          const errors = detail.map((error: any) => {
+            // 处理邮箱验证错误
+            if (error.loc && error.loc.includes('email')) {
+              if (error.msg?.includes('not a valid email address') || 
+                  error.msg?.includes('must have an @-sign')) {
+                return '邮箱地址格式不正确，请输入有效的邮箱地址'
+              }
+            }
+            // 其他验证错误保留原文或返回通用提示
+            return error.msg || '输入信息有误'
+          })
+          errorMsg = errors.join('；')
+        } 
+        // 如果detail是字符串（如用户名已存在等错误）
+        else if (typeof detail === 'string') {
+          errorMsg = detail
+        }
       } else if (err.message) {
         errorMsg = err.message
       }
@@ -2313,5 +2398,51 @@ select.user-input {
 select.user-input option {
   background-color: rgba(0, 0, 0, 0.8) !important;
   color: #fff !important;
+}
+
+/* 密码输入框包装器和切换按钮样式 */
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  max-width: 240px;
+  width: 240px;
+}
+
+.password-input-wrapper .user-input {
+  padding-right: 2.5rem;
+  width: 100%;
+  max-width: none;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.3s ease;
+  height: 20px;
+  width: 20px;
+}
+
+.password-toggle-btn:hover {
+  color: #00bcd4;
+}
+
+.password-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+.password-toggle-btn svg {
+  width: 18px;
+  height: 18px;
 }
 </style>

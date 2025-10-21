@@ -441,7 +441,7 @@
                 </span>
               </div>
             </div>
-            <div v-if="addTaskPointForm.robotAction !== 'none'" class="add-user-form-row">
+            <div v-if="shouldShowHoldTime" class="add-user-form-row">
               <label>动作持续：</label>
               <div class="input-with-unit">
                 <input 
@@ -1531,6 +1531,21 @@ const getRobotActionName = (actionCode?: string): string => {
   const action = robotActions.value.find(a => a.code === actionCode)
   return action?.name || actionCode // 如果找不到名称，返回code
 }
+
+// 判断是否需要显示动作持续时间输入框
+// 只有选择了特定的讲解姿势时才显示
+const shouldShowHoldTime = computed(() => {
+  if (!addTaskPointForm.value.robotAction || addTaskPointForm.value.robotAction === 'none') {
+    return false
+  }
+  
+  const action = robotActions.value.find(a => a.code === addTaskPointForm.value.robotAction)
+  if (!action) return false
+  
+  // 只有这四种讲解姿势才显示动作持续时间
+  const allowedActions = ['左侧讲解姿势', '右侧讲解姿势', '左下讲解姿势', '右下讲解姿势']
+  return allowedActions.includes(action.name)
+})
 
 // 获取视频字典列表
 const fetchVideoList = async () => {
@@ -3883,13 +3898,24 @@ watch(selectedHall, () => {
 })
 
 // 监听标签页切换，当切换到展厅管理时重新渲染栅格图
-watch(currentTab, (newTab) => {
+watch(currentTab, async (newTab) => {
   if (newTab === 'hall') {
     console.log('Switched to hall tab, reloading grid...')
     // 延迟一点时间确保标签页内容已经显示
     setTimeout(() => {
       loadAndRenderHallPGM()
     }, 100)
+  } else if (newTab === 'multitask') {
+    console.log('Switched to multitask tab, refreshing task details...')
+    // 切换到展厅任务页面时，如果有选中的任务，重新获取任务详情以刷新任务点数据
+    if (selectedHallTaskList.value) {
+      try {
+        await tourStore.fetchTourPresetItems(parseInt(selectedHallTaskList.value))
+        console.log('展厅任务详情已刷新')
+      } catch (error) {
+        console.error('刷新展厅任务详情失败:', error)
+      }
+    }
   }
 })
 
@@ -4472,6 +4498,16 @@ const handleConfirmAddTaskPoint = async () => {
       }
       const updatedPoint = await pointStore.updatePoint(parseInt(editingTaskPoint.value.id), pointData)
       
+      // 如果有选中的展厅任务，刷新任务详情以更新任务点列表
+      if (selectedHallTaskList.value) {
+        try {
+          await tourStore.fetchTourPresetItems(parseInt(selectedHallTaskList.value))
+          console.log('任务点更新后已刷新展厅任务详情')
+        } catch (error) {
+          console.warn('刷新展厅任务详情失败:', error)
+        }
+      }
+      
       showSuccessMessage(`任务点更新成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(updatedPoint.point_name_id)?.name || '未知点位'}`)
     } catch (error) {
       console.error('更新任务点失败:', error)
@@ -4518,6 +4554,16 @@ const handleConfirmAddTaskPoint = async () => {
         }
       }
       const newPoint = await pointStore.createPoint(pointData)
+      
+      // 如果有选中的展厅任务，刷新任务详情以更新任务点列表
+      if (selectedHallTaskList.value) {
+        try {
+          await tourStore.fetchTourPresetItems(parseInt(selectedHallTaskList.value))
+          console.log('任务点创建后已刷新展厅任务详情')
+        } catch (error) {
+          console.warn('刷新展厅任务详情失败:', error)
+        }
+      }
       
       showSuccessMessage(`任务点创建成功：${addTaskPointForm.value.name} - ${guideStore.getPointNameById(newPoint.point_name_id)?.name || '未知点位'}`)
     } catch (error) {
@@ -4572,6 +4618,16 @@ const onClickDeleteTaskPoint = async (point: TaskPoint) => {
     try {
       console.log('删除任务点:', point.id)
       await pointStore.deletePoint(parseInt(point.id))
+      
+      // 如果有选中的展厅任务，刷新任务详情以更新任务点列表
+      if (selectedHallTaskList.value) {
+        try {
+          await tourStore.fetchTourPresetItems(parseInt(selectedHallTaskList.value))
+          console.log('任务点删除后已刷新展厅任务详情')
+        } catch (error) {
+          console.warn('刷新展厅任务详情失败:', error)
+        }
+      }
       
       showSuccessMessage(`任务点删除成功：${point.name}`)
     } catch (error) {
@@ -4971,8 +5027,34 @@ const onClickEditMultiTask = (task: TaskPresetDisplay) => {
 const onClickDeleteTaskPreset = async (task: TaskPresetDisplay) => {
   const confirmed = await showConfirmDialog('删除确认', `确定要删除展区"${task.zoneName}"的任务吗？`)
   if (confirmed) {
-    // 这里可以调用API来删除任务预设项
-    showSuccessMessage(`删除任务：${task.zoneName}`)
+    try {
+      const token = userStore.token
+      if (!token) {
+        showErrorMessage('用户未登录，请先登录')
+        return
+      }
+
+      if (!selectedHallTaskList.value) {
+        showErrorMessage('未选择展厅任务')
+        return
+      }
+
+      const presetId = parseInt(selectedHallTaskList.value)
+      const itemId = parseInt(task.id)
+
+      console.log('删除展厅任务项:', { presetId, itemId, zoneName: task.zoneName })
+
+      // 调用API删除任务预设项
+      await tourApi.deleteTourPresetItem(token, presetId, itemId)
+
+      showSuccessMessage(`删除任务成功：${task.zoneName}`)
+
+      // 刷新展厅任务列表
+      await tourStore.fetchTourPresetItems(presetId)
+    } catch (error) {
+      console.error('删除展厅任务项失败:', error)
+      showErrorMessage(error instanceof Error ? error.message : '删除任务失败，请重试')
+    }
   }
 }
 

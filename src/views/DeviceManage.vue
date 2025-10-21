@@ -289,6 +289,25 @@
       </div>
     </main>
 
+    <!-- 删除机器人确认弹窗 -->
+    <div v-if="showDeleteRobotDialog" class="custom-dialog-mask">
+      <div class="custom-dialog delete-confirm-dialog">
+        <div class="custom-dialog-title">删除确认</div>
+        <div class="custom-dialog-content">
+          <div class="delete-confirm-message">
+            <div class="delete-icon">⚠️</div>
+            <div class="delete-text">
+              确定要删除机器人"{{ currentRobot?.name }}"吗？删除后无法恢复，请谨慎操作。
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-stop" @click="onDeleteRobotConfirm">确认删除</button>
+          <button class="mission-btn mission-btn-cancel" @click="showDeleteRobotDialog = false">取消</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ResultDialog 结果弹窗 -->
     <ResultDialog
       :show="resultDialog.show"
@@ -384,24 +403,69 @@ const handleSearch = async () => {
   }
 }
 
-const handleDelete = async (id: string) => {
-  if (!confirm('确定要删除这个机器人吗？')) {
-    return
+// 打开删除机器人确认弹窗
+const handleDelete = (id: string) => {
+  const robotId = parseInt(id)
+  const robot = devices.value.find((d: any) => d.id === robotId)
+  if (robot) {
+    currentRobot.value = robot
+    showDeleteRobotDialog.value = true
   }
-  
-  try {
-    const robotId = parseInt(id)
-    const token = userStore.token
-    if (!token) {
-      console.error('用户未登录')
-      return
+}
+
+// 确认删除机器人
+const onDeleteRobotConfirm = async () => {
+  if (currentRobot.value) {
+    try {
+      const token = userStore.token
+      if (!token) {
+        console.error('用户未登录')
+        resultDialog.value = {
+          show: true,
+          type: 'error',
+          title: '操作失败',
+          message: '',
+          details: '用户未登录，请先登录'
+        }
+        return
+      }
+      
+      await robotStore.deleteRobot(token, currentRobot.value.id)
+      showDeleteRobotDialog.value = false
+      
+      console.log('机器人删除成功:', currentRobot.value.id)
+      
+      // 显示成功结果
+      resultDialog.value = {
+        show: true,
+        type: 'success',
+        title: '删除机器人成功',
+        message: '',
+        details: ''
+      }
+    } catch (error: any) {
+      console.error('删除机器人失败:', error)
+      
+      // 处理错误响应
+      let errorMsg = '删除机器人失败，请稍后重试'
+      
+      if (error.detail) {
+        errorMsg = error.detail
+      } else if (error.message) {
+        errorMsg = error.message
+      } else if (error.response?.data?.detail) {
+        errorMsg = error.response.data.detail
+      }
+      
+      // 显示失败结果
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '删除机器人失败',
+        message: '',
+        details: errorMsg
+      }
     }
-    
-    await robotStore.deleteRobot(token, robotId)
-    console.log('机器人删除成功:', id)
-  } catch (error) {
-    console.error('删除机器人失败:', error)
-    alert('删除机器人失败，请稍后重试')
   }
 }
 
@@ -443,6 +507,10 @@ const formErrors = ref({
   name: '',
   ip_address: ''
 })
+
+// 删除机器人确认弹窗状态
+const showDeleteRobotDialog = ref(false)
+const currentRobot = ref<any>(null)
 
 // ResultDialog 状态
 const resultDialog = ref({
@@ -731,9 +799,22 @@ const handleEditRobotSubmit = async () => {
     console.log('机器人更新成功:', robotData)
     alert('机器人更新成功！')
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('更新机器人失败:', error)
-    alert('更新机器人失败，请稍后重试')
+    
+    // 从错误对象中提取 detail 字段
+    let errorMessage = '更新机器人失败，请稍后重试'
+    if (error && typeof error === 'object') {
+      if (error.detail) {
+        errorMessage = error.detail
+      } else if (error.message) {
+        errorMessage = error.message
+      } else if (error.response && error.response.data && error.response.data.detail) {
+        errorMessage = error.response.data.detail
+      }
+    }
+    
+    alert(errorMessage)
   }
 }
 
@@ -1525,6 +1606,29 @@ select.add-device-input option {
   background: transparent;
   padding-bottom: 0;
   padding-right: 32px;
+}
+
+/* 删除确认弹窗样式 */
+.delete-confirm-dialog {
+  min-width: 380px;
+  max-width: 420px;
+}
+.delete-confirm-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  text-align: left;
+}
+.delete-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.delete-text {
+  color: #b6b6b6;
+  font-size: 15px;
+  line-height: 1.5;
+  flex: 1;
 }
 
 /* 高分辨率屏幕优化 */
