@@ -222,8 +222,10 @@
                       <input 
                         v-model="editRobotForm.name" 
                         class="add-device-input" 
+                        :class="{ 'error': formErrors.name }"
                         placeholder="请输入机器人名称（必填）" 
                       />
+                      <div v-if="formErrors.name" class="error-message">{{ formErrors.name }}</div>
                     </div>
                     <div class="add-device-row">
                       <label>型号：</label>
@@ -234,8 +236,14 @@
                       <input v-model="editRobotForm.firmware_version" class="add-device-input" placeholder="请输入固件版本" />
                     </div>
                     <div class="add-device-row">
-                      <label>IP地址：</label>
-                      <input v-model="editRobotForm.ip_address" class="add-device-input" placeholder="请输入IP地址" />
+                      <label><span class="required">*</span>IP地址：</label>
+                      <input 
+                        v-model="editRobotForm.ip_address" 
+                        class="add-device-input" 
+                        :class="{ 'error': formErrors.ip_address }"
+                        placeholder="请输入IP地址（必填）" 
+                      />
+                      <div v-if="formErrors.ip_address" class="error-message">{{ formErrors.ip_address }}</div>
                     </div>
                     <div class="add-device-row">
                       <label>语音IP：</label>
@@ -710,6 +718,12 @@ const editRobotForm = ref({
 const handleEditRobot = (device: any) => {
   currentEditRobotId.value = device.id
   showEditRobotModal.value = true
+  // 重置表单验证错误
+  Object.assign(formErrors.value, {
+    sn: '',
+    name: '',
+    ip_address: ''
+  })
   // 填充表单数据
   Object.assign(editRobotForm.value, {
     sn: device.sn || '',
@@ -756,9 +770,26 @@ const resetEditImage = () => {
 }
 
 const handleEditRobotSubmit = async () => {
+  // 重置错误信息
+  formErrors.value.sn = ''
+  formErrors.value.name = ''
+  formErrors.value.ip_address = ''
+  
+  let hasError = false
+  
   // 验证名称
   if (!editRobotForm.value.name.trim()) {
-    alert('名称是必填项')
+    formErrors.value.name = '名称是必填项'
+    hasError = true
+  }
+  
+  // 验证IP地址
+  if (!editRobotForm.value.ip_address.trim()) {
+    formErrors.value.ip_address = 'IP地址是必填项'
+    hasError = true
+  }
+  
+  if (hasError) {
     return
   }
   

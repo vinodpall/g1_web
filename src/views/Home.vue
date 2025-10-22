@@ -3966,15 +3966,8 @@ const loadAndRenderPGM = async () => {
 }
 
 
-// 绘制高清机器人图标 - 实心圆 + 外环小白点设计
+// 绘制高清机器人图标 - 实心圆 + 三角箭头方向指示
 const drawRobotSVGIcon = async (ctx: CanvasRenderingContext2D, x: number, y: number, theta: number, canvas: HTMLCanvasElement) => {
-  // 获取当前缩放比例
-  const currentScale = canvas.clientWidth / canvas.width
-  
-  // 固定视觉大小（像素）
-  const visualSize = 20
-  const iconSize = visualSize / currentScale // 根据缩放调整实际绘制大小
-  
   ctx.save()
   
   // 移动到机器人位置
@@ -3984,16 +3977,27 @@ const drawRobotSVGIcon = async (ctx: CanvasRenderingContext2D, x: number, y: num
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   
-  // 绘制主体实心圆（带阴影效果，无边框）
+  // 获取当前缩放比例
+  const currentScale = canvas.clientWidth / canvas.width
+  
+  // 固定屏幕视觉大小（像素），图标在屏幕上看起来的大小
+  const visualSize = 24
+  // 转换为canvas像素大小，设置最小值确保放大时也清晰
+  const iconSize = Math.max(12, visualSize / currentScale)
+  
+  // 计算圆的半径
+  const circleRadius = iconSize * 0.4
+  
+  // 添加阴影效果（根据缩放调整）
   ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
-  ctx.shadowBlur = 3 / currentScale
+  ctx.shadowBlur = Math.max(2, 3 / currentScale)
   ctx.shadowOffsetX = 0
-  ctx.shadowOffsetY = 1 / currentScale
+  ctx.shadowOffsetY = Math.max(0.5, 1 / currentScale)
   
+  // 绘制主体红色实心圆
   ctx.fillStyle = '#FF4444'
-  
   ctx.beginPath()
-  ctx.arc(0, 0, iconSize * 0.4, 0, Math.PI * 2)
+  ctx.arc(0, 0, circleRadius, 0, Math.PI * 2)
   ctx.fill()
   
   // 清除阴影设置
@@ -4002,20 +4006,59 @@ const drawRobotSVGIcon = async (ctx: CanvasRenderingContext2D, x: number, y: num
   ctx.shadowOffsetX = 0
   ctx.shadowOffsetY = 0
   
-  // 计算小白点位置（在圆内，表示机器人朝向）
-  const dotRadius = iconSize * 0.25 // 小白点距离中心的距离（在圆内）
-  const dotSize = iconSize * 0.12 // 小白点大小固定为主圆的12%
-  const dotX = Math.cos(-theta || 0) * dotRadius // 注意角度方向
-  const dotY = Math.sin(-theta || 0) * dotRadius
+  // 绘制方向指示三角箭头（在圆的外部）
+  ctx.save()
   
-  // 绘制方向指示小白点
-  ctx.fillStyle = '#FFFFFF'
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)' // 更淡的边框
-  ctx.lineWidth = Math.max(0.2, 0.3 / currentScale)
+  // 根据theta角度旋转
+  ctx.rotate(-theta || 0)
+  
+  // 计算三角形的位置和大小
+  const arrowHeight = circleRadius * 1.3 // 箭头高度
+  // 尖角60度：底部半宽 = 高度 * tan(30°)
+  const halfBaseWidth = arrowHeight * Math.tan(30 * Math.PI / 180)
+  const arrowAngle = Math.asin(halfBaseWidth / circleRadius) // 计算箭头在圆上的角度
+  
+  // 绘制与圆形贴合的三角箭头
+  ctx.fillStyle = '#FF4444' // 红色
+  
+  // 添加阴影效果
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
+  ctx.shadowBlur = Math.max(1.5, 2 / currentScale)
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = Math.max(0.5, 1 / currentScale)
   
   ctx.beginPath()
-  ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2)
+  // 顶点（指向方向）
+  ctx.moveTo(circleRadius + arrowHeight, 0)
+  
+  // 右侧边线（从顶点到圆形边缘）
+  ctx.lineTo(
+    circleRadius * Math.cos(-arrowAngle),
+    circleRadius * Math.sin(-arrowAngle)
+  )
+  
+  // 底部凹进去的弧线（沿着圆形边缘，顺时针方向）
+  ctx.arc(0, 0, circleRadius, -arrowAngle, arrowAngle, false)
+  
+  // 左侧边线（从圆形边缘回到顶点）
+  ctx.lineTo(circleRadius + arrowHeight, 0)
+  
+  ctx.closePath()
   ctx.fill()
+  
+  // 清除阴影设置
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 0
+  
+  ctx.restore()
+  
+  // 给圆形描白色边框（在箭头绘制完成后，确保可见）
+  ctx.strokeStyle = '#FFFFFF'
+  ctx.lineWidth = Math.max(1.5, 2.5 / currentScale)
+  ctx.beginPath()
+  ctx.arc(0, 0, circleRadius, 0, Math.PI * 2)
   ctx.stroke()
   
   ctx.restore()
@@ -4059,13 +4102,13 @@ const drawTaskPathLines = async (ctx: CanvasRenderingContext2D, canvas: HTMLCanv
 
   // 设置路径线样式
   ctx.strokeStyle = '#00BCD4' // 青色路径线
-  ctx.lineWidth = Math.max(1.5, 2 / currentScale) // 稍粗的线条
+  ctx.lineWidth = Math.max(2, 2.5 / currentScale) // 更粗的线条，更清晰
   ctx.lineCap = 'round' // 圆形线帽
   ctx.lineJoin = 'round' // 圆形连接
   
   // 添加发光效果
-  ctx.shadowColor = 'rgba(0, 188, 212, 0.6)'
-  ctx.shadowBlur = 4 / currentScale
+  ctx.shadowColor = 'rgba(0, 188, 212, 0.7)'
+  ctx.shadowBlur = Math.max(3, 5 / currentScale)
 
   // 收集所有有效的已走过的点位（从第一个到当前点，包括当前点）
   const validPoints: Array<{x: number, y: number}> = []
@@ -4127,9 +4170,10 @@ const drawTaskPoints = async (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasE
   // 获取当前缩放比例
   const currentScale = canvas.clientWidth / canvas.width
   
-  // 固定视觉大小（像素）
-  const visualSize = 8 // 任务点比机器人图标小一些
-  const pointSize = visualSize / currentScale // 根据缩放调整实际绘制大小
+  // 固定屏幕视觉大小（像素）
+  const visualSize = 10 // 任务点大小
+  // 转换为canvas像素半径，设置最小值确保清晰
+  const pointRadius = Math.max(4, (visualSize / currentScale) * 0.5)
 
   ctx.save()
   
@@ -4138,7 +4182,7 @@ const drawTaskPoints = async (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasE
   ctx.imageSmoothingQuality = 'high'
 
   taskPoints.forEach((point, index) => {
-    // 检查点位是否有有效的坐标
+    // 检查点位是否有效的坐标
     if (typeof point.x !== 'number' || typeof point.y !== 'number') {
       return
     }
@@ -4168,17 +4212,17 @@ const drawTaskPoints = async (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasE
     }
 
     // 绘制任务点（带阴影效果）
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)'
-    ctx.shadowBlur = 2 / currentScale
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)'
+    ctx.shadowBlur = Math.max(2, 3 / currentScale)
     ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 1 / currentScale
+    ctx.shadowOffsetY = Math.max(0.8, 1.5 / currentScale)
 
     ctx.fillStyle = fillColor
     ctx.strokeStyle = strokeColor
-    ctx.lineWidth = Math.max(0.5, 1 / currentScale)
+    ctx.lineWidth = Math.max(0.8, 1 / currentScale) // 细一点的白色边框
 
     ctx.beginPath()
-    ctx.arc(pixelPos.x, pixelPos.y, pointSize * 0.5, 0, Math.PI * 2)
+    ctx.arc(pixelPos.x, pixelPos.y, pointRadius, 0, Math.PI * 2)
     ctx.fill()
     ctx.stroke()
 

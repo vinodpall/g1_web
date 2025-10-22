@@ -67,7 +67,7 @@
         <div class="user-info" @click="toggleUserMenu">
           <img src="/src/assets/source_data/avatar.jpg" alt="avatar" class="avatar" />
           <div class="right-sel">
-            <span class="name">{{ user?.username || 'admin' }}</span>
+            <span class="name">{{ user?.username || user?.full_name || '用户' }}</span>
             <span class="triangle" :class="{ 'is-active': isUserMenuVisible }"></span>
           </div>
           <!-- 下拉菜单 -->

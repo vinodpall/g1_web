@@ -160,6 +160,36 @@ export function getCurrentEnvironment(): Environment {
 // 获取当前环境配置
 export function getCurrentConfig(): EnvironmentConfig {
   const currentEnv = getCurrentEnvironment()
+  const isProd = import.meta.env.PROD
+  
+  // 生产环境使用动态域名配置（同域部署）
+  if (isProd && typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host // 包含端口号
+    const origin = window.location.origin
+    
+    return {
+      api: {
+        baseUrl: '/api/v1',
+        domain: origin
+      },
+      websocket: {
+        host: window.location.hostname,
+        port: parseInt(window.location.port) || (window.location.protocol === 'https:' ? 443 : 80),
+        fullUrl: `${protocol}//${host}`
+      },
+      video: {
+        webrtcDomain: `webrtc://${host}`,
+        rtmpDomain: `rtmp://${host}`
+      },
+      services: {
+        vision: origin,
+        livestream: origin
+      }
+    }
+  }
+  
+  // 开发环境根据环境类型选择配置
   return currentEnv === Environment.INTRANET ? intranetConfig : internetConfig
 }
 

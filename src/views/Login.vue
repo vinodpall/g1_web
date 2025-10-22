@@ -288,11 +288,12 @@ const handleLogin = async () => {
       console.log('当前用户信息获取成功')
     } catch (err) {
       console.error('获取当前用户信息失败:', err)
-      // 如果获取失败，使用登录响应中的用户信息作为备选
-      if ((response as any).user) {
-        console.log('使用登录响应中的用户信息作为备选')
-        userStore.setUser((response as any).user)
-      }
+      // 清除已保存的 token，防止后续请求使用无效的 token
+      userStore.logout()
+      // 显示错误信息并阻止登录
+      errorMessage.value = '获取用户信息失败，请重新登录'
+      showErrorDialog.value = true
+      return // 阻止继续执行，不允许跳转
     }
     
     // 根据是否勾选记住密码来保存或清除登录信息

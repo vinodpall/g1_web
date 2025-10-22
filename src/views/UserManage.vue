@@ -188,7 +188,12 @@
             </div>
             <div class="add-user-form-row">
               <label>邮箱：</label>
-              <input v-model="addUserForm.email" type="email" class="user-input" placeholder="请输入邮箱地址" />
+              <input 
+                v-model="addUserForm.email" 
+                type="email" 
+                :class="['user-input', { 'input-error': isAddEmailInvalid }]" 
+                placeholder="请输入邮箱地址" 
+              />
             </div>
             <div class="add-user-form-row">
               <label>是否激活：</label>
@@ -263,7 +268,12 @@
             </div>
             <div class="add-user-form-row">
               <label>邮箱：</label>
-              <input v-model="editUserForm.email" type="email" class="user-input" placeholder="请输入邮箱地址" />
+              <input 
+                v-model="editUserForm.email" 
+                type="email" 
+                :class="['user-input', { 'input-error': isEditEmailInvalid }]" 
+                placeholder="请输入邮箱地址" 
+              />
             </div>
             <div class="add-user-form-row">
               <label>是否激活：</label>
@@ -764,6 +774,27 @@ const editUserForm = ref({
 
 const currentUser = ref<any>(null)
 
+// 邮箱格式验证
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// 新增用户邮箱验证状态
+const isAddEmailInvalid = computed(() => {
+  const email = addUserForm.value.email.trim()
+  // 如果邮箱为空，不显示错误（允许留空）
+  if (!email) return false
+  // 如果有内容，则验证格式
+  return !emailRegex.test(email)
+})
+
+// 编辑用户邮箱验证状态
+const isEditEmailInvalid = computed(() => {
+  const email = editUserForm.value.email.trim()
+  // 如果邮箱为空，不显示错误（允许留空）
+  if (!email) return false
+  // 如果有内容，则验证格式
+  return !emailRegex.test(email)
+})
+
 // 权限检查函数（与全站一致，使用权限Store）
 const permissionStore = usePermissionStore()
 const hasPermission = (permission: string) => permissionStore.hasPermission(permission)
@@ -837,6 +868,18 @@ const onAddUserConfirm = async () => {
         title: '新增用户失败',
         message: '',
         details: '请输入密码'
+      }
+      return
+    }
+    
+    // 邮箱格式校验（如果填写了邮箱）
+    if (addUserForm.value.email.trim() && !emailRegex.test(addUserForm.value.email.trim())) {
+      resultDialog.value = {
+        show: true,
+        type: 'error',
+        title: '新增用户失败',
+        message: '',
+        details: '邮箱格式不正确，请输入有效的邮箱地址'
       }
       return
     }
@@ -961,6 +1004,18 @@ const openEditUserDialog = (user: any) => {
 const onEditUserConfirm = async () => {
   if (currentUser.value) {
     try {
+      // 邮箱格式校验（如果填写了邮箱）
+      if (editUserForm.value.email.trim() && !emailRegex.test(editUserForm.value.email.trim())) {
+        resultDialog.value = {
+          show: true,
+          type: 'error',
+          title: '编辑用户失败',
+          message: '',
+          details: '邮箱格式不正确，请输入有效的邮箱地址'
+        }
+        return
+      }
+      
       // 构建更新数据，只包含有值的字段
       const apiUserData: any = {
         username: editUserForm.value.username,
@@ -1530,24 +1585,22 @@ const handleSpeakTest = async (item: any) => {
     
     // 构建API URL
     const text = encodeURIComponent(item.content)
-    const timeout = 30  // 30秒超时时间，适应较长的讲解词
+    const timeout = 300  // 300秒超时时间，适应较长的讲解词
     const url = `/api/v1/speech/test?sn=${sn}&text=${text}&timeout=${timeout}`
     
-    // 调用API
+    // 调用API（不等待响应）
     const token = userStore.token
-    const response = await fetch(url, {
+    fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
+    }).catch(err => {
+      console.error('语音播报API调用错误（异步）:', err)
     })
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-    
-    // 显示成功提示
+    // 发送请求后立即显示成功提示
     resultDialog.value = {
       show: true,
       type: 'success',
@@ -2386,6 +2439,17 @@ onMounted(async () => {
 .required {
   color: #ff4d4f;
   margin-right: 4px;
+}
+
+/* 邮箱输入框错误状态样式 */
+.user-input.input-error {
+  border-color: #ff4d4f !important;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2) !important;
+}
+
+.user-input.input-error:focus {
+  border-color: #ff4d4f !important;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.3) !important;
 }
 
 /* 下拉框样式优化 */
