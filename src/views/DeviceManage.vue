@@ -7,6 +7,7 @@
           v-for="tab in sidebarTabs"
           :key="tab.key"
           :class="['sidebar-tab', { active: currentTab === tab.key }]"
+          :title="tab.label"
           @click="handleTabClick(tab.key)"
         >
           <img :src="tab.icon" :alt="tab.label" />
@@ -1063,6 +1064,36 @@ select.add-device-input option {
 .mission-select option {
   background: #172233;
   color: #fff;
+}
+
+/* 全屏模式下修复下拉框定位问题（iPad等设备） */
+:fullscreen select,
+:fullscreen .mission-select,
+:fullscreen .add-device-input,
+:-webkit-full-screen select,
+:-webkit-full-screen .mission-select,
+:-webkit-full-screen .add-device-input,
+:-moz-full-screen select,
+:-moz-full-screen .mission-select,
+:-moz-full-screen .add-device-input {
+  position: relative;
+  z-index: 9999;
+}
+
+/* 全屏模式下确保对话框容器有正确的层叠上下文 */
+:fullscreen .custom-dialog,
+:-webkit-full-screen .custom-dialog,
+:-moz-full-screen .custom-dialog {
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+}
+
+/* 全屏模式下修复下拉选项列表的定位 */
+:fullscreen .custom-select-wrapper,
+:-webkit-full-screen .custom-select-wrapper,
+:-moz-full-screen .custom-select-wrapper {
+  position: relative;
+  z-index: 9999;
 }
 .device-btn {
   border-radius: 4px;

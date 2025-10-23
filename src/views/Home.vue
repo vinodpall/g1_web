@@ -39,13 +39,13 @@
                   </div>
                   <!-- 电量和信号强度移到右侧 -->
                   <div class="status-indicators-row">
-                    <div class="status-indicator-item">
+                    <div class="status-indicator-item" title="电池电量">
                       <div class="status-icon battery-icon">
                         <div class="battery-level" :style="{ width: uiBatteryPercent + '%' }"></div>
                       </div>
                       <span class="status-percentage">{{ uiBatteryPercent }}%</span>
                     </div>
-                    <div class="status-indicator-item">
+                    <div class="status-indicator-item" title="信号强度">
                       <div class="status-icon wifi-icon">
                         <div class="wifi-bars">
                           <div class="bar bar1" :class="{ 'active': robotDisplayInfo.signalStrength !== 'none' }"></div>
@@ -7132,6 +7132,45 @@ const centerToDroneMarker = () => {
   background: rgba(103, 213, 253, 0.1);
   color: #67d5fd;
   border-color: rgba(103, 213, 253, 0.3);
+}
+
+/* 全屏模式下修复日期选择器和下拉框定位问题（iPad等设备） */
+:fullscreen .dispatch-task-input[type="date"],
+:fullscreen .dispatch-task-input[type="datetime-local"],
+:fullscreen select,
+:fullscreen .mission-select,
+:fullscreen .user-select,
+:fullscreen .wayline-select,
+:-webkit-full-screen .dispatch-task-input[type="date"],
+:-webkit-full-screen .dispatch-task-input[type="datetime-local"],
+:-webkit-full-screen select,
+:-webkit-full-screen .mission-select,
+:-webkit-full-screen .user-select,
+:-webkit-full-screen .wayline-select,
+:-moz-full-screen .dispatch-task-input[type="date"],
+:-moz-full-screen .dispatch-task-input[type="datetime-local"],
+:-moz-full-screen select,
+:-moz-full-screen .mission-select,
+:-moz-full-screen .user-select,
+:-moz-full-screen .wayline-select {
+  position: relative;
+  z-index: 9999;
+}
+
+/* 全屏模式下确保对话框容器有正确的层叠上下文 */
+:fullscreen .custom-dialog,
+:-webkit-full-screen .custom-dialog,
+:-moz-full-screen .custom-dialog {
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+}
+
+/* 全屏模式下修复下拉选项列表的定位 */
+:fullscreen .custom-select-wrapper,
+:-webkit-full-screen .custom-select-wrapper,
+:-moz-full-screen .custom-select-wrapper {
+  position: relative;
+  z-index: 9999;
 }
 
 .custom-select-wrapper {

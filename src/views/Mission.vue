@@ -7,6 +7,7 @@
           v-for="tab in sidebarTabs"
           :key="tab.key"
           :class="['sidebar-tab', { active: currentTab === tab.key }]"
+          :title="tab.label"
           @click="handleTabClick(tab)"
         >
           <img :src="tab.icon" :alt="tab.label" />
@@ -260,10 +261,13 @@
                   </div>
                   <div class="task-control-buttons">
                     <button 
-                      class="mission-btn mission-btn-pause"
-                      @click="handleStartTask"
-                      :disabled="!selectedHallTaskList || taskRunning"
-                    >开始任务</button>
+                      class="mission-btn"
+                      :class="isTaskExecuting ? 'mission-btn-stop' : 'mission-btn-pause'"
+                      @click="handleTaskControlClick"
+                      :disabled="!isTaskExecuting && (!selectedHallTaskList || !isNavEnabled)"
+                    >
+                      {{ isTaskExecuting ? '停止任务' : '开始任务' }}
+                    </button>
                     <button 
                       class="mission-btn mission-btn-stop"
                       @click="handlePauseTask"
@@ -4831,6 +4835,35 @@ const isTaskPaused = computed(() => {
 })
 
 // 任务控制相关方法
+// 处理任务控制按钮点击（开始/停止）
+const handleTaskControlClick = async () => {
+  if (isTaskExecuting.value) {
+    // 如果正在执行任务，则停止任务
+    try {
+      const token = userStore.token || localStorage.getItem('token') || ''
+      await websocketDataStore.stopCurrentTourRun(token)
+      
+      // 任务停止成功后，刷新任务运行列表状态
+      try {
+        await websocketDataStore.fetchTourRuns(token)
+        console.log('✅ 任务停止后刷新任务列表成功')
+      } catch (error) {
+        console.warn('❌ 刷新任务列表失败:', error)
+      }
+      
+      // 重置任务运行状态
+      taskRunning.value = false
+      showSuccessMessage('任务已停止')
+    } catch (error) {
+      console.error('❌ 停止任务失败:', error)
+      showErrorMessage('停止任务失败，请重试')
+    }
+  } else {
+    // 如果没有执行任务，则开始任务
+    await handleStartTask()
+  }
+}
+
 const handleStartTask = async () => {
   // 检查导航是否开启
   if (!isNavEnabled.value) {
@@ -5241,6 +5274,39 @@ const closeResultDialog = () => {
   background: rgba(103, 213, 253, 0.1);
   color: #67d5fd;
   border-color: rgba(103, 213, 253, 0.3);
+}
+
+/* 全屏模式下修复日期选择器和下拉框定位问题（iPad等设备） */
+:fullscreen .dispatch-task-input[type="date"],
+:fullscreen .dispatch-task-input[type="datetime-local"],
+:fullscreen select,
+:fullscreen .mission-select,
+:-webkit-full-screen .dispatch-task-input[type="date"],
+:-webkit-full-screen .dispatch-task-input[type="datetime-local"],
+:-webkit-full-screen select,
+:-webkit-full-screen .mission-select,
+:-moz-full-screen .dispatch-task-input[type="date"],
+:-moz-full-screen .dispatch-task-input[type="datetime-local"],
+:-moz-full-screen select,
+:-moz-full-screen .mission-select {
+  position: relative;
+  z-index: 9999;
+}
+
+/* 全屏模式下确保对话框容器有正确的层叠上下文 */
+:fullscreen .custom-dialog,
+:-webkit-full-screen .custom-dialog,
+:-moz-full-screen .custom-dialog {
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+}
+
+/* 全屏模式下修复下拉选项列表的定位 */
+:fullscreen .custom-select-wrapper,
+:-webkit-full-screen .custom-select-wrapper,
+:-moz-full-screen .custom-select-wrapper {
+  position: relative;
+  z-index: 9999;
 }
 
 .custom-select-wrapper {

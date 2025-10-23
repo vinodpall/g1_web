@@ -92,3 +92,27 @@ body .amap-maptype,
     background-color: #f9f9f9;
   }
 }
+
+/* 全屏模式下修复日期选择器和下拉框定位问题（iPad等触摸设备） */
+:fullscreen input[type="date"],
+:fullscreen input[type="datetime-local"],
+:fullscreen input[type="time"],
+:fullscreen select,
+:-webkit-full-screen input[type="date"],
+:-webkit-full-screen input[type="datetime-local"],
+:-webkit-full-screen input[type="time"],
+:-webkit-full-screen select,
+:-moz-full-screen input[type="date"],
+:-moz-full-screen input[type="datetime-local"],
+:-moz-full-screen input[type="time"],
+:-moz-full-screen select {
+  position: relative;
+  z-index: 9999;
+}
+
+/* 全屏模式下确保弹出式选择器有正确的视口参考 */
+:fullscreen,
+:-webkit-full-screen,
+:-moz-full-screen {
+  overflow: auto !important;
+}
