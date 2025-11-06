@@ -57,8 +57,9 @@ export interface CmdStatus extends TimestampData {
   nav?: boolean | number         // 导航开启状态
   slam?: boolean | number        // 建图状态
   
-  // 电量百分比（0-100），设备上报字段
-  battery_soc?: number
+  // 电量相关字段（设备上报）
+  battery_soc?: number      // 电量百分比（0-100）
+  battery_ts?: number       // 电量数据的时间戳（可选，如果没有 ts 字段则使用此值）
   
   // 其他设备态透传字段（字段名依设备而定）
   [key: string]: any

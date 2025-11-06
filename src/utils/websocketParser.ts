@@ -105,7 +105,12 @@ export function validateCmdStatus(data: any): data is CmdStatus {
     return false
   }
   
-  // 必须有时间戳
+  // 如果没有 ts 但有 battery_ts，自动使用 battery_ts 作为时间戳
+  if (typeof data.ts !== 'number' && typeof data.battery_ts === 'number') {
+    data.ts = data.battery_ts
+  }
+  
+  // 必须有时间戳（ts 或 battery_ts）
   if (typeof data.ts !== 'number') {
     return false
   }

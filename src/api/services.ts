@@ -937,6 +937,84 @@ export const guideApi = {
       console.error('删除讲解词API请求失败:', error)
       throw error
     })
+  },
+
+  // 讲解词上移
+  moveScriptUp: (token: string, scriptId: number) => {
+    const url = `${API_BASE_URL}/guide/scripts/${scriptId}/move-up`
+    
+    console.log('guideApi.moveScriptUp 被调用')
+    console.log('请求URL:', url)
+    console.log('讲解词ID:', scriptId)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('讲解词上移API响应状态:', response.status)
+      console.log('讲解词上移API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json()
+          .then(errorData => {
+            console.error('讲解词上移API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('讲解词上移API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('讲解词上移API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 讲解词下移
+  moveScriptDown: (token: string, scriptId: number) => {
+    const url = `${API_BASE_URL}/guide/scripts/${scriptId}/move-down`
+    
+    console.log('guideApi.moveScriptDown 被调用')
+    console.log('请求URL:', url)
+    console.log('讲解词ID:', scriptId)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('讲解词下移API响应状态:', response.status)
+      console.log('讲解词下移API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json()
+          .then(errorData => {
+            console.error('讲解词下移API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('讲解词下移API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('讲解词下移API请求失败:', error)
+      throw error
+    })
   }
 }
 
@@ -1414,6 +1492,86 @@ export const tourApi = {
       return data
     }).catch(error => {
       console.error('删除展厅任务预设项API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 展厅任务预设项上移
+  moveTourPresetItemUp: (token: string, presetId: number, itemId: number) => {
+    const url = `${API_BASE_URL}/tours/presets/${presetId}/items/${itemId}/move-up`
+    
+    console.log('tourApi.moveTourPresetItemUp 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('预设ID:', presetId)
+    console.log('任务项ID:', itemId)
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('展厅任务预设项上移API响应状态:', response.status)
+      console.log('展厅任务预设项上移API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json()
+          .then(errorData => {
+            console.error('展厅任务预设项上移API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('展厅任务预设项上移API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('展厅任务预设项上移API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 展厅任务预设项下移
+  moveTourPresetItemDown: (token: string, presetId: number, itemId: number) => {
+    const url = `${API_BASE_URL}/tours/presets/${presetId}/items/${itemId}/move-down`
+    
+    console.log('tourApi.moveTourPresetItemDown 被调用')
+    console.log('请求URL:', url)
+    console.log('请求token:', token ? '存在' : '不存在')
+    console.log('预设ID:', presetId)
+    console.log('任务项ID:', itemId)
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('展厅任务预设项下移API响应状态:', response.status)
+      console.log('展厅任务预设项下移API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json()
+          .then(errorData => {
+            console.error('展厅任务预设项下移API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('展厅任务预设项下移API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('展厅任务预设项下移API请求失败:', error)
       throw error
     })
   }
@@ -2040,6 +2198,84 @@ export const pointApi = {
       return data
     }).catch(error => {
       console.error('删除任务点API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 任务点上移
+  movePointUp: (token: string, pointId: number) => {
+    const url = `${API_BASE_URL}/points/${pointId}/move-up`
+    
+    console.log('pointApi.movePointUp 被调用')
+    console.log('请求URL:', url)
+    console.log('任务点ID:', pointId)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('任务点上移API响应状态:', response.status)
+      console.log('任务点上移API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json()
+          .then(errorData => {
+            console.error('任务点上移API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('任务点上移API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('任务点上移API请求失败:', error)
+      throw error
+    })
+  },
+
+  // 任务点下移
+  movePointDown: (token: string, pointId: number) => {
+    const url = `${API_BASE_URL}/points/${pointId}/move-down`
+    
+    console.log('pointApi.movePointDown 被调用')
+    console.log('请求URL:', url)
+    console.log('任务点ID:', pointId)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    }).then(response => {
+      console.log('任务点下移API响应状态:', response.status)
+      console.log('任务点下移API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json()
+          .then(errorData => {
+            console.error('任务点下移API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('任务点下移API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('任务点下移API请求失败:', error)
       throw error
     })
   }

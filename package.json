@@ -10,7 +10,8 @@
     "build": "vue-tsc -b && vite build",
     "build:intranet": "cross-env VITE_APP_ENVIRONMENT=intranet vue-tsc -b && vite build",
     "build:internet": "cross-env VITE_APP_ENVIRONMENT=internet vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "package": "npm run build && node -e \"console.log('\\n构建完成！\\n\\nWindows 系统请运行: 打包.bat\\nLinux/Mac 系统请运行: bash package.sh\\n')\""
   },
   "dependencies": {
     "@amap/amap-jsapi-loader": "^1.0.1",

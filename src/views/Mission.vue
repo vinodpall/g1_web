@@ -222,6 +222,22 @@
                   <div class="mission-td">{{ point.robotDirection }}</div>
                   <div class="mission-td">
                     <div class="user-action-btns">
+                      <button 
+                        class="icon-btn move-btn" 
+                        title="上移" 
+                        @click="onClickMoveTaskPointUp(point)"
+                        :disabled="idx === 0"
+                      >
+                        <img :src="upIcon" />
+                      </button>
+                      <button 
+                        class="icon-btn move-btn" 
+                        title="下移" 
+                        @click="onClickMoveTaskPointDown(point)"
+                        :disabled="idx === currentTaskPoints.length - 1"
+                      >
+                        <img :src="downIcon" />
+                      </button>
                       <button class="icon-btn" title="编辑" @click="onClickEditTaskPoint(point)">
                         <img :src="editIcon" />
                       </button>
@@ -300,7 +316,7 @@
                 <div class="mission-th" style="flex: 1;">展区名称</div>
                 <div class="mission-th" style="flex: 0 0 120px;">任务点数量</div>
                 <div class="mission-th" style="flex: 3;">任务点详情</div>
-                <div class="mission-th" style="flex: 0 0 80px;">操作</div>
+                <div class="mission-th" style="flex: 0 0 120px;">操作</div>
               </div>
               <div class="mission-table-body">
                 <div v-if="!selectedHallTaskList" class="empty-state">
@@ -331,8 +347,24 @@
                       </span>
                     </div>
                   </div>
-                  <div class="mission-td" style="flex: 0 0 80px;">
+                  <div class="mission-td" style="flex: 0 0 120px;">
                     <div class="user-action-btns">
+                      <button 
+                        class="icon-btn move-btn" 
+                        title="上移" 
+                        @click="onClickMoveTaskPresetUp(task)"
+                        :disabled="idx === 0"
+                      >
+                        <img :src="upIcon" />
+                      </button>
+                      <button 
+                        class="icon-btn move-btn" 
+                        title="下移" 
+                        @click="onClickMoveTaskPresetDown(task)"
+                        :disabled="idx === currentMultiTasks.length - 1"
+                      >
+                        <img :src="downIcon" />
+                      </button>
                       <button class="icon-btn" title="删除" @click="onClickDeleteTaskPreset(task)">
                         <img :src="deleteIcon" />
                       </button>
@@ -825,6 +857,8 @@ import editIcon from '@/assets/source_data/svg_data/edit.svg'
 import deleteIcon from '@/assets/source_data/svg_data/delete.svg'
 import arrowUpIcon from '@/assets/source_data/control_data/arrow_up.svg'
 import arrowDownIcon from '@/assets/source_data/control_data/arrow_down.svg'
+import upIcon from '@/assets/source_data/control_data/up.svg'
+import downIcon from '@/assets/source_data/control_data/down.svg'
 // 导入地图编辑工具图标
 import mapEditIcon from '@/assets/source_data/robot_source/map_edit.svg'
 import mapUploadIcon from '@/assets/source_data/robot_source/map_upload.svg'
@@ -4705,6 +4739,30 @@ const onClickDeleteTaskPoint = async (point: TaskPoint) => {
   }
 }
 
+// 任务点上移
+const onClickMoveTaskPointUp = async (point: TaskPoint) => {
+  try {
+    console.log('任务点上移:', point.id)
+    await pointStore.movePointUp(parseInt(point.id))
+    showSuccessMessage(`任务点上移成功：${point.name}`)
+  } catch (error) {
+    console.error('任务点上移失败:', error)
+    showErrorMessage(error instanceof Error ? error.message : '任务点上移失败')
+  }
+}
+
+// 任务点下移
+const onClickMoveTaskPointDown = async (point: TaskPoint) => {
+  try {
+    console.log('任务点下移:', point.id)
+    await pointStore.movePointDown(parseInt(point.id))
+    showSuccessMessage(`任务点下移成功：${point.name}`)
+  } catch (error) {
+    console.error('任务点下移失败:', error)
+    showErrorMessage(error instanceof Error ? error.message : '任务点下移失败')
+  }
+}
+
 // 时间格式化
 const formatTime = (time: string) => {
   return time
@@ -5152,6 +5210,48 @@ const onClickDeleteTaskPreset = async (task: TaskPresetDisplay) => {
       console.error('删除展厅任务项失败:', error)
       showErrorMessage(error instanceof Error ? error.message : '删除任务失败，请重试')
     }
+  }
+}
+
+// 展厅任务预设项上移
+const onClickMoveTaskPresetUp = async (task: TaskPresetDisplay) => {
+  try {
+    if (!selectedHallTaskList.value) {
+      showErrorMessage('未选择展厅任务')
+      return
+    }
+
+    const presetId = parseInt(selectedHallTaskList.value)
+    const itemId = parseInt(task.id)
+
+    console.log('展厅任务项上移:', { presetId, itemId, zoneName: task.zoneName })
+
+    await tourStore.moveTourPresetItemUp(presetId, itemId)
+    showSuccessMessage(`任务上移成功：${task.zoneName}`)
+  } catch (error) {
+    console.error('展厅任务项上移失败:', error)
+    showErrorMessage(error instanceof Error ? error.message : '任务上移失败，请重试')
+  }
+}
+
+// 展厅任务预设项下移
+const onClickMoveTaskPresetDown = async (task: TaskPresetDisplay) => {
+  try {
+    if (!selectedHallTaskList.value) {
+      showErrorMessage('未选择展厅任务')
+      return
+    }
+
+    const presetId = parseInt(selectedHallTaskList.value)
+    const itemId = parseInt(task.id)
+
+    console.log('展厅任务项下移:', { presetId, itemId, zoneName: task.zoneName })
+
+    await tourStore.moveTourPresetItemDown(presetId, itemId)
+    showSuccessMessage(`任务下移成功：${task.zoneName}`)
+  } catch (error) {
+    console.error('展厅任务项下移失败:', error)
+    showErrorMessage(error instanceof Error ? error.message : '任务下移失败，请重试')
   }
 }
 
@@ -6849,21 +6949,31 @@ const closeResultDialog = () => {
   object-fit: contain;
 }
 
-/* 移动按钮特殊样式 - 统一颜色 */
+/* 移动按钮特殊样式 - 蓝色主题 */
 .icon-btn.move-btn img {
-  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(118%) contrast(119%);
+  /* 蓝色滤镜，和编辑按钮颜色一致 */
+  filter: brightness(0) saturate(100%) invert(56%) sepia(89%) saturate(1475%) hue-rotate(166deg) brightness(103%) contrast(101%);
 }
 
-.icon-btn.move-btn:disabled img {
-  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(118%) contrast(119%) opacity(0.3);
-}
-
-.icon-btn.move-btn:disabled {
-  cursor: not-allowed;
+.icon-btn.move-btn:hover {
+  background: rgba(34, 187, 242, 0.15);
 }
 
 .icon-btn.move-btn:hover:not(:disabled) img {
-  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(86deg) brightness(140%) contrast(130%);
+  filter: brightness(0) saturate(100%) invert(71%) sepia(56%) saturate(2717%) hue-rotate(166deg) brightness(104%) contrast(98%);
+}
+
+.icon-btn.move-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.icon-btn.move-btn:disabled:hover {
+  background: transparent;
+}
+
+.icon-btn.move-btn:disabled img {
+  filter: brightness(0) saturate(100%) invert(56%) sepia(89%) saturate(1475%) hue-rotate(166deg) brightness(103%) contrast(101%) opacity(0.4);
 }
 
 

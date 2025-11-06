@@ -1092,7 +1092,7 @@ import { navigationApi, pauseSpeech, resumeSpeech, replaySpeech, skipSpeech } fr
 const waylineApi: any = { getFlightStatistics: async (_workspaceId: any, _days: number) => ({ code: 0, data: {} }) }
 const livestreamApi: any = { setQuality: async (_dockSn: string, _payload: any) => ({}) }
 const controlApi: any = { returnHome: async (_sn: string) => ({}) }
-import { config } from '../config/environment'
+import { getCurrentConfig } from '../config/environment'
 import { useSimpleWebSocket } from '../utils/simpleWebSocket'
 import { getVideoStreams, getVideoStream, getDefaultVideoType } from '../utils/videoCache'
 import * as echarts from 'echarts'
@@ -4330,7 +4330,8 @@ const startVideoPlayback = () => {
       if (flvjs.isSupported()) {
         
         // 将rtmp地址转换为http-flv地址
-        const flvUrl = videoStreamUrl.value.replace(/^rtmp:\/\/[^\/]+/, config.api.domain)
+        const currentConfig = getCurrentConfig()
+        const flvUrl = videoStreamUrl.value.replace(/^rtmp:\/\/[^\/]+/, currentConfig.api.domain)
         
         // 创建flv播放器
         videoPlayer.value = flvjs.createPlayer({

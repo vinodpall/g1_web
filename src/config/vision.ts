@@ -1,9 +1,16 @@
 // 视觉WebSocket配置
-import { config } from './environment'
+import { getCurrentConfig } from './environment'
+
+// 动态获取 WebSocket 服务器地址
+function getVisionServerHost(): string {
+  return import.meta.env.VITE_VISION_WS_HOST || getCurrentConfig().websocket.fullUrl
+}
 
 export const visionConfig = {
-  // WebSocket服务器地址
-  serverHost: import.meta.env.VITE_VISION_WS_HOST || config.websocket.fullUrl,
+  // WebSocket服务器地址（使用函数动态获取，避免在模块加载时固定）
+  get serverHost() {
+    return getVisionServerHost()
+  },
   
   // 连接配置
   maxReconnectAttempts: 5,

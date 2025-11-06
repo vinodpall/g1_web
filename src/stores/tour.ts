@@ -282,6 +282,117 @@ export const useTourStore = defineStore('tour', () => {
     }
   }
 
+  // 删除展厅任务预设项
+  const deleteTourPresetItem = async (presetId: number, itemId: number) => {
+    console.log('=== tourStore.deleteTourPresetItem 被调用 ===')
+    console.log('presetId:', presetId)
+    console.log('itemId:', itemId)
+    
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      console.error('未找到认证token')
+      itemsError.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoadingItems.value = true
+      itemsError.value = null
+      
+      console.log('=== 准备调用tourApi.deleteTourPresetItem ===')
+      await tourApi.deleteTourPresetItem(token, presetId, itemId)
+      
+      // 删除成功后，重新获取任务预设详情以刷新列表
+      await fetchTourPresetItems(presetId)
+      
+      console.log('展厅任务预设项删除成功')
+      return { success: true }
+    } catch (err) {
+      itemsError.value = err instanceof Error ? err.message : '删除展厅任务预设项失败'
+      console.error('=== 删除展厅任务预设项失败 ===', err)
+      throw err
+    } finally {
+      isLoadingItems.value = false
+      console.log('=== tourStore.deleteTourPresetItem 执行完成 ===')
+    }
+  }
+
+  // 展厅任务预设项上移
+  const moveTourPresetItemUp = async (presetId: number, itemId: number) => {
+    console.log('=== tourStore.moveTourPresetItemUp 被调用 ===')
+    console.log('presetId:', presetId)
+    console.log('itemId:', itemId)
+    
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      console.error('未找到认证token')
+      itemsError.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoadingItems.value = true
+      itemsError.value = null
+      
+      console.log('=== 准备调用tourApi.moveTourPresetItemUp ===')
+      await tourApi.moveTourPresetItemUp(token, presetId, itemId)
+      
+      // 移动成功后，重新获取任务预设详情以刷新列表
+      await fetchTourPresetItems(presetId)
+      
+      console.log('展厅任务预设项上移成功')
+      return { success: true }
+    } catch (err) {
+      itemsError.value = err instanceof Error ? err.message : '展厅任务预设项上移失败'
+      console.error('=== 展厅任务预设项上移失败 ===', err)
+      throw err
+    } finally {
+      isLoadingItems.value = false
+      console.log('=== tourStore.moveTourPresetItemUp 执行完成 ===')
+    }
+  }
+
+  // 展厅任务预设项下移
+  const moveTourPresetItemDown = async (presetId: number, itemId: number) => {
+    console.log('=== tourStore.moveTourPresetItemDown 被调用 ===')
+    console.log('presetId:', presetId)
+    console.log('itemId:', itemId)
+    
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      console.error('未找到认证token')
+      itemsError.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoadingItems.value = true
+      itemsError.value = null
+      
+      console.log('=== 准备调用tourApi.moveTourPresetItemDown ===')
+      await tourApi.moveTourPresetItemDown(token, presetId, itemId)
+      
+      // 移动成功后，重新获取任务预设详情以刷新列表
+      await fetchTourPresetItems(presetId)
+      
+      console.log('展厅任务预设项下移成功')
+      return { success: true }
+    } catch (err) {
+      itemsError.value = err instanceof Error ? err.message : '展厅任务预设项下移失败'
+      console.error('=== 展厅任务预设项下移失败 ===', err)
+      throw err
+    } finally {
+      isLoadingItems.value = false
+      console.log('=== tourStore.moveTourPresetItemDown 执行完成 ===')
+    }
+  }
+
   return {
     tourPresets,
     isLoading,
@@ -301,6 +412,9 @@ export const useTourStore = defineStore('tour', () => {
     clearPresetItems,
     addTourPresetItem,
     startTourPreset,
-    deleteTourPreset
+    deleteTourPreset,
+    deleteTourPresetItem,
+    moveTourPresetItemUp,
+    moveTourPresetItemDown
   }
 })

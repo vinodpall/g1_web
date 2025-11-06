@@ -313,6 +313,68 @@ export const usePointStore = defineStore('point', () => {
     }
   }
 
+  // 任务点上移
+  const movePointUp = async (pointId: number) => {
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+
+      console.log('任务点上移:', pointId)
+      await pointApi.movePointUp(token, pointId)
+
+      // 重新获取任务点列表以更新顺序
+      await fetchPoints(undefined, true)
+      
+      console.log('任务点上移成功')
+      return true
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '任务点上移失败'
+      console.error('任务点上移失败:', err)
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  // 任务点下移
+  const movePointDown = async (pointId: number) => {
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+
+      console.log('任务点下移:', pointId)
+      await pointApi.movePointDown(token, pointId)
+
+      // 重新获取任务点列表以更新顺序
+      await fetchPoints(undefined, true)
+      
+      console.log('任务点下移成功')
+      return true
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '任务点下移失败'
+      console.error('任务点下移失败:', err)
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     points,
     isLoading,
@@ -327,6 +389,8 @@ export const usePointStore = defineStore('point', () => {
     createPoint,
     updatePoint,
     deletePoint,
+    movePointUp,
+    movePointDown,
     clearCache,
     getPointById,
     getPointsByType,

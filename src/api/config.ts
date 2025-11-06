@@ -1,5 +1,5 @@
 // API配置文件
-import { config, getCurrentConfig } from '../config/environment'
+import { getCurrentConfig } from '../config/environment'
 
 // 根据环境动态获取API配置
 const getApiConfig = () => {
@@ -12,8 +12,9 @@ const getApiConfig = () => {
     }
   } else {
     // 开发环境：使用相对路径，依赖Vite代理
+    const currentConfig = getCurrentConfig()
     return {
-      baseUrl: config.api.baseUrl,
+      baseUrl: currentConfig.api.baseUrl,
       domain: ''
     }
   }

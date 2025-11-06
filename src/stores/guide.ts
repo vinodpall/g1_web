@@ -400,6 +400,68 @@ export const useGuideStore = defineStore('guide', () => {
     }
   }
 
+  // 讲解词上移
+  const moveScriptUp = async (scriptId: number) => {
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      console.log('讲解词上移:', scriptId)
+      await guideApi.moveScriptUp(token, scriptId)
+      
+      // 重新获取讲解词列表以更新顺序
+      await fetchScripts(true)
+      
+      console.log('讲解词上移成功')
+      return true
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '讲解词上移失败'
+      console.error('讲解词上移失败:', err)
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  // 讲解词下移
+  const moveScriptDown = async (scriptId: number) => {
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      console.log('讲解词下移:', scriptId)
+      await guideApi.moveScriptDown(token, scriptId)
+      
+      // 重新获取讲解词列表以更新顺序
+      await fetchScripts(true)
+      
+      console.log('讲解词下移成功')
+      return true
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '讲解词下移失败'
+      console.error('讲解词下移失败:', err)
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     // 状态
     pointNames,
@@ -429,6 +491,8 @@ export const useGuideStore = defineStore('guide', () => {
     deleteAudience,
     createScript,
     updateScript,
-    deleteScript
+    deleteScript,
+    moveScriptUp,
+    moveScriptDown
   }
 })

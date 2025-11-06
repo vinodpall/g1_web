@@ -61,21 +61,21 @@ const intranetConfig: EnvironmentConfig = {
 // 外网环境配置
 const internetConfig: EnvironmentConfig = {
   api: {
-    baseUrl: 'http://10.10.1.40:8000/api/v1',
-    domain: 'http://10.10.1.40:8000/api/v1'
+    baseUrl: 'http://10.10.1.41:8000/api/v1',
+    domain: 'http://10.10.1.41:8000/api/v1'
   },
   websocket: {
-    host: '10.10.1.40',
+    host: '10.10.1.41',
     port: 8000,
-    fullUrl: 'ws://10.10.1.40:8000'
+    fullUrl: 'ws://10.10.1.41:8000'
   },
   video: {
-    webrtcDomain: 'webrtc://10.10.1.40:8000',
-    rtmpDomain: 'rtmp://10.10.1.40:8000'
+    webrtcDomain: 'webrtc://10.10.1.41:8000',
+    rtmpDomain: 'rtmp://10.10.1.41:8000'
   },
   services: {
-    vision: 'http://10.10.1.40:8000',
-    livestream: 'http://10.10.1.40:8000'
+    vision: 'http://10.10.1.41:8000',
+    livestream: 'http://10.10.1.41:8000'
   }
 }
 
@@ -103,7 +103,7 @@ export function getCurrentEnvironment(): Environment {
     console.log('🔧 环境检测 (生产环境-自动检测):')
     console.log('- 访问 hostname:', hostname)
     console.log('- 检测为:', detectedEnv === Environment.INTRANET ? '内网' : '外网')
-    console.log('- WebSocket 地址:', detectedEnv === Environment.INTRANET ? 'ws://172.16.8.233:8000' : 'ws://10.10.1.40:8000')
+    console.log('- WebSocket 地址:', detectedEnv === Environment.INTRANET ? 'ws://172.16.8.233:8000' : 'ws://10.10.1.41:8000')
     
     return detectedEnv
   }
@@ -113,7 +113,7 @@ export function getCurrentEnvironment(): Environment {
     console.log('🔧 环境检测 (开发环境-环境变量):')
     console.log('- VITE_APP_ENVIRONMENT:', envFromVar)
     console.log('- 使用环境:', envFromVar === Environment.INTERNET ? '外网' : '内网')
-    console.log('- WebSocket 地址:', envFromVar === Environment.INTERNET ? 'ws://10.10.1.40:8000' : 'ws://172.16.8.233:8000')
+    console.log('- WebSocket 地址:', envFromVar === Environment.INTERNET ? 'ws://10.10.1.41:8000' : 'ws://172.16.8.233:8000')
     return envFromVar === Environment.INTERNET ? Environment.INTERNET : Environment.INTRANET
   }
   
@@ -132,7 +132,7 @@ export function getCurrentEnvironment(): Environment {
     console.log('🔧 环境检测 (开发环境-hostname):')
     console.log('- 访问 hostname:', hostname)
     console.log('- 检测为:', detectedEnv === Environment.INTRANET ? '内网' : '外网')
-    console.log('- WebSocket 地址:', detectedEnv === Environment.INTRANET ? 'ws://172.16.8.233:8000' : 'ws://10.10.1.40:8000')
+    console.log('- WebSocket 地址:', detectedEnv === Environment.INTRANET ? 'ws://172.16.8.233:8000' : 'ws://10.10.1.41:8000')
     
     return detectedEnv
   }
@@ -165,8 +165,13 @@ export function getCurrentConfig(): EnvironmentConfig {
   // 生产环境使用动态域名配置（同域部署）
   if (isProd && typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const hostname = window.location.hostname
     const host = window.location.host // 包含端口号
     const origin = window.location.origin
+    
+    // WebSocket 固定使用 8000 端口（后端服务端口）
+    const wsPort = 8000
+    const wsHost = `${hostname}:${wsPort}`
     
     return {
       api: {
@@ -174,17 +179,17 @@ export function getCurrentConfig(): EnvironmentConfig {
         domain: origin
       },
       websocket: {
-        host: window.location.hostname,
-        port: parseInt(window.location.port) || (window.location.protocol === 'https:' ? 443 : 80),
-        fullUrl: `${protocol}//${host}`
+        host: hostname,
+        port: wsPort,
+        fullUrl: `${protocol}//${wsHost}`
       },
       video: {
-        webrtcDomain: `webrtc://${host}`,
-        rtmpDomain: `rtmp://${host}`
+        webrtcDomain: `webrtc://${wsHost}`,
+        rtmpDomain: `rtmp://${wsHost}`
       },
       services: {
-        vision: origin,
-        livestream: origin
+        vision: `${window.location.protocol}//${wsHost}`,
+        livestream: `${window.location.protocol}//${wsHost}`
       }
     }
   }
@@ -199,11 +204,12 @@ export function setEnvironment(env: Environment): void {
   console.log('如需切换环境，请修改 .env 文件中的 VITE_APP_ENVIRONMENT 变量')
 }
 
-// 导出当前配置的便捷访问
-export const config = getCurrentConfig()
+// 导出配置的动态获取函数（不要直接导出固定的config，避免在模块加载时固定配置）
+// 如果需要配置，请调用 getCurrentConfig() 函数
+// export const config = getCurrentConfig()  // ❌ 不要这样做，会在模块加载时固定配置
 
-// 导出环境类型
-export const currentEnvironment = getCurrentEnvironment()
+// 导出环境类型的动态获取函数
+// export const currentEnvironment = getCurrentEnvironment()  // ❌ 不要这样做，会在模块加载时固定环境
 
 // 强制刷新环境配置（用于登录时确保配置正确）
 export function refreshEnvironmentConfig(): EnvironmentConfig {
@@ -223,11 +229,13 @@ export function refreshEnvironmentConfig(): EnvironmentConfig {
 
 // 调试函数
 export function logEnvironmentConfig(): void {
+  const currentEnv = getCurrentEnvironment()
+  const currentConfig = getCurrentConfig()
   console.log('🔧 当前环境配置:')
-  console.log('- 环境类型:', currentEnvironment)
-  console.log('- API域名:', config.api.domain)
-  console.log('- WebSocket地址:', config.websocket.fullUrl)
-  console.log('- WebRTC域名:', config.video.webrtcDomain)
+  console.log('- 环境类型:', currentEnv)
+  console.log('- API域名:', currentConfig.api.domain)
+  console.log('- WebSocket地址:', currentConfig.websocket.fullUrl)
+  console.log('- WebRTC域名:', currentConfig.video.webrtcDomain)
   console.log('- 生产环境:', import.meta.env.PROD ? '是' : '否')
   console.log('- 当前域名:', typeof window !== 'undefined' ? window.location.origin : 'N/A')
   try {

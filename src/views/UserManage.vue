@@ -121,6 +121,22 @@
                   </div>
                   <div class="mission-td introduce-col-actions">
                     <div class="user-action-btns">
+                      <button 
+                        class="icon-btn move-btn" 
+                        title="上移" 
+                        @click="moveScriptUp(item.id)"
+                        :disabled="index === 0"
+                      >
+                        <img :src="upIcon" />
+                      </button>
+                      <button 
+                        class="icon-btn move-btn" 
+                        title="下移" 
+                        @click="moveScriptDown(item.id)"
+                        :disabled="index === introduceContents.length - 1"
+                      >
+                        <img :src="downIcon" />
+                      </button>
                       <button class="icon-btn speak-btn" title="语音播报" @click="handleSpeakTest(item)">
                         <img :src="speakIcon" />
                       </button>
@@ -558,6 +574,8 @@ import introduceIcon from '@/assets/source_data/robot_source/introduce.svg'
 import editIcon from '@/assets/source_data/svg_data/edit.svg'
 import deleteIcon from '@/assets/source_data/svg_data/delete.svg'
 import speakIcon from '@/assets/source_data/robot_source/speak.svg'
+import upIcon from '@/assets/source_data/control_data/up.svg'
+import downIcon from '@/assets/source_data/control_data/down.svg'
 
 const router = useRouter()
 const route = useRoute()
@@ -1680,6 +1698,58 @@ const showContentDetail = (content: string) => {
   showContentDetailDialog.value = true
 }
 
+// 讲解词上移
+const moveScriptUp = async (scriptId: string) => {
+  try {
+    const id = parseInt(scriptId)
+    await guideStore.moveScriptUp(id)
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '移动成功',
+      message: '',
+      details: '讲解词已上移'
+    }
+  } catch (error) {
+    console.error('讲解词上移失败:', error)
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '移动失败',
+      message: '',
+      details: error instanceof Error ? error.message : '讲解词上移失败，请稍后重试'
+    }
+  }
+}
+
+// 讲解词下移
+const moveScriptDown = async (scriptId: string) => {
+  try {
+    const id = parseInt(scriptId)
+    await guideStore.moveScriptDown(id)
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '移动成功',
+      message: '',
+      details: '讲解词已下移'
+    }
+  } catch (error) {
+    console.error('讲解词下移失败:', error)
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '移动失败',
+      message: '',
+      details: error instanceof Error ? error.message : '讲解词下移失败，请稍后重试'
+    }
+  }
+}
+
 // 确认编辑讲解词
 const confirmEditIntroduceContent = async () => {
   if (!editIntroduceContentForm.value.content.trim()) {
@@ -1977,6 +2047,30 @@ onMounted(async () => {
 }
 .icon-btn.speak-btn:hover img {
   filter: brightness(1.8);
+}
+/* 移动按钮特殊样式 */
+.icon-btn.move-btn {
+  /* padding 与其他按钮保持一致 */
+}
+.icon-btn.move-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.icon-btn.move-btn:disabled:hover {
+  background: transparent;
+}
+.icon-btn.move-btn img {
+  /* 蓝色滤镜，和编辑按钮颜色一致 */
+  filter: brightness(0) saturate(100%) invert(56%) sepia(89%) saturate(1475%) hue-rotate(166deg) brightness(103%) contrast(101%);
+}
+.icon-btn.move-btn:hover {
+  background: rgba(34, 187, 242, 0.15);
+}
+.icon-btn.move-btn:hover img {
+  filter: brightness(0) saturate(100%) invert(71%) sepia(56%) saturate(2717%) hue-rotate(166deg) brightness(104%) contrast(98%);
+}
+.icon-btn.move-btn:disabled img {
+  filter: brightness(0) saturate(100%) invert(56%) sepia(89%) saturate(1475%) hue-rotate(166deg) brightness(103%) contrast(101%) opacity(0.4);
 }
 .add-user-form {
   display: flex;
@@ -2346,9 +2440,9 @@ onMounted(async () => {
 
 .introduce-table-header .introduce-col-actions,
 .mission-tr .introduce-col-actions {
-  flex: 0 0 120px;
-  max-width: 120px;
-  min-width: 120px;
+  flex: 0 0 180px;
+  max-width: 180px;
+  min-width: 180px;
   text-align: center;
   justify-content: center;
 }
