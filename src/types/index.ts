@@ -326,6 +326,7 @@ export interface TourPreset {
 export interface Point {
   id: number
   zone_id: number
+  seq: number // 任务点序号
   type: 'explain' | 'action'  // explain为讲解点，action为辅助点
   point_name_id: number
   custom_name: string // 自定义任务点名称

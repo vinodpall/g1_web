@@ -168,14 +168,13 @@ export const useTourStore = defineStore('tour', () => {
   }
 
   // 添加任务预设项（展区任务）
-  const addTourPresetItem = async (presetId: number, zoneId: number, seq?: number) => {
+  const addTourPresetItem = async (presetId: number, zoneId: number) => {
     const userStore = useUserStore()
     const token = userStore.token
     
     console.log('=== 添加任务预设项 ===')
     console.log('预设ID:', presetId)
     console.log('展区ID:', zoneId)
-    console.log('序号:', seq)
     
     if (!token) {
       const errorMsg = '未找到认证token'
@@ -187,12 +186,10 @@ export const useTourStore = defineStore('tour', () => {
       isLoadingItems.value = true
       itemsError.value = null
       
-      const itemData: { zone_id: number, seq?: number } = { zone_id: zoneId }
-      if (seq !== undefined) {
-        itemData.seq = seq
-      }
+      // 只传 zone_id，不传 seq
+      const itemData = { zone_id: zoneId }
       
-      console.log('开始添加任务预设项...')
+      console.log('开始添加任务预设项...', itemData)
       const response = await tourApi.addTourPresetItem(token, presetId, itemData)
       
       // 添加成功后，重新获取任务预设详情以刷新列表

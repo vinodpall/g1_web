@@ -1476,24 +1476,26 @@ const currentTaskPoints = computed(() => {
   // 根据当前选中的展区获取任务点列表
   const points = pointStore.getPointsByZoneId(zoneId)
   
-  // 转换为TaskPoint格式以兼容现有UI
-  return points.map(point => {
-    const pointName = guideStore.getPointNameById(point.point_name_id)
-    
-    return {
-      id: point.id.toString(),
-      areaId: point.zone_id.toString(),
-      name: point.custom_name || pointName?.name || '未知点位', // 优先显示custom_name
-      x: point.pose_x,
-      y: point.pose_y,
-      angle: point.pose_theta, // 直接使用theta原始值
-      pointType: point.type === 'explain' ? '讲解点' : '辅助点',
-      robotAction: getRobotActionName(point.action_code || undefined), // 获取动作中文名称
-      robotDirection: parseRobotDirection(point.action_params), // 从action_params解析机器人朝向
-      commentary: `点位${point.id}`, // API中没有此字段，使用默认值
-      createdTime: '' // API中没有此字段，暂时设为空
-    }
-  })
+  // 按seq从小到大排序，然后转换为TaskPoint格式以兼容现有UI
+  return points
+    .sort((a, b) => a.seq - b.seq)
+    .map(point => {
+      const pointName = guideStore.getPointNameById(point.point_name_id)
+      
+      return {
+        id: point.id.toString(),
+        areaId: point.zone_id.toString(),
+        name: point.custom_name || pointName?.name || '未知点位', // 优先显示custom_name
+        x: point.pose_x,
+        y: point.pose_y,
+        angle: point.pose_theta, // 直接使用theta原始值
+        pointType: point.type === 'explain' ? '讲解点' : '辅助点',
+        robotAction: getRobotActionName(point.action_code || undefined), // 获取动作中文名称
+        robotDirection: parseRobotDirection(point.action_params), // 从action_params解析机器人朝向
+        commentary: `点位${point.id}`, // API中没有此字段，使用默认值
+        createdTime: '' // API中没有此字段，暂时设为空
+      }
+    })
 })
 
 // 弹窗状态
@@ -1713,12 +1715,12 @@ const currentMultiTasks = computed((): TaskPresetDisplay[] => {
     return []
   }
   
-  // 按id排序，然后序号从1开始
+  // 按seq从小到大排序，然后序号从1开始显示
   return tourStore.currentPresetItems
-    .sort((a, b) => a.id - b.id)
+    .sort((a, b) => a.seq - b.seq)
     .map((item, index) => ({
       id: item.id.toString(),
-      seq: index + 1, // 序号从1开始
+      seq: index + 1, // 显示序号从1开始
       zoneName: item.zone_name,
       hallName: item.hall_alias || item.hall_nav_name,
       pointsCount: item.points_count,

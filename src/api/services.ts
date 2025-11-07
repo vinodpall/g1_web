@@ -1334,7 +1334,7 @@ export const tourApi = {
   },
 
   // 添加任务预设项（展区任务）
-  addTourPresetItem: (token: string, presetId: number, itemData: { zone_id: number, seq?: number }) => {
+  addTourPresetItem: (token: string, presetId: number, itemData: { zone_id: number }) => {
     const url = `${API_BASE_URL}/tours/presets/${presetId}/items`
     
     console.log('tourApi.addTourPresetItem 被调用')
