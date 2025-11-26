@@ -4599,6 +4599,8 @@ const handleConfirmAddTaskPoint = async () => {
         if (!isNaN(videoIdNum)) {
           pointData.screen_video_id = videoIdNum
         }
+      } else {
+        pointData.screen_video_id = null
       }
       const updatedPoint = await pointStore.updatePoint(parseInt(editingTaskPoint.value.id), pointData)
       
@@ -4656,6 +4658,8 @@ const handleConfirmAddTaskPoint = async () => {
         if (!isNaN(videoIdNum)) {
           pointData.screen_video_id = videoIdNum
         }
+      } else {
+        pointData.screen_video_id = null
       }
       const newPoint = await pointStore.createPoint(pointData)
       
