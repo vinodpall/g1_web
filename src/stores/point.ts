@@ -151,7 +151,8 @@ export const usePointStore = defineStore('point', () => {
     action_code?: string,
     action_params?: string,
     robot_sn: string,
-    screen_video_id?: number
+    screen_video_id?: number,
+    no_wait?: boolean
   }) => {
     const userStore = useUserStore()
     const token = userStore.token
@@ -201,6 +202,11 @@ export const usePointStore = defineStore('point', () => {
         requestData.screen_video_id = pointData.screen_video_id
       }
 
+      // 传递到点不停开关
+      if (pointData.no_wait !== undefined) {
+        requestData.no_wait = pointData.no_wait === true
+      }
+
       console.log('创建任务点:', requestData)
       const response = await pointApi.createPoint(token, requestData)
 
@@ -230,7 +236,8 @@ export const usePointStore = defineStore('point', () => {
     action_code?: string,
     action_params?: string,
     robot_sn?: string,
-    screen_video_id?: number
+    screen_video_id?: number,
+    no_wait?: boolean
   }) => {
     const userStore = useUserStore()
     const token = userStore.token
@@ -260,6 +267,11 @@ export const usePointStore = defineStore('point', () => {
       // 如果提供了screen_video_id，添加到请求数据中
       if (pointData.screen_video_id !== undefined) {
         requestData.screen_video_id = pointData.screen_video_id
+      }
+
+      // 如果提供了no_wait，添加到请求数据中
+      if (pointData.no_wait !== undefined) {
+        requestData.no_wait = pointData.no_wait === true
       }
 
       console.log('更新任务点:', pointId, requestData)

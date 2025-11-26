@@ -230,6 +230,40 @@ export const useGuideStore = defineStore('guide', () => {
     }
   }
 
+  // 更新点位名称
+  const updatePointName = async (pointNameId: number, name: string) => {
+    const userStore = useUserStore()
+    const token = userStore.token
+
+    if (!token) {
+      error.value = '未找到认证token'
+      throw new Error('未找到认证token')
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+      
+      console.log('更新点位名称:', pointNameId, name)
+      const updatedPoint = await guideApi.updatePointName(token, pointNameId, name)
+      
+      // 更新本地缓存中的点位名称
+      const index = pointNames.value.findIndex(point => point.id === pointNameId)
+      if (index !== -1) {
+        pointNames.value[index] = updatedPoint
+      }
+      
+      console.log('点位名称更新成功')
+      return updatedPoint
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '更新点位名称失败'
+      console.error('更新点位名称失败:', err)
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   // 创建讲解对象
   const createAudience = async (name: string) => {
     const userStore = useUserStore()
@@ -487,6 +521,7 @@ export const useGuideStore = defineStore('guide', () => {
     getScriptsByAudienceId,
     createPointName,
     deletePointName,
+    updatePointName,
     createAudience,
     deleteAudience,
     createScript,

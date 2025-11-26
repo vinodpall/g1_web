@@ -470,13 +470,22 @@
                 class="point-item"
               >
                 <span class="point-name">{{ point.name }}</span>
-                <button 
-                  class="point-delete-btn" 
-                  @click="deletePointName(point.id)"
-                  title="删除"
-                >
-                  <img :src="deleteIcon" />
-                </button>
+                <div class="point-item-actions">
+                  <button 
+                    class="point-action-btn" 
+                    @click="editPointName(point.id, point.name)"
+                    title="编辑"
+                  >
+                    <img :src="editIcon" />
+                  </button>
+                  <button 
+                    class="point-action-btn" 
+                    @click="deletePointName(point.id)"
+                    title="删除"
+                  >
+                    <img :src="deleteIcon" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -502,6 +511,30 @@
         <div class="custom-dialog-actions">
           <button class="mission-btn mission-btn-stop" @click="confirmDeletePointName">确认删除</button>
           <button class="mission-btn mission-btn-cancel" @click="showDeletePointNameDialog = false">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑点位名称弹窗 -->
+    <div v-if="showEditPointNameDialog" class="custom-dialog-mask">
+      <div class="custom-dialog">
+        <div class="custom-dialog-title">编辑点位名称</div>
+        <div class="custom-dialog-content">
+          <div class="add-user-form">
+            <div class="add-user-form-row">
+              <label>点位名称：</label>
+              <input 
+                v-model="editPointNameForm.name" 
+                class="user-input" 
+                placeholder="请输入点位名称"
+                maxlength="50"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="custom-dialog-actions">
+          <button class="mission-btn mission-btn-cancel" @click="showEditPointNameDialog = false">取消</button>
+          <button class="mission-btn mission-btn-pause" @click="confirmEditPointName">确定</button>
         </div>
       </div>
     </div>
@@ -715,6 +748,11 @@ const selectedPointForContent = ref('')
 const showDeletePointNameDialog = ref(false)
 const deletePointNameId = ref<number | null>(null)
 const deletePointNameText = ref('')
+const showEditPointNameDialog = ref(false)
+const editPointNameForm = ref({
+  id: 0,
+  name: ''
+})
 
 // 使用computed从guideStore获取点位名称
 const pointNames = computed(() => 
@@ -1561,6 +1599,71 @@ const confirmDeletePointName = async () => {
   }
 }
 
+// 编辑点位名称
+const editPointName = (pointId: string, pointName: string) => {
+  editPointNameForm.value = {
+    id: parseInt(pointId),
+    name: pointName
+  }
+  showEditPointNameDialog.value = true
+}
+
+// 确认编辑点位名称
+const confirmEditPointName = async () => {
+  if (!editPointNameForm.value.name.trim()) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '请输入点位名称'
+    }
+    return
+  }
+  
+  // 检查是否已存在同名点位（排除自己）
+  const exists = pointNames.value.some(
+    point => point.name === editPointNameForm.value.name.trim() && parseInt(point.id) !== editPointNameForm.value.id
+  )
+  if (exists) {
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '操作失败',
+      message: '',
+      details: '该点位名称已存在'
+    }
+    return
+  }
+  
+  try {
+    await guideStore.updatePointName(editPointNameForm.value.id, editPointNameForm.value.name.trim())
+    
+    // 显示成功提示
+    resultDialog.value = {
+      show: true,
+      type: 'success',
+      title: '更新成功',
+      message: '',
+      details: '点位名称已成功更新'
+    }
+    
+    // 关闭编辑弹窗
+    showEditPointNameDialog.value = false
+  } catch (error) {
+    console.error('更新点位名称失败:', error)
+    
+    // 显示错误提示
+    resultDialog.value = {
+      show: true,
+      type: 'error',
+      title: '更新失败',
+      message: '',
+      details: error instanceof Error ? error.message : '更新点位名称失败，请重试'
+    }
+  }
+}
+
 // 编辑讲解词
 const editIntroduceContent = (item: any) => {
   editingIntroduceContent.value = item
@@ -2372,25 +2475,40 @@ onMounted(async () => {
   flex: 1;
 }
 
-.point-delete-btn {
+.point-item-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.point-action-btn {
   background: transparent;
   border: none;
-  padding: 4px;
+  padding: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   border-radius: 4px;
   transition: background 0.2s;
+  width: 28px;
+  height: 28px;
 }
 
-.point-delete-btn:hover {
-  background: rgba(255, 107, 107, 0.2);
+.point-action-btn:hover {
+  background: rgba(34, 187, 242, 0.15);
 }
 
-.point-delete-btn img {
+.point-action-btn img {
   width: 16px;
   height: 16px;
   object-fit: contain;
+  /* 蓝色滤镜，和编辑按钮颜色一致 */
+  filter: brightness(0) saturate(100%) invert(56%) sepia(89%) saturate(1475%) hue-rotate(166deg) brightness(103%) contrast(101%);
+}
+
+.point-action-btn:hover img {
+  filter: brightness(0) saturate(100%) invert(71%) sepia(56%) saturate(2717%) hue-rotate(166deg) brightness(104%) contrast(98%);
 }
 
 /* 自定义滚动条样式 */

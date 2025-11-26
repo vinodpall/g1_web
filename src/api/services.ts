@@ -654,6 +654,48 @@ export const guideApi = {
     })
   },
 
+  // 更新点位名称
+  updatePointName: (token: string, pointNameId: number, name: string) => {
+    const url = `${API_BASE_URL}/guide/point-names/${pointNameId}`
+    const requestData = { name }
+    
+    console.log('guideApi.updatePointName 被调用')
+    console.log('请求URL:', url)
+    console.log('点位名称ID:', pointNameId)
+    console.log('请求参数:', requestData)
+    console.log('请求token:', token ? '存在' : '不存在')
+    
+    return fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    }).then(response => {
+      console.log('更新点位名称API响应状态:', response.status)
+      console.log('更新点位名称API响应OK:', response.ok)
+      
+      if (!response.ok) {
+        return response.json()
+          .then(errorData => {
+            console.error('更新点位名称API错误响应:', errorData)
+            const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+            throw new Error(errorMessage)
+          }, () => {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          })
+      }
+      return response.json()
+    }).then(data => {
+      console.log('更新点位名称API响应数据:', data)
+      return data
+    }).catch(error => {
+      console.error('更新点位名称API请求失败:', error)
+      throw error
+    })
+  },
+
   // 获取讲解对象列表
   getAudiences: (token: string) => {
     const url = `${API_BASE_URL}/guide/audiences`
@@ -2076,7 +2118,9 @@ export const pointApi = {
     pose_theta: number,
     action_code: string,
     action_params: string,
-    robot_sn: string
+    robot_sn: string,
+    screen_video_id?: number,
+    no_wait?: boolean
   }) => {
     const url = `${API_BASE_URL}/points`
     

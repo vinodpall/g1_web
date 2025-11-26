@@ -1762,6 +1762,12 @@ const handleStartTaskClick = async () => {
     return
   }
   
+  // 定位异常拦截：定位异常时禁止启动任务
+  if (!localizationStatus.value) {
+    displayErrorMessage('定位异常，无法启动任务！')
+    return
+  }
+  
   try {
     // 先确保数据已加载
     if (!tourStore.tourPresets.length) {
@@ -1804,6 +1810,12 @@ const handleConfirmStartTask = async () => {
   
   if (!selectedAudienceId.value) {
     displayErrorMessage('请选择讲解对象')
+    return
+  }
+
+  // 二次校验：若在弹窗期间定位变为异常，阻止启动
+  if (!localizationStatus.value) {
+    displayErrorMessage('定位异常，无法启动任务！')
     return
   }
   
@@ -2451,6 +2463,44 @@ const isTaskPaused = computed(() => {
   }
   
   return false
+})
+
+// 自动暂停触发锁，防止重复触发
+const autoPauseLock = ref(false)
+
+// 监听定位状态变化：任务执行中且按钮为“暂停任务”时，定位异常自动暂停任务
+watch(() => localizationStatus.value, async (now, prev) => {
+  try {
+    // 仅在从正常 -> 异常时触发
+    if (prev === true && now === false) {
+      // 任务正在执行 且 当前按钮文本应为“暂停任务”（即未处于暂停态）
+      if (isTaskExecuting.value && !isTaskPaused.value && !autoPauseLock.value) {
+        autoPauseLock.value = true
+        const token = userStore.token || localStorage.getItem('token') || ''
+        const currentSn = getWebSocketSn()
+        if (token && currentSn && currentSn !== 'broadcast') {
+          await navigationApi.pauseResumeNav(token, {
+            sn: currentSn,
+            action: 1, // 1 = 暂停导航
+            timeout: 10
+          })
+          displaySuccessMessage('定位异常，已将任务暂停！')
+        }
+      }
+    }
+
+    // 定位恢复后，解除一次性触发锁
+    if (now === true) {
+      autoPauseLock.value = false
+    }
+  } catch (err) {
+    console.error('定位异常自动暂停任务失败:', err)
+  }
+})
+
+// 当任务不再执行时，解除自动暂停触发锁
+watch(() => isTaskExecuting.value, (executing) => {
+  if (!executing) autoPauseLock.value = false
 })
 
 // 暂停/恢复任务执行

@@ -445,17 +445,29 @@
                 </span>
               </div>
             </div>
-            <div class="add-user-form-row">
-              <label>X坐标：</label>
-              <input v-model.number="addTaskPointForm.x" type="number" step="0.01" class="user-input no-spinners" placeholder="请输入X坐标" />
-            </div>
-            <div class="add-user-form-row">
-              <label>Y坐标：</label>
-              <input v-model.number="addTaskPointForm.y" type="number" step="0.01" class="user-input no-spinners" placeholder="请输入Y坐标" />
-            </div>
-            <div class="add-user-form-row">
-              <label>角度：</label>
-              <input v-model.number="addTaskPointForm.angle" type="number" step="0.001" class="user-input no-spinners" placeholder="请输入角度(弧度值)" />
+            <div class="coordinates-with-refresh">
+              <div class="coordinates-rows">
+                <div class="add-user-form-row">
+                  <label>X坐标：</label>
+                  <input v-model.number="addTaskPointForm.x" type="number" step="0.01" class="user-input no-spinners" placeholder="请输入X坐标" />
+                </div>
+                <div class="add-user-form-row">
+                  <label>Y坐标：</label>
+                  <input v-model.number="addTaskPointForm.y" type="number" step="0.01" class="user-input no-spinners" placeholder="请输入Y坐标" />
+                </div>
+                <div class="add-user-form-row">
+                  <label>角度：</label>
+                  <input v-model.number="addTaskPointForm.angle" type="number" step="0.001" class="user-input no-spinners" placeholder="请输入角度(弧度值)" />
+                </div>
+              </div>
+              <button 
+                v-if="editingTaskPoint" 
+                class="refresh-position-btn-slim" 
+                @click="refreshPosition"
+                title="刷新位置"
+              >
+                刷新位置
+              </button>
             </div>
             <div class="add-user-form-row">
               <label>机器人动作：</label>
@@ -537,6 +549,16 @@
                   </svg>
                 </span>
               </div>
+            </div>
+            <div class="add-user-form-row">
+              <label>到点不停：</label>
+              <span 
+                class="switch-container" 
+                :class="{ active: addTaskPointForm.noWait }" 
+                @click="addTaskPointForm.noWait = !addTaskPointForm.noWait"
+              >
+                <span class="switch-toggle"></span>
+              </span>
             </div>
           </div>
         </div>
@@ -1537,7 +1559,8 @@ const addTaskPointForm = ref({
   holdTime: 1.5, // 动作持续，默认1.5秒
   robotDirection: '前进',
   waitTime: 0, // 任务等待，默认0秒
-  videoId: '' // 视频选择，默认为空（无）
+  videoId: '', // 视频选择，默认为空（无）
+  noWait: false // 到点不停，默认关闭
 })
 
 // 机器人动作列表
@@ -1653,6 +1676,31 @@ watch(() => addTaskPointForm.value.pointType, (newPointType) => {
       addTaskPointForm.value.pointNameId = guideStore.pointNames[0].id.toString()
     }
   }
+})
+
+// 监听讲解点位变化，智能同步任务点名称
+watch(() => addTaskPointForm.value.pointNameId, (newPointNameId, oldPointNameId) => {
+  // 只在点位类型为讲解点时处理
+  if (addTaskPointForm.value.pointType !== '讲解点' || !newPointNameId) {
+    return
+  }
+  
+  // 获取旧的讲解点位名称
+  let oldPointName = ''
+  if (oldPointNameId) {
+    const oldPoint = guideStore.getPointNameById(parseInt(oldPointNameId))
+    oldPointName = oldPoint?.name || ''
+  }
+  
+  // 获取新的讲解点位名称
+  const newPoint = guideStore.getPointNameById(parseInt(newPointNameId))
+  const newPointName = newPoint?.name || ''
+  
+  // 如果当前任务点名称为空，或者与旧的讲解点位名称一致，则自动同步新的讲解点位名称
+  if (!addTaskPointForm.value.name || addTaskPointForm.value.name === oldPointName) {
+    addTaskPointForm.value.name = newPointName
+  }
+  // 否则说明用户自定义了名称，不自动修改
 })
 
 // 多任务管理相关数据
@@ -4472,9 +4520,14 @@ const handleAddTaskPoint = async () => {
   const defaultAction = robotActions.value.find(action => action.recommended)
   
   editingTaskPoint.value = null
-  addTaskPointForm.value = { 
-    name: '',
-    pointNameId: guideStore.pointNames.length > 0 ? guideStore.pointNames[0].id.toString() : '',
+  
+  // 如果有讲解点位，自动使用第一个点位的名称作为任务点名称
+  const defaultPointNameId = guideStore.pointNames.length > 0 ? guideStore.pointNames[0].id.toString() : ''
+  const defaultPointName = defaultPointNameId && guideStore.pointNames.length > 0 ? guideStore.pointNames[0].name : ''
+  
+  addTaskPointForm.value = {
+    name: defaultPointName, // 自动填充第一个讲解点位的名称
+    pointNameId: defaultPointNameId,
     x: defaultX, 
     y: defaultY, 
     angle: defaultAngle, 
@@ -4483,7 +4536,8 @@ const handleAddTaskPoint = async () => {
     holdTime: 1.5, // 动作持续，默认1.5秒
     robotDirection: '前进',
     waitTime: 0, // 任务等待，默认0秒
-    videoId: '' // 视频选择，默认为空（无）
+    videoId: '', // 视频选择，默认为空（无）
+    noWait: false // 到点不停，默认关闭
   }
   showAddTaskPointDialog.value = true
 }
@@ -4589,7 +4643,8 @@ const handleConfirmAddTaskPoint = async () => {
         pose_theta: addTaskPointForm.value.angle, // 直接使用原始值
         action_code: addTaskPointForm.value.robotAction === 'none' ? '' : addTaskPointForm.value.robotAction, // 如果选择"无"，则保存为空字符串
         action_params: actionParams,
-        robot_sn: currentSn // 使用当前机器人的SN
+        robot_sn: currentSn, // 使用当前机器人的SN
+        no_wait: addTaskPointForm.value.noWait === true
       }
       
       // 如果选择了视频（不是"无"），添加screen_video_id字段
@@ -4599,6 +4654,8 @@ const handleConfirmAddTaskPoint = async () => {
         if (!isNaN(videoIdNum)) {
           pointData.screen_video_id = videoIdNum
         }
+      } else {
+        pointData.screen_video_id = null
       }
       const updatedPoint = await pointStore.updatePoint(parseInt(editingTaskPoint.value.id), pointData)
       
@@ -4646,7 +4703,8 @@ const handleConfirmAddTaskPoint = async () => {
         pose_theta: addTaskPointForm.value.angle, // 直接使用原始值
         action_code: addTaskPointForm.value.robotAction === 'none' ? '' : addTaskPointForm.value.robotAction, // 如果选择"无"，则保存为空字符串
         action_params: actionParams,
-        robot_sn: currentSn // 使用当前机器人的SN
+        robot_sn: currentSn, // 使用当前机器人的SN
+        no_wait: addTaskPointForm.value.noWait === true
       }
       
       // 如果选择了视频（不是"无"），添加screen_video_id字段
@@ -4656,6 +4714,8 @@ const handleConfirmAddTaskPoint = async () => {
         if (!isNaN(videoIdNum)) {
           pointData.screen_video_id = videoIdNum
         }
+      } else {
+        pointData.screen_video_id = null
       }
       const newPoint = await pointStore.createPoint(pointData)
       
@@ -4686,6 +4746,37 @@ const handleCancelAddTaskPoint = () => {
   editingTaskPoint.value = null
 }
 
+// 刷新位置 - 获取机器人当前位置并填充到表单
+const refreshPosition = () => {
+  // 获取当前机器人的位置数据
+  const currentSn = getWebSocketSn()
+  let robotPose = getRobotPose(currentSn)
+  
+  // 如果当前SN没有数据，尝试使用broadcast
+  if (!robotPose && currentSn !== 'broadcast') {
+    robotPose = getRobotPose('broadcast')
+  }
+  
+  if (robotPose && typeof robotPose.x === 'number' && typeof robotPose.y === 'number' && typeof robotPose.theta === 'number') {
+    // 更新表单中的坐标信息
+    addTaskPointForm.value.x = robotPose.x
+    addTaskPointForm.value.y = robotPose.y
+    addTaskPointForm.value.angle = robotPose.theta
+    
+    console.log('刷新位置成功:', { 
+      sn: currentSn, 
+      x: robotPose.x, 
+      y: robotPose.y, 
+      theta: robotPose.theta 
+    })
+    
+    showSuccessMessage('位置信息已更新')
+  } else {
+    console.warn('无法获取机器人位置数据:', { sn: currentSn, robotPose })
+    showErrorMessage('无法获取机器人位置，请确保机器人已连接')
+  }
+}
+
 // 编辑任务点
 const onClickEditTaskPoint = async (point: TaskPoint) => {
   // 每次打开编辑对话框时都刷新视频列表
@@ -4710,7 +4801,8 @@ const onClickEditTaskPoint = async (point: TaskPoint) => {
     holdTime: parseHoldTime(originalPoint?.action_params || null), // 从action_params解析动作持续时间
     robotDirection: parseRobotDirection(originalPoint?.action_params || null), // 从action_params解析机器人朝向
     waitTime: parseWaitTime(originalPoint?.action_params || null), // 从action_params解析任务等待时间
-    videoId: getVideoIdFromPoint((originalPoint as any)?.screen_video_id) // 直接从Point对象获取视频ID
+    videoId: getVideoIdFromPoint((originalPoint as any)?.screen_video_id), // 直接从Point对象获取视频ID
+    noWait: (originalPoint as any)?.no_wait === true
   }
   showAddTaskPointDialog.value = true
 }
@@ -6758,6 +6850,53 @@ const closeResultDialog = () => {
   font-size: 14px;
   flex-shrink: 0;
   min-width: fit-content;
+}
+
+/* 带刷新按钮的坐标组合样式 */
+.add-user-form .coordinates-with-refresh {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.add-user-form .coordinates-rows {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 细长型竖向刷新位置按钮 */
+.add-user-form .refresh-position-btn-slim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  background: linear-gradient(180deg, #1a5a7a 0%, #0c3c56 100%);
+  border: 1px solid rgba(103, 213, 253, 0.3);
+  border-radius: 4px;
+  color: #67d5fd;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  width: 36px;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 3px;
+}
+
+.add-user-form .refresh-position-btn-slim:hover {
+  background: linear-gradient(180deg, #2a6a8a 0%, #1c4c66 100%);
+  border-color: rgba(103, 213, 253, 0.6);
+  box-shadow: 0 0 8px rgba(103, 213, 253, 0.3);
+  transform: translateX(2px);
+}
+
+.add-user-form .refresh-position-btn-slim:active {
+  transform: translateX(0);
+  box-shadow: 0 0 4px rgba(103, 213, 253, 0.2);
 }
 
 /* 展区名称输入组合样式 */

@@ -337,6 +337,7 @@ export interface Point {
   action_code: string | null
   action_params: string | null
   screen_video_id?: number | null // 视频ID，可选字段
+  no_wait?: boolean // 到点不停，可选字段
 }
 
 // 任务预设详情中的任务点信息（已在上方定义）
