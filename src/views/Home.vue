@@ -81,11 +81,11 @@
                     <div class="task-point-details">
                       <span class="task-detail-item">
                         <span class="detail-label">展区：</span>
-                        <span class="detail-value">{{ point.zone_name || '--' }}</span>
+                        <span class="detail-value" :title="point.zone_name || '--'">{{ formatString(point.zone_name || '--') }}</span>
                       </span>
                       <span class="task-detail-item">
                         <span class="detail-label">点位：</span>
-                        <span class="detail-value">{{ point.custom_name || point.name || '--' }}</span>
+                        <span class="detail-value" :title="point.custom_name || point.name || '--'">{{ formatString(point.custom_name || point.name || '--') }}</span>
                       </span>
                       <span class="task-detail-item">
                         <span class="detail-label">类型：</span>
@@ -130,8 +130,8 @@
                     </button>
                     <button 
                       class="speech-control-btn" 
-                      :class="{ 'disabled': !isTaskExecuting }" 
-                      :disabled="!isTaskExecuting"
+                      :class="{ 'disabled': !isTaskExecuting || isRobotMoving }" 
+                      :disabled="!isTaskExecuting || isRobotMoving"
                       @click="handleSkipSpeech"
                     >
                       跳过
@@ -1244,6 +1244,12 @@ const latestAlert = ref<any>(null)
 
 
 // 数据格式化方法
+const formatString = (str: string) => {
+  if (!str) return '--'
+  return str.length > 6 ? str.slice(0, 6) + '...' : str
+}
+
+// 数据格式化方法
 const formatPosition = (pos: any) => {
   if (!pos || (pos.longitude === 0 && pos.latitude === 0 && pos.height === 0)) {
     return '无数据'
@@ -1591,6 +1597,36 @@ const robotSpeed = computed(() => {
   
   return filteredSpeed
 })
+
+// 机器人是否正在运动（瞬时状态）
+const isRobotMovingInstant = computed(() => {
+  if (!robotSpeed.value) return false
+  // robotSpeed 已经经过阈值过滤，如果 v 或 w 不为 0，说明速度超过了 0.05
+  return robotSpeed.value.v !== 0 || robotSpeed.value.w !== 0
+})
+
+// 机器人是否正在运动（防抖处理后）
+const isRobotMoving = ref(false)
+let stopTimer: number | null = null
+
+watch(isRobotMovingInstant, (newVal) => {
+  if (newVal) {
+    // 如果检测到运动，立即设置为运动状态，并清除停止计时器
+    isRobotMoving.value = true
+    if (stopTimer) {
+      clearTimeout(stopTimer)
+      stopTimer = null
+    }
+  } else {
+    // 如果检测到停止，延迟 2 秒再确认为停止状态
+    if (!stopTimer) {
+      stopTimer = window.setTimeout(() => {
+        isRobotMoving.value = false
+        stopTimer = null
+      }, 2000)
+    }
+  }
+}, { immediate: true })
 
 // 机器人在线状态
 const robotOnlineStatus = computed(() => {
@@ -6767,9 +6803,9 @@ const centerToDroneMarker = () => {
 .task-point-details {
   display: flex;
   flex-direction: row;
-  gap: 16px;
+  gap: 8px;
   color: #cfe9f3;
-  font-size: 14px;
+  font-size: 12px;
   align-items: center;
   flex-wrap: nowrap;
 }
@@ -6781,7 +6817,20 @@ const centerToDroneMarker = () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.task-detail-item .detail-value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.task-detail-item .detail-label {
+  font-size: 12px;
+  min-width: auto;
 }
 
 .detail-item {
